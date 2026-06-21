@@ -1,0 +1,131 @@
+{
+  "schema": 1,
+  "templates": [
+    {
+      "id": "ir_triage",
+      "name": "Endpoint IR baseline triage",
+      "priority": "P0",
+      "approval_required": true,
+      "safety_scope": "Authorized endpoint forensics and incident response only. No credential theft, privacy collection, lateral movement, or unauthorized persistence.",
+      "velociraptor_artifacts": [
+        "Windows.Memory.ProcessInfo",
+        "Windows.Network.Netstat",
+        "Windows.Sys.StartupItems",
+        "Generic.Forensic.LocalHashes.Glob",
+        "Windows.Sys.Users",
+        "Windows.Applications.Chrome.History",
+        "Linux.Network.Netstat",
+        "Linux.Sys.LastUserLogin"
+      ],
+      "default_parameters": {
+        "path_globs": [
+          "C:/Users/*/Downloads/*",
+          "C:/ProgramData/*",
+          "/tmp/*",
+          "/var/tmp/*"
+        ],
+        "max_rows": 5000
+      }
+    },
+    {
+      "id": "suspicious_process",
+      "name": "Suspicious process review",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Collect process metadata needed for authorized triage. Do not dump memory unless a separate approval exists.",
+      "velociraptor_artifacts": [
+        "Windows.Memory.ProcessInfo",
+        "Linux.Events.ProcessExecutions",
+        "Generic.System.ProcessSiblings"
+      ],
+      "default_parameters": {
+        "process_regex": "(powershell|cmd|wscript|cscript|python|bash|sh|curl|wget)",
+        "include_command_line": true
+      }
+    },
+    {
+      "id": "network_connections",
+      "name": "Network connection review",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Collect endpoint network connection metadata for authorized incident response.",
+      "velociraptor_artifacts": [
+        "Windows.Network.Netstat",
+        "Windows.Network.ListeningPorts",
+        "Linux.Network.Netstat",
+        "Linux.Network.NetstatEnriched"
+      ],
+      "default_parameters": {
+        "include_listening": true
+      }
+    },
+    {
+      "id": "startup_items",
+      "name": "Startup and autorun review",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Collect startup item metadata and paths for persistence triage.",
+      "velociraptor_artifacts": [
+        "Windows.Sys.StartupItems",
+        "Windows.Sysinternals.Autoruns",
+        "MacOS.Detection.Autoruns"
+      ],
+      "default_parameters": {
+        "include_unsigned": true
+      }
+    },
+    {
+      "id": "file_hashes",
+      "name": "File hash collection",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Hash scoped files for evidence correlation. Do not upload personal content unless explicitly authorized.",
+      "velociraptor_artifacts": [
+        "Generic.Forensic.LocalHashes.Glob",
+        "Generic.Forensic.HashLookup",
+        "Windows.Forensics.LocalHashes.Usn"
+      ],
+      "default_parameters": {
+        "path_globs": [
+          "C:/ProgramData/*",
+          "C:/Users/*/Downloads/*",
+          "/tmp/*",
+          "/var/tmp/*"
+        ]
+      }
+    },
+    {
+      "id": "browser_traces",
+      "name": "Browser trace review",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Collect scoped browser history or download metadata only for authorized incident reconstruction. Do not collect personal content outside the approved case scope.",
+      "velociraptor_artifacts": [
+        "Windows.Applications.Chrome.History",
+        "Windows.Applications.Edge.History",
+        "Windows.Applications.Firefox.Downloads",
+        "MacOS.Applications.Chrome.History"
+      ],
+      "default_parameters": {
+        "lookback_days": 7,
+        "domain_regex": "(example|corp|internal|203\\.0\\.113)"
+      }
+    },
+    {
+      "id": "user_logins",
+      "name": "User login record review",
+      "priority": "P2",
+      "approval_required": true,
+      "safety_scope": "Collect login metadata for authorized incident timeline reconstruction.",
+      "velociraptor_artifacts": [
+        "Linux.Sys.LastUserLogin",
+        "Linux.Syslog.SSHLogin",
+        "Windows.Forensics.UserAccessLogs",
+        "Windows.Sys.Users"
+      ],
+      "default_parameters": {
+        "include_failed_login_summary": true
+      }
+    }
+  ]
+}

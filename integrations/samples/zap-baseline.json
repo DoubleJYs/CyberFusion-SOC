@@ -1,0 +1,12 @@
+[
+  {
+    "sourceType": "zap",
+    "pluginid": "10021",
+    "name": "Demo protective header review",
+    "riskdesc": "Medium",
+    "url": "https://demo.internal.local/login?batch=DEMO-RANGE-OFFLINE-V1",
+    "batchId": "DEMO-RANGE-OFFLINE-V1",
+    "demoCaseId": "DEMO-HEADER-001",
+    "evidenceSummary": "Offline ZAP-style finding used for SOC validation only."
+  }
+]

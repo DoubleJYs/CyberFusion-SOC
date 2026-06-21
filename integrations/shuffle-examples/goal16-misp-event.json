@@ -1,0 +1,12 @@
+{
+  "Event": {
+    "uuid": "6d7e8f90-goal16-demo",
+    "info": "Demo MISP event for credential stuffing infrastructure",
+    "threat_level_id": "2"
+  },
+  "Attribute": {
+    "uuid": "attribute-goal16-demo-001",
+    "type": "ip-src",
+    "value": "198.51.100.23"
+  }
+}

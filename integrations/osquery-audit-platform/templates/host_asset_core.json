@@ -1,0 +1,31 @@
+{
+  "id": "host_asset_core",
+  "name": "主机资产核心模板",
+  "category": "asset",
+  "description": "采集授权主机的主机、系统、用户、进程、监听端口、软件、计划任务、启动项、内核模块和关键文件哈希，用于资产画像与基线审计。",
+  "safe_scope": "仅用于授权主机或 demo 数据。不要采集浏览器历史、私钥、令牌、个人文件内容或绕权数据。",
+  "sections": [
+    "host",
+    "system",
+    "users",
+    "processes",
+    "ports",
+    "software",
+    "scheduled_tasks",
+    "startup_items",
+    "kernel_modules",
+    "file_hashes"
+  ],
+  "queries": {
+    "host": "SELECT hostname, uuid, cpu_brand, cpu_physical_cores, physical_memory FROM system_info;",
+    "system": "SELECT name, version, major, minor, build, platform FROM os_version;",
+    "users": "SELECT username, uid, gid, directory, shell, type FROM users WHERE username NOT LIKE '_%' ORDER BY uid LIMIT 100;",
+    "processes": "SELECT pid, name, path, state, parent, uid FROM processes ORDER BY pid LIMIT 200;",
+    "ports": "SELECT pid, port, protocol, address FROM listening_ports ORDER BY port LIMIT 200;",
+    "software": "SELECT name, version, source FROM apps ORDER BY name LIMIT 200;",
+    "scheduled_tasks": "SELECT event, command, path FROM crontab ORDER BY path, event LIMIT 200;",
+    "startup_items": "SELECT name, path, type, status FROM startup_items ORDER BY name LIMIT 200;",
+    "kernel_modules": "SELECT name, path, size, status FROM kernel_modules ORDER BY name LIMIT 200;",
+    "file_hashes": "SELECT path, sha256 FROM hash WHERE path IN ('/etc/hosts', '/etc/passwd', '/etc/ssh/sshd_config') ORDER BY path;"
+  }
+}

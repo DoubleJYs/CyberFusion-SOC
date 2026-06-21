@@ -1,0 +1,11 @@
+{
+  "id": "process_inventory",
+  "name": "进程清单模板",
+  "category": "asset",
+  "description": "采集授权主机当前进程快照，用于危险服务、异常进程和资产画像。",
+  "safe_scope": "仅查询进程元数据，不读取进程环境变量、命令行敏感参数或内存内容。",
+  "sections": ["processes"],
+  "queries": {
+    "processes": "SELECT pid, name, path, state, parent, uid FROM processes ORDER BY pid LIMIT 500;"
+  }
+}

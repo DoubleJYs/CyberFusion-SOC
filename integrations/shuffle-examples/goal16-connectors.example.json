@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "mail": {
+    "mode": "outbox",
+    "enabled": true,
+    "target": "soc@example.local",
+    "secret_ref": "/Users/zhangjiyan/Environment/12-secrets/16-Shuffle/mail.env"
+  },
+  "im": {
+    "mode": "outbox",
+    "enabled": true,
+    "room": "soc-ops-demo",
+    "secret_ref": "/Users/zhangjiyan/Environment/12-secrets/16-Shuffle/im.env"
+  },
+  "ticket": {
+    "mode": "local-json",
+    "enabled": true,
+    "project": "SOAR-DEMO",
+    "secret_ref": "/Users/zhangjiyan/Environment/12-secrets/16-Shuffle/ticket.env"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "server_url": "https://velociraptor.example.internal:8001",
+  "api_client_config_path": "/Users/zhangjiyan/Environment/12-secrets/11-velociraptor/api-client.yaml",
+  "default_org_id": "root",
+  "verify_tls": true,
+  "notes": [
+    "Do not store API keys, client certificates, private keys, or passwords in the source repository.",
+    "Keep live API client material under /Users/zhangjiyan/Environment/12-secrets/11-velociraptor/.",
+    "The current wrapper generates auditable dispatch request JSON. A live API executor should read this config at runtime."
+  ]
+}

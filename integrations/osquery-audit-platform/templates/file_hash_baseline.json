@@ -1,0 +1,11 @@
+{
+  "id": "file_hash_baseline",
+  "name": "关键文件哈希模板",
+  "category": "baseline",
+  "description": "采集授权范围内关键配置文件的 SHA256，用于快照差异和篡改线索对比。",
+  "safe_scope": "仅计算明确列出的配置文件哈希，不读取或上传文件内容。",
+  "sections": ["file_hashes"],
+  "queries": {
+    "file_hashes": "SELECT path, sha256 FROM hash WHERE path IN ('/etc/hosts', '/etc/passwd', '/etc/ssh/sshd_config') ORDER BY path;"
+  }
+}

@@ -1,0 +1,504 @@
+<template>
+  <div class="page-shell incident-cluster-page">
+    <section class="soc-page-hero">
+      <div>
+        <span class="soc-page-kicker">CORRELATION ENGINE</span>
+        <h1>安全事件簇</h1>
+        <p>这个页面帮你把同一资产、同一批次和同一时间窗口内的多源证据聚合成可处置事件链。</p>
+      </div>
+      <div class="hero-actions">
+        <el-button type="primary" :loading="correlating" @click="runCorrelation">执行关联</el-button>
+        <el-button @click="load">刷新</el-button>
+      </div>
+    </section>
+
+    <el-alert v-if="error" title="事件簇加载失败" type="error" show-icon :closable="false" class="recoverable-alert">
+      <template #default>
+        <p>可能是后端未启动、数据库未初始化或当前账号没有事件簇权限。</p>
+        <div class="recoverable-actions">
+          <el-button size="small" type="primary" @click="load">重试</el-button>
+          <el-button size="small" @click="diagnosticsVisible = !diagnosticsVisible">查看诊断</el-button>
+          <el-button size="small" @click="resetFilters">返回列表</el-button>
+        </div>
+        <pre v-if="diagnosticsVisible" class="diagnostic-box">{{ diagnosticText }}</pre>
+      </template>
+    </el-alert>
+
+    <section class="soc-panel panel-pad">
+      <div class="soc-filter-bar">
+        <el-input v-model="query.keyword" clearable placeholder="搜索事件簇编号、资产 IP、batchId" @keyup.enter="load" />
+        <el-select v-model="query.severity" clearable placeholder="等级">
+          <el-option label="严重" value="critical" />
+          <el-option label="高危" value="high" />
+          <el-option label="中危" value="medium" />
+          <el-option label="低危" value="low" />
+        </el-select>
+        <el-select v-model="query.status" clearable placeholder="状态">
+          <el-option label="打开" value="open" />
+          <el-option label="调查中" value="investigating" />
+          <el-option label="已转工单" value="ticketed" />
+          <el-option label="已关闭" value="closed" />
+        </el-select>
+        <el-button @click="load">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+      </div>
+    </section>
+
+    <section class="table-panel">
+      <el-table v-loading="loading" :data="rows" empty-text="暂无事件簇，点击“执行关联”生成结果" @row-click="open">
+        <el-table-column prop="clusterNo" label="事件簇" width="150" />
+        <el-table-column label="等级" width="90">
+          <template #default="{ row }"><SeverityBadge :severity="row.severity" /></template>
+        </el-table-column>
+        <el-table-column label="标题" min-width="250" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="title-cell">
+              <strong>{{ row.title }}</strong>
+              <span>{{ row.summary || sourceLabel(row) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="资产" width="180">
+          <template #default="{ row }">{{ assetLabel(row) }}</template>
+        </el-table-column>
+        <el-table-column label="证据数" width="110">
+          <template #default="{ row }">{{ evidenceCount(row) }}</template>
+        </el-table-column>
+        <el-table-column prop="alertCount" label="告警数" width="90" />
+        <el-table-column prop="vulnerabilityCount" label="漏洞数" width="90" />
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }"><StatusBadge :status="row.status" /></template>
+        </el-table-column>
+        <el-table-column label="首次出现" width="170">
+          <template #default="{ row }">{{ formatTime(row.firstSeenAt) }}</template>
+        </el-table-column>
+        <el-table-column label="最近出现" width="170">
+          <template #default="{ row }">{{ formatTime(row.lastSeenAt) }}</template>
+        </el-table-column>
+        <el-table-column label="推荐动作" min-width="150">
+          <template #default="{ row }">{{ actionLabel(row) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="220" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click.stop="open(row)">详情</el-button>
+            <el-button v-if="row.ticketId" size="small" type="primary" @click.stop="goTicket(row)">查看工单</el-button>
+            <el-button v-else size="small" type="warning" @click.stop="createTicket(row)">转工单</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <span>共 {{ total }} 个事件簇</span>
+        <el-pagination v-model:current-page="query.pageNum" v-model:page-size="query.pageSize" layout="total, sizes, prev, pager, next" :total="total" @change="load" />
+      </div>
+    </section>
+
+    <el-drawer v-model="drawer" title="事件簇详情" size="760px">
+      <el-alert v-if="detailError" title="事件簇详情加载失败" type="error" show-icon :closable="false" class="recoverable-alert">
+        <template #default>
+          <p>可能是事件簇已被更新、当前账号权限不足或后端暂时不可用。</p>
+          <div class="recoverable-actions">
+            <el-button size="small" type="primary" @click="current && open(current)">重试</el-button>
+            <el-button size="small" @click="diagnosticsVisible = !diagnosticsVisible">查看诊断</el-button>
+            <el-button size="small" @click="drawer = false">返回列表</el-button>
+          </div>
+        </template>
+      </el-alert>
+
+      <div v-if="current" class="drawer-stack">
+        <div class="soc-drawer-grid">
+          <span>事件簇编号</span><strong>{{ current.clusterNo }}</strong>
+          <span>状态</span><strong><StatusBadge :status="current.status" /></strong>
+          <span>等级</span><strong><SeverityBadge :severity="current.severity" /></strong>
+          <span>关联分</span><strong>{{ current.score }}</strong>
+          <span>资产</span><strong>{{ assetLabel(current) }}</strong>
+          <span>来源</span><strong>{{ sourceLabel(current) }}</strong>
+          <span>Batch</span><strong>{{ current.batchId || '-' }}</strong>
+          <span>Demo Case</span><strong>{{ current.demoCaseId || '-' }}</strong>
+          <span>首次出现</span><strong>{{ formatTime(current.firstSeenAt) }}</strong>
+          <span>最近出现</span><strong>{{ formatTime(current.lastSeenAt) }}</strong>
+          <span>关联规则</span><strong>{{ current.ruleKey || '-' }}</strong>
+          <span>Correlation Key</span><strong>{{ current.correlationKey || '-' }}</strong>
+          <span>推荐动作</span><strong>{{ current.recommendation || actionLabel(current) }}</strong>
+          <span>摘要</span><strong>{{ current.summary || '-' }}</strong>
+        </div>
+
+        <section class="detail-section">
+          <div class="section-title">
+            <strong>事件链时间线</strong>
+            <el-tag effect="plain">{{ evidenceTimeline.length }} 条</el-tag>
+          </div>
+          <el-timeline v-if="evidenceTimeline.length">
+            <el-timeline-item
+              v-for="item in evidenceTimeline"
+              :key="`${item.evidenceType}-${item.evidenceId}`"
+              :timestamp="formatTime(item.eventTime)"
+              placement="top"
+            >
+              <article class="timeline-card">
+                <div>
+                  <strong>{{ evidenceTypeLabel(item.evidenceType) }} #{{ item.evidenceId }}</strong>
+                  <span>{{ item.sourceType || '-' }} / {{ item.eventType || '-' }} / {{ item.ruleId || '-' }}</span>
+                  <p>{{ item.relationReason || '命中关联规则' }}</p>
+                </div>
+                <el-tag effect="plain">{{ item.relationScore }}</el-tag>
+              </article>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无事件链时间线" :image-size="80" />
+        </section>
+
+        <section class="detail-section">
+          <div class="section-title">
+            <strong>关联证据</strong>
+            <el-tag effect="plain">{{ externalEvidence.length }} 条</el-tag>
+          </div>
+          <article v-for="item in externalEvidence" :key="`${item.evidenceType}-${item.evidenceId}`" class="evidence-card">
+            <div>
+              <strong>{{ item.sourceType || 'external_event' }} / {{ item.eventType || '-' }}</strong>
+              <span>{{ item.assetIp || item.hostname || '-' }} · {{ item.targetUrl || item.batchId || '-' }}</span>
+              <p>{{ item.relationReason }}</p>
+            </div>
+            <el-button text @click="goEvidence(item)">查看证据</el-button>
+          </article>
+          <el-empty v-if="!externalEvidence.length" description="暂无多源证据" :image-size="80" />
+        </section>
+
+        <section class="detail-grid">
+          <div class="detail-section">
+            <div class="section-title">
+              <strong>关联告警</strong>
+              <el-tag effect="plain">{{ alertEvidence.length }} 条</el-tag>
+            </div>
+            <article v-for="item in alertEvidence" :key="item.id" class="compact-card">
+              <SeverityBadge :severity="item.severity || current.severity" />
+              <div>
+                <strong>{{ item.ruleId || `告警 #${item.evidenceId}` }}</strong>
+                <span>{{ item.relationReason }}</span>
+              </div>
+              <el-button text @click="goEvidence(item)">查看</el-button>
+            </article>
+            <el-empty v-if="!alertEvidence.length" description="暂无关联告警" :image-size="70" />
+          </div>
+
+          <div class="detail-section">
+            <div class="section-title">
+              <strong>关联漏洞</strong>
+              <el-tag effect="plain">{{ vulnerabilityEvidence.length }} 条</el-tag>
+            </div>
+            <article v-for="item in vulnerabilityEvidence" :key="item.id" class="compact-card">
+              <SeverityBadge :severity="item.severity || current.severity" />
+              <div>
+                <strong>{{ item.ruleId || `漏洞 #${item.evidenceId}` }}</strong>
+                <span>{{ item.relationReason }}</span>
+              </div>
+              <el-button text @click="goEvidence(item)">查看</el-button>
+            </article>
+            <el-empty v-if="!vulnerabilityEvidence.length" description="暂无关联漏洞" :image-size="70" />
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="section-title">
+            <strong>关联工单</strong>
+            <el-tag effect="plain">{{ current.ticketId ? '已转工单' : '未转工单' }}</el-tag>
+          </div>
+          <article class="ticket-card">
+            <div>
+              <strong>{{ current.ticketId ? `工单 #${current.ticketId}` : '尚未生成处置工单' }}</strong>
+              <span>{{ current.ticketId ? '可以进入工单中心查看时间线和处置动作。' : '建议将高优先级事件簇转为工单，进入处置闭环。' }}</span>
+            </div>
+            <el-button v-if="current.ticketId" type="primary" @click="goTicket(current)">查看工单</el-button>
+          </article>
+        </section>
+
+        <div class="drawer-actions">
+          <el-button v-if="current.ticketId" type="primary" @click="goTicket(current)">查看工单</el-button>
+          <el-button v-else type="warning" @click="createTicket(current)">转为处置工单</el-button>
+          <el-button type="danger" :disabled="current.status === 'closed'" @click="closeCurrent">关闭事件簇</el-button>
+          <el-button @click="drawer = false">返回列表</el-button>
+        </div>
+      </div>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
+import SeverityBadge from '@/components/security/SeverityBadge.vue'
+import StatusBadge from '@/components/security/StatusBadge.vue'
+import {
+  closeIncident,
+  correlateIncidents,
+  incidentDetail,
+  listIncidents,
+  ticketIncident,
+  type IncidentClusterItem,
+  type IncidentEvidenceItem,
+} from '@/api/soc'
+
+const route = useRoute()
+const router = useRouter()
+
+const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', severity: '', status: '' })
+const rows = ref<IncidentClusterItem[]>([])
+const total = ref(0)
+const loading = ref(false)
+const correlating = ref(false)
+const error = ref('')
+const detailError = ref('')
+const drawer = ref(false)
+const diagnosticsVisible = ref(false)
+const current = ref<IncidentClusterItem>()
+
+const evidenceTimeline = computed(() => {
+  return [...(current.value?.evidence || [])].sort((a, b) => String(a.eventTime || '').localeCompare(String(b.eventTime || '')))
+})
+const externalEvidence = computed(() => evidenceTimeline.value.filter((item) => item.evidenceType === 'external_event' || item.evidenceType === 'fim' || item.evidenceType === 'baseline'))
+const alertEvidence = computed(() => evidenceTimeline.value.filter((item) => item.evidenceType === 'alert'))
+const vulnerabilityEvidence = computed(() => evidenceTimeline.value.filter((item) => item.evidenceType === 'vulnerability'))
+const diagnosticText = computed(() => JSON.stringify({
+  route: route.fullPath,
+  query,
+  listError: error.value || undefined,
+  detailError: detailError.value || undefined,
+  api: ['/soc/incidents', '/soc/incidents/{id}', '/soc/incidents/correlate'],
+}, null, 2))
+
+watch(
+  () => route.query.keyword,
+  (keyword) => {
+    query.keyword = typeof keyword === 'string' ? keyword : ''
+    query.pageNum = 1
+    void load()
+  },
+  { immediate: true },
+)
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    const { data } = await listIncidents(query)
+    rows.value = data.data.records
+    total.value = data.data.total
+  } catch {
+    error.value = '事件簇加载失败'
+    rows.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+async function runCorrelation() {
+  correlating.value = true
+  try {
+    const { data } = await correlateIncidents()
+    ElMessage.success(`关联完成：刷新 ${data.data.upsertedClusters} 个事件簇，写入 ${data.data.evidenceWritten} 条证据`)
+    await load()
+  } catch {
+    ElMessage.error('事件关联执行失败，请检查权限、规则配置或后端服务。')
+  } finally {
+    correlating.value = false
+  }
+}
+
+async function open(row: IncidentClusterItem) {
+  drawer.value = true
+  current.value = row
+  detailError.value = ''
+  try {
+    const { data } = await incidentDetail(row.id)
+    current.value = data.data
+  } catch {
+    detailError.value = '事件簇详情加载失败'
+  }
+}
+
+async function createTicket(row: IncidentClusterItem) {
+  try {
+    await ElMessageBox.confirm('将该事件簇转为处置工单，继续？', '转工单确认', { type: 'warning' })
+    await ticketIncident(row.id, '由安全事件簇转为处置工单')
+    ElMessage.success('已转为处置工单')
+    await load()
+    if (current.value?.id === row.id) current.value = (await incidentDetail(row.id)).data.data
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('转工单失败，请检查权限或后端服务。')
+  }
+}
+
+async function closeCurrent() {
+  if (!current.value) return
+  try {
+    await ElMessageBox.confirm('关闭后该事件簇会保留证据链但不再作为待处理事项，继续？', '关闭确认', { type: 'warning' })
+    await closeIncident(current.value.id, '已完成事件簇复核')
+    ElMessage.success('事件簇已关闭')
+    await load()
+    current.value = (await incidentDetail(current.value.id)).data.data
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('关闭事件簇失败，请检查权限或后端服务。')
+  }
+}
+
+function resetFilters() {
+  query.keyword = ''
+  query.severity = ''
+  query.status = ''
+  query.pageNum = 1
+  void router.replace({ path: '/soc/incidents' })
+  void load()
+}
+
+function goTicket(row: IncidentClusterItem) {
+  if (!row.ticketId) return
+  router.push({ path: '/soc/tickets', query: { keyword: String(row.ticketId), openTicketId: row.ticketId } })
+}
+
+function goEvidence(item: IncidentEvidenceItem) {
+  if (item.evidenceType === 'alert') {
+    router.push({ path: '/soc/alerts', query: { openAlertId: item.evidenceId, keyword: item.batchId || item.assetIp || item.ruleId } })
+    return
+  }
+  if (item.evidenceType === 'vulnerability') {
+    router.push({ path: '/soc/vulnerabilities', query: { keyword: item.evidenceUid || item.ruleId || item.assetIp } })
+    return
+  }
+  router.push({ path: '/soc/external-events', query: { openEventUid: item.evidenceUid, keyword: item.batchId || item.assetIp || item.ruleId } })
+}
+
+function assetLabel(row: IncidentClusterItem) {
+  const host = row.hostname || row.primaryHostname || '-'
+  const ip = row.assetIp || row.primaryAssetIp || '-'
+  return `${host} / ${ip}`
+}
+
+function sourceLabel(row: IncidentClusterItem) {
+  return row.sourceSummary || row.sourceTypes || '-'
+}
+
+function evidenceCount(row: IncidentClusterItem) {
+  return row.evidenceCount ?? ((row.eventCount || 0) + (row.alertCount || 0) + (row.vulnerabilityCount || 0))
+}
+
+function actionLabel(row: IncidentClusterItem) {
+  if (row.recommendation) return row.recommendation
+  if (row.ticketId) return '查看处置工单'
+  if (row.status === 'closed') return '已关闭，保留证据链'
+  if (['critical', 'high'].includes(String(row.severity || '').toLowerCase())) return '建议转为处置工单'
+  return '继续观察或关闭事件簇'
+}
+
+function evidenceTypeLabel(type: IncidentEvidenceItem['evidenceType']) {
+  const labels: Record<IncidentEvidenceItem['evidenceType'], string> = {
+    external_event: '多源事件',
+    alert: '告警',
+    vulnerability: '漏洞',
+    ticket: '工单',
+    fim: '文件变更',
+    baseline: '基线',
+  }
+  return labels[type] || type
+}
+
+function formatTime(value?: string) {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 19)
+}
+</script>
+
+<style scoped>
+.hero-actions,
+.recoverable-actions,
+.drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.recoverable-alert {
+  margin: 16px 0;
+}
+
+.recoverable-actions {
+  margin-top: 10px;
+}
+
+.diagnostic-box {
+  margin: 12px 0 0;
+  padding: 12px;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.title-cell,
+.timeline-card div,
+.evidence-card div,
+.compact-card div,
+.ticket-card div {
+  display: grid;
+  gap: 5px;
+}
+
+.title-cell span,
+.timeline-card span,
+.timeline-card p,
+.evidence-card span,
+.evidence-card p,
+.compact-card span,
+.ticket-card span {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.detail-section {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.section-title,
+.timeline-card,
+.evidence-card,
+.compact-card,
+.ticket-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.timeline-card,
+.evidence-card,
+.compact-card,
+.ticket-card {
+  padding: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.compact-card {
+  justify-content: flex-start;
+}
+
+@media (max-width: 900px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

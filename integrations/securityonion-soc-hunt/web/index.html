@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SOC Threat Hunt Console</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <aside class="rail">
+      <div class="brand">
+        <span class="mark">SO</span>
+        <div>
+          <strong>码研工坊 SOC</strong>
+          <small>威胁狩猎平台</small>
+        </div>
+      </div>
+      <nav>
+        <a href="#overview">总览</a>
+        <a href="#alerts">告警</a>
+        <a href="#cases">案件</a>
+        <a href="#hunts">狩猎</a>
+        <a href="#health">健康</a>
+        <a href="#audit">审计</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <h1>SOC 威胁狩猎与告警分析平台</h1>
+          <p>码研工坊本地 SOC 工作台：统一告警、案件流转、狩猎任务和报告导出。</p>
+        </div>
+        <div class="top-actions">
+          <input id="apiToken" type="password" placeholder="Bearer token">
+          <button id="saveToken">保存令牌</button>
+          <button id="importDemo" class="primary">导入 demo 告警</button>
+          <button id="resetDemo">清理 demo</button>
+          <button id="dailyReport">导出日报</button>
+        </div>
+      </header>
+
+      <section id="overview" class="metrics"></section>
+      <section id="recentHighs" class="workbench compact"></section>
+
+      <section id="alerts" class="workbench">
+        <div class="section-head">
+          <div>
+            <h2>告警列表</h2>
+            <p>统一字段：source / event_type / severity / src_ip / dst_ip / asset / rule / raw_event / status</p>
+          </div>
+          <div class="filters">
+            <input id="search" placeholder="检索 IP、资产、规则或原始事件">
+            <input id="asset" placeholder="资产">
+            <input id="rule" placeholder="规则">
+            <input id="tags" placeholder="标签">
+            <select id="source">
+              <option value="">全部来源</option>
+              <option value="suricata">suricata</option>
+              <option value="zeek">zeek</option>
+            </select>
+            <select id="severity">
+              <option value="">全部等级</option>
+              <option value="critical">critical</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+            <select id="status">
+              <option value="">全部状态</option>
+              <option value="new">new</option>
+              <option value="in_case">in_case</option>
+              <option value="closed">closed</option>
+            </select>
+          </div>
+        </div>
+        <div class="split">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>等级</th>
+                  <th>来源</th>
+                  <th>资产</th>
+                  <th>通信</th>
+                  <th>规则</th>
+                  <th>状态/操作</th>
+                </tr>
+              </thead>
+              <tbody id="alertRows"></tbody>
+            </table>
+          </div>
+          <aside class="detail" id="alertDetail">
+            <h3>告警详情</h3>
+            <p class="muted">选择一条告警查看原始事件并创建案件。</p>
+          </aside>
+        </div>
+      </section>
+
+      <section id="cases" class="workbench">
+        <div class="section-head">
+          <div>
+            <h2>案件列表</h2>
+            <p>告警进入案件后可记录分析、流转状态并导出报告。</p>
+          </div>
+        </div>
+        <div id="caseList" class="case-list"></div>
+      </section>
+
+      <section id="hunts" class="workbench two-col">
+        <div>
+          <h2>狩猎任务</h2>
+          <form id="huntForm" class="form">
+            <input name="title" placeholder="任务标题" required>
+            <input name="query" placeholder="狩猎查询，例如 source:zeek asset:finance" required>
+            <input name="case_id" placeholder="关联案件 ID">
+            <textarea name="hypothesis" placeholder="狩猎假设"></textarea>
+            <textarea name="notes" placeholder="数据源、排查范围"></textarea>
+            <textarea name="result" placeholder="结果记录"></textarea>
+            <textarea name="conclusion" placeholder="结论"></textarea>
+            <button class="primary">记录任务</button>
+          </form>
+        </div>
+        <div id="huntList" class="stack"></div>
+      </section>
+
+      <section id="health" class="workbench">
+        <div class="section-head">
+          <div>
+            <h2>数据源健康</h2>
+            <p>跟踪 Zeek、Suricata、Elastic/Indexer 和传感器最近接收时间。</p>
+          </div>
+        </div>
+        <div id="healthList" class="stack"></div>
+      </section>
+
+      <section id="audit" class="workbench">
+        <div class="section-head">
+          <div>
+            <h2>审计日志</h2>
+            <p>记录导入、建案、处理记录、状态流转、报告导出和狩猎任务。</p>
+          </div>
+        </div>
+        <div id="auditList" class="audit-list"></div>
+      </section>
+    </main>
+
+    <template id="caseTemplate">
+      <article class="case-card">
+        <div class="case-title"></div>
+        <div class="case-meta"></div>
+        <div class="case-records"></div>
+        <form class="record-form">
+          <input name="note" placeholder="处理记录" required>
+          <button>追加记录</button>
+        </form>
+        <div class="case-actions">
+          <button data-status="investigating">处理中</button>
+          <button data-status="contained">已遏制</button>
+          <button data-review="true">复核</button>
+          <button data-status="closed">关闭</button>
+          <button data-status="archived">归档</button>
+          <button data-export="true">导出报告</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

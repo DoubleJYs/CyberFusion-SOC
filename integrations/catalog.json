@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "description": "CyberFusion SOC local integration program catalog. Runtime data and secrets remain outside source.",
+  "defaultImportApi": "/api/soc/external-events/cyberfusion/import",
+  "integrations": [
+    {
+      "sourceType": "wazuh",
+      "name": "Wazuh host security evidence",
+      "localPath": "integrations/wazuh-sec-soc",
+      "sourceModule": "../01-wazuh/sec-wazuh-soc",
+      "apis": ["/api/soc/settings/wazuh/check", "/api/soc/external-events/cyberfusion/import"],
+      "mode": "optional live health check plus offline/demo evidence import",
+      "safety": "credentials from environment only; no real external sender"
+    },
+    {
+      "sourceType": "zeek",
+      "name": "Zeek traffic metadata",
+      "localPath": "integrations/zeek-traffic-platform",
+      "sourceModule": "../03-zeek/tools/traffic-platform",
+      "apis": ["/api/soc/external-events/cyberfusion/import"],
+      "mode": "offline conn.log or JSON import",
+      "safety": "no packet capture or public target scan"
+    },
+    {
+      "sourceType": "suricata",
+      "name": "Suricata IDS EVE events",
+      "localPath": "integrations/suricata-ids-console",
+      "sourceModule": "../04-suricata/ids_console",
+      "apis": ["/api/soc/external-events/cyberfusion/import", "/api/soc/external-events/suricata/import"],
+      "mode": "offline eve.json JSON Lines import",
+      "safety": "no IDS rule push or live traffic capture"
+    },
+    {
+      "sourceType": "sigma",
+      "name": "Sigma detection rule reference",
+      "localPath": "integrations/sigma-manager",
+      "sourceModule": "../05-sigma/sigma_manager",
+      "apis": ["/api/soc/rules", "/api/soc/external-events/cyberfusion/import"],
+      "mode": "rule metadata and detection-rule event import",
+      "safety": "no executable rule expressions"
+    },
+    {
+      "sourceType": "trivy",
+      "name": "Trivy vulnerability JSON",
+      "localPath": "integrations/trivy-platform",
+      "sourceModule": "../06-trivy/cmd/trivy-platform",
+      "apis": ["/api/soc/external-events/cyberfusion/import", "/api/soc/vulnerabilities"],
+      "mode": "offline JSON import into vulnerability center",
+      "safety": "no live scan by default"
+    },
+    {
+      "sourceType": "misp",
+      "name": "MISP IOC evidence",
+      "localPath": "integrations/misp-deploy",
+      "sourceModule": "../08-MISP/deploy",
+      "apis": ["/api/soc/external-events/cyberfusion/import"],
+      "mode": "authorized IOC JSON import",
+      "safety": "no real threat-intel pull without explicit environment config"
+    },
+    {
+      "sourceType": "zap",
+      "name": "ZAP baseline findings",
+      "localPath": "integrations/zap-authorized-scan-platform",
+      "sourceModule": "../14-zaproxy/authorized-scan-platform",
+      "apis": ["/api/soc/external-events/cyberfusion/import"],
+      "mode": "authorized baseline report import",
+      "safety": "no full scan and no public target scan"
+    },
+    {
+      "sourceType": "cyberchef",
+      "name": "CyberChef field analysis",
+      "localPath": "integrations/cyberchef-deploy",
+      "sourceModule": "../13-CyberChef/deploy",
+      "apis": ["/api/soc/external-events/cyberchef/analyze"],
+      "mode": "local field analysis helper",
+      "safety": "analysis helper only; no data exfiltration"
+    },
+    {
+      "sourceType": "shuffle",
+      "name": "Shuffle dry-run workflow examples",
+      "localPath": "integrations/shuffle-examples",
+      "sourceModule": "../16-Shuffle/examples",
+      "apis": ["/api/soc/external-events/shuffle/demo-notification"],
+      "mode": "dry-run notification workflow examples",
+      "safety": "dry-run log only; no real webhook/email/chat sender"
+    }
+  ]
+}

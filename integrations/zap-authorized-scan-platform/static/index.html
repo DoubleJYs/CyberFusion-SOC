@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>授权 Web 漏洞扫描平台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">码研工坊授权扫描治理平台</p>
+      <h1>授权 Web 漏洞扫描平台</h1>
+    </div>
+    <div class="env" id="envStatus">加载中</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel target-panel">
+      <div class="panel-head">
+        <h2>授权目标</h2>
+        <span id="targetCount">0</span>
+      </div>
+      <form id="targetForm" class="stack">
+        <label>目标名称<input name="name" required minlength="2" placeholder="内部门户测试环境"></label>
+        <label>基础 URL<input name="base_url" required placeholder="http://127.0.0.1:8080"></label>
+        <label>扫描范围<input name="scope_prefix" placeholder="留空则使用基础 URL"></label>
+        <label>授权截止<input name="valid_until" required placeholder="2099-12-31"></label>
+        <label>白名单<textarea name="allowlist" rows="2" placeholder="http://127.0.0.1:8080/app*"></textarea></label>
+        <label>黑名单<textarea name="blocklist" rows="2" placeholder="http://127.0.0.1:8080/app/private*"></textarea></label>
+        <div class="split">
+          <label>负责人<input name="owner" required placeholder="安全负责人"></label>
+          <label class="checkline"><input name="authorization_confirmed" type="checkbox" required> 已授权</label>
+        </div>
+        <label>授权依据<textarea name="authorization_note" required minlength="8" rows="3" placeholder="测试环境资产编号、授权单号或负责人确认记录"></textarea></label>
+        <button type="submit">添加授权目标</button>
+      </form>
+      <div id="targets" class="list"></div>
+    </section>
+
+    <section class="panel task-panel">
+      <div class="panel-head">
+        <h2>扫描任务</h2>
+        <button id="refreshBtn" class="secondary" type="button">刷新</button>
+      </div>
+      <form id="taskForm" class="task-form">
+        <label>目标<select name="target_id" required></select></label>
+        <label>任务名称<input name="name" placeholder="授权基线扫描"></label>
+        <label>类型
+          <select name="scan_type">
+            <option value="baseline">baseline</option>
+            <option value="full">full</option>
+            <option value="api">api</option>
+          </select>
+        </label>
+        <label>策略
+          <select name="policy">
+            <option value="passive-safe">passive-safe</option>
+            <option value="standard-readonly">standard-readonly</option>
+            <option value="api-readonly">api-readonly</option>
+          </select>
+        </label>
+        <label>门禁
+          <select name="risk_gate">
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </label>
+        <label>超时<input name="timeout_seconds" type="number" min="60" max="3600" value="600"></label>
+        <label>速率<input name="rate_limit_per_min" type="number" min="1" max="120" value="30"></label>
+        <button type="submit">创建 demo 扫描</button>
+      </form>
+      <div id="tasks" class="task-list"></div>
+    </section>
+
+    <section class="panel findings-panel">
+      <div class="panel-head">
+        <div>
+          <h2>漏洞列表</h2>
+          <p id="activeTask">未选择任务</p>
+        </div>
+        <div class="actions">
+          <button id="retestTaskBtn" class="secondary" type="button" disabled>复测任务</button>
+          <button id="ciGateBtn" class="secondary" type="button" disabled>CI 门禁</button>
+          <button id="exportBtn" type="button" disabled>整改报告</button>
+        </div>
+      </div>
+      <div class="risk-strip" id="riskStrip"></div>
+      <div id="taskMeta" class="task-meta"></div>
+      <div id="findings" class="findings"></div>
+    </section>
+  </main>
+
+  <dialog id="closeDialog">
+    <form method="dialog" id="closeForm">
+      <h3>关闭漏洞</h3>
+      <input name="vuln_id" type="hidden">
+      <label>关闭说明<textarea name="closure_reason" required minlength="4" rows="4"></textarea></label>
+      <menu>
+        <button value="cancel" class="secondary" formnovalidate>取消</button>
+        <button value="default">确认关闭</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="fixedDialog">
+    <form method="dialog" id="fixedForm">
+      <h3>标记已修复待复测</h3>
+      <input name="vuln_id" type="hidden">
+      <label>修复说明<textarea name="note" required minlength="4" rows="4"></textarea></label>
+      <menu>
+        <button value="cancel" class="secondary" formnovalidate>取消</button>
+        <button value="default">确认</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

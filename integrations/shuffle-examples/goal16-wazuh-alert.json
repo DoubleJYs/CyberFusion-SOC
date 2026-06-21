@@ -1,0 +1,18 @@
+{
+  "id": "WAZUH-DEMO-20260531-001",
+  "timestamp": "2026-05-31T20:40:00+08:00",
+  "source": "wazuh-local",
+  "rule": {
+    "level": 10,
+    "description": "Multiple SSH authentication failures from one source"
+  },
+  "agent": {
+    "id": "001",
+    "name": "lab-web-01"
+  },
+  "data": {
+    "srcip": "198.51.100.23",
+    "user": "demo-user",
+    "protocol": "ssh"
+  }
+}

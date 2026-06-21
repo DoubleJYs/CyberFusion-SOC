@@ -1,0 +1,76 @@
+:root {
+  --soc-canvas: #f5f2ec;
+  --soc-canvas-soft: #fbfaf7;
+  --soc-surface: rgba(255, 255, 255, 0.72);
+  --soc-surface-raised: rgba(255, 255, 255, 0.86);
+  --soc-surface-strong: rgba(255, 255, 255, 0.94);
+  --soc-surface-muted: rgba(245, 241, 234, 0.72);
+  --soc-glass: rgba(255, 255, 255, 0.56);
+  --soc-border: rgba(179, 173, 163, 0.46);
+  --soc-border-strong: rgba(126, 117, 101, 0.48);
+  --soc-text: #1f2937;
+  --soc-text-muted: #667085;
+  --soc-text-subtle: #98a2b3;
+  --soc-cyan: #10b3c7;
+  --soc-blue: #3978d8;
+  --soc-warm: #d4934a;
+  --soc-warm-strong: #c76f2e;
+  --soc-critical: #e5484d;
+  --soc-high: #f08a24;
+  --soc-medium: #d6a21d;
+  --soc-low: #15a8bd;
+  --soc-success: #24a865;
+  --soc-radius: 6px;
+  --soc-radius-card: 8px;
+  --soc-shadow: 0 18px 48px rgba(91, 77, 53, 0.12);
+  --soc-shadow-soft: 0 10px 30px rgba(91, 77, 53, 0.08);
+  --soc-glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.86), 0 1px 0 rgba(255, 255, 255, 0.5);
+  color-scheme: light;
+}
+
+body {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(244, 240, 232, 0.88) 42%, rgba(238, 243, 246, 0.9) 100%);
+  color: var(--soc-text);
+}
+
+.soc-panel {
+  border: 1px solid var(--soc-border);
+  border-radius: var(--soc-radius-card);
+  background: var(--soc-surface);
+  box-shadow: var(--soc-shadow-soft), var(--soc-glass-highlight);
+  backdrop-filter: blur(22px) saturate(1.14);
+}
+
+.soc-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 160px 160px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.soc-drawer-grid {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px 14px;
+  padding: 12px;
+  border: 1px solid rgba(179, 173, 163, 0.42);
+  border-radius: var(--soc-radius-card);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 13px;
+}
+
+.soc-drawer-grid span {
+  color: var(--soc-text-muted);
+}
+
+.soc-drawer-grid strong {
+  overflow-wrap: anywhere;
+  color: var(--soc-text);
+}
+
+@media (max-width: 860px) {
+  .soc-filter-bar {
+    grid-template-columns: 1fr;
+  }
+}

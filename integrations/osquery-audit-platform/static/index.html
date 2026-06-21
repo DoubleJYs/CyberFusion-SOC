@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>终端主机资产与基线审计平台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">OSQ</span>
+          <div>
+            <strong>终端审计平台</strong>
+            <small>资产与基线</small>
+          </div>
+        </div>
+        <nav>
+          <a class="active" href="#overview">首页概览</a>
+          <a href="#templates">查询模板</a>
+          <a href="#assets">主机资产</a>
+          <a href="#baseline">基线合规</a>
+          <a href="#tasks">任务调度</a>
+          <a href="#departments">部门视图</a>
+          <a href="#reports">审计报告</a>
+        </nav>
+        <div class="runtime-note">
+          <span>运行态</span>
+          <strong id="runtimePath">Environment</strong>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div>
+            <h1>主机资产与基线审计</h1>
+            <p>选择查询模板，执行或导入结果，展示资产和基线，生成审计报告。</p>
+          </div>
+          <div class="topbar-actions">
+            <button id="refreshButton" class="ghost">刷新</button>
+            <button id="reportButton" class="primary">导出审计报告</button>
+          </div>
+        </header>
+
+        <section id="overview" class="metric-grid">
+          <article class="metric">
+            <span>资产总数</span>
+            <strong id="hostCount">0</strong>
+            <small>授权或 demo 主机</small>
+          </article>
+          <article class="metric">
+            <span>基线失败项</span>
+            <strong id="failedCount">0</strong>
+            <small>需要整改</small>
+          </article>
+          <article class="metric">
+            <span>平均风险</span>
+            <strong id="riskScore">0</strong>
+            <small>0-100 越高越危险</small>
+          </article>
+          <article class="metric">
+            <span>高风险资产</span>
+            <strong id="highRiskCount">0</strong>
+            <small>评分不低于 70</small>
+          </article>
+        </section>
+
+        <section id="templates" class="work-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>查询模板</h2>
+              <span id="templateCount">0</span>
+            </div>
+            <select id="templateSelect"></select>
+            <div id="templateDetail" class="template-detail"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>执行 / 导入</h2>
+              <span id="runStatus">未执行</span>
+            </div>
+            <div class="button-row">
+              <button id="demoRunButton" class="primary">执行 demo 查询</button>
+              <button id="importButton" class="ghost">导入 JSON 结果</button>
+            </div>
+            <textarea id="importText" spellcheck="false" placeholder='{"hosts":[{"host":{"hostname":"HOST-01"},"sections":{"users":[],"ports":[],"software":[]}}]}'></textarea>
+          </article>
+
+          <article class="panel report-panel">
+            <div class="panel-head">
+              <h2>报告与快照</h2>
+              <span id="lastRun">暂无快照</span>
+            </div>
+            <p id="reportPath">报告尚未生成</p>
+            <div id="changesList" class="changes-list"></div>
+          </article>
+        </section>
+
+        <section id="assets" class="panel wide">
+          <div class="panel-head">
+            <h2>主机资产</h2>
+            <input id="assetFilter" type="search" placeholder="筛选主机 / IP / 部门" />
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>主机</th>
+                  <th>IP</th>
+                  <th>操作系统</th>
+                  <th>部门</th>
+                  <th>类型</th>
+                  <th>用户</th>
+                  <th>软件</th>
+                  <th>端口</th>
+                  <th>最近查询</th>
+                  <th>状态</th>
+                  <th>风险</th>
+                </tr>
+              </thead>
+              <tbody id="assetRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="split-grid">
+          <article id="assetDetail" class="panel">
+            <div class="panel-head">
+              <h2>资产详情</h2>
+              <span id="selectedHost">未选择</span>
+            </div>
+            <div id="detailContent" class="detail-content">点击主机资产行查看系统、用户、进程、端口和软件。</div>
+          </article>
+
+          <article id="baseline" class="panel">
+            <div class="panel-head">
+              <h2>基线失败项</h2>
+              <span id="failureCount">0</span>
+            </div>
+            <div id="failureList" class="failure-list"></div>
+          </article>
+        </section>
+
+        <section id="departments" class="panel wide">
+          <div class="panel-head">
+            <h2>按部门资产视图</h2>
+            <span>周期巡检与风险归集</span>
+          </div>
+          <div id="departmentGrid" class="department-grid"></div>
+        </section>
+
+        <section id="tasks" class="split-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <h2>查询任务模型</h2>
+              <span id="taskCount">0</span>
+            </div>
+            <div id="taskList" class="task-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <h2>周期巡检</h2>
+              <button id="scheduleButton" class="ghost">创建每日 demo 巡检</button>
+            </div>
+            <div id="scheduleList" class="task-list"></div>
+          </article>
+        </section>
+
+        <section id="audit" class="panel wide">
+          <div class="panel-head">
+            <h2>权限与审计日志</h2>
+            <span>查询、导入、调度、导出留痕</span>
+          </div>
+          <div id="auditList" class="audit-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "env_root": "/Users/zhangjiyan/Environment",
+  "database_dir": "/Users/zhangjiyan/Environment/02-databases/11-velociraptor",
+  "log_dir": "/Users/zhangjiyan/Environment/11-logs/11-velociraptor",
+  "upload_dir": "/Users/zhangjiyan/Environment/13-uploads/11-velociraptor",
+  "dispatch_dir": "/Users/zhangjiyan/Environment/13-uploads/11-velociraptor/dispatch",
+  "evidence_dir": "/Users/zhangjiyan/Environment/13-uploads/11-velociraptor/evidence",
+  "docs_dir": "/Users/zhangjiyan/Environment/08-docs/11-velociraptor",
+  "secret_config_dir": "/Users/zhangjiyan/Environment/12-secrets/11-velociraptor",
+  "policy": {
+    "authorized_use_only": true,
+    "forbidden": [
+      "unauthorized collection",
+      "privacy theft",
+      "credential theft",
+      "lateral movement"
+    ]
+  }
+}

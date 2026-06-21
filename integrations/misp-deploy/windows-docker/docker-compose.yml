@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/windows-docker/Dockerfile
+    environment:
+      MISP_RUNTIME_ENV_ROOT: /Environment
+    volumes:
+      - ${ENV_ROOT:-./.runtime-docker}:/Environment

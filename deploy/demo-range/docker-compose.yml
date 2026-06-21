@@ -1,0 +1,119 @@
+name: cyberfusion-demo-range
+
+services:
+  demo-target:
+    build:
+      context: ./demo-enterprise-portal
+    image: cyberfusion/demo-enterprise-portal:local
+    container_name: cyberfusion-demo-target
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      DEMO_PORTAL_MODE: "${DEMO_PORTAL_MODE:-protected}"
+      DEMO_BATCH_ID: "${DEMO_BATCH_ID:-DEMO-RANGE-DOCKER-LOCAL}"
+      DEMO_PORTAL_LOG_FILE: /runtime/logs/demo-target/demo-events.jsonl
+    volumes:
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/logs/demo-target:/runtime/logs/demo-target"
+    networks:
+      - demo-range
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  waf-gateway:
+    image: owasp/modsecurity-crs:nginx
+    container_name: cyberfusion-waf-gateway
+    restart: unless-stopped
+    depends_on:
+      demo-target:
+        condition: service_started
+    environment:
+      BACKEND: http://demo-target:3000
+      SERVER_NAME: localhost
+      PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+      MODSEC_AUDIT_LOG: /var/log/modsecurity/audit.log
+    ports:
+      - "${DEMO_RANGE_BIND_HOST:-127.0.0.1}:${WAF_HTTP_PORT:-18081}:8080"
+    volumes:
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/logs/waf:/var/log/modsecurity"
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/logs/nginx:/var/log/nginx"
+    networks:
+      - demo-range
+
+  zap-baseline:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    container_name: cyberfusion-zap-baseline
+    profiles: ["scan"]
+    depends_on:
+      waf-gateway:
+        condition: service_started
+    command:
+      - /bin/sh
+      - -lc
+      - >
+        mkdir -p /zap/wrk &&
+        zap-baseline.py -t http://waf-gateway:8080
+        -J zap-baseline.json
+        -r zap-baseline.html
+        -I || true
+    volumes:
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/zap:/zap/wrk"
+    networks:
+      - demo-range
+
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: cyberfusion-trivy
+    profiles: ["scan"]
+    command:
+      - fs
+      - --format
+      - json
+      - --output
+      - /reports/trivy-demo-enterprise-portal.json
+      - --severity
+      - HIGH,CRITICAL
+      - /target
+    volumes:
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/trivy:/reports"
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}/trivy-cache:/root/.cache/trivy"
+      - "./demo-enterprise-portal:/target:ro"
+    networks:
+      - demo-range
+
+  demo-event-bridge:
+    build:
+      context: ./bridge
+    image: cyberfusion/demo-event-bridge:local
+    container_name: cyberfusion-demo-event-bridge
+    profiles: ["bridge"]
+    environment:
+      CYBERFUSION_API_BASE: "${CYBERFUSION_API_BASE:-http://host.docker.internal:18080/api}"
+      CYBERFUSION_API_TOKEN: "${CYBERFUSION_API_TOKEN:-}"
+      BRIDGE_DRY_RUN: "${BRIDGE_DRY_RUN:-true}"
+      DEMO_PORTAL_LOG_PATH: /runtime/logs/demo-target/demo-events.jsonl
+      WAF_LOG_PATH: /runtime/logs/waf/audit.log
+      ZAP_REPORT_PATH: /runtime/zap/zap-baseline.json
+      TRIVY_REPORT_PATH: /runtime/trivy/trivy-demo-enterprise-portal.json
+      DEMO_BATCH_ID: "${DEMO_BATCH_ID:-DEMO-RANGE-DOCKER-LOCAL}"
+    command: ["--dry-run"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "${DEMO_RANGE_RUNTIME_ROOT:-/Users/zhangjiyan/Environment/cyberfusion-platform/demo-range}:/runtime:ro"
+    networks:
+      - demo-range
+
+networks:
+  demo-range:
+    driver: bridge
+
+# Runtime logs, ZAP output, Trivy output, caches, and real .env files belong under
+# /Users/zhangjiyan/Environment or another protected runtime path, not in source.
+# Do not run `docker compose down -v` unless data deletion is explicitly approved.

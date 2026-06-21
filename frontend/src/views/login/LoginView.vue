@@ -1,0 +1,123 @@
+<template>
+  <main class="login-page">
+    <section class="login-panel">
+      <div class="login-copy">
+        <strong class="eyebrow">CYBERFUSION SECURITY OPERATIONS</strong>
+        <h1>CyberFusion SOC</h1>
+        <p>统一融合 Wazuh、Zeek、Suricata、MISP、Trivy、ZAP、CyberChef 与 Shuffle 的安全运营主系统。</p>
+      </div>
+      <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form" @keyup.enter="submit">
+        <el-alert title="本地演示账号：admin，密码以当前本地环境配置为准，仅用于授权测试环境" type="info" show-icon :closable="false" />
+        <el-form-item label="账号" prop="username">
+          <el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入账号" />
+        </el-form-item>
+        <el-form-item label="密码" prop="password">
+          <el-input v-model="form.password" size="large" type="password" autocomplete="current-password" show-password placeholder="请输入密码" />
+        </el-form-item>
+        <div class="form-row">
+          <el-checkbox v-model="form.rememberMe">记住我</el-checkbox>
+          <span>后端校验菜单、按钮、接口和数据权限</span>
+        </div>
+        <el-button type="primary" size="large" :loading="loading" class="login-button" @click="submit">登录</el-button>
+      </el-form>
+    </section>
+  </main>
+</template>
+
+<script setup lang="ts">
+import { reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import type { FormInstance, FormRules } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+
+const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
+const loading = ref(false)
+const formRef = ref<FormInstance>()
+const form = reactive({ username: 'admin', password: '', rememberMe: true })
+const rules: FormRules = {
+  username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
+}
+
+async function submit() {
+  if (!(await formRef.value?.validate().catch(() => false))) return
+  loading.value = true
+  try {
+    await authStore.login(form)
+    ElMessage.success('登录成功')
+    await router.replace(String(route.query.redirect || '/soc/dashboard'))
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 242, 234, 0.9) 52%, rgba(235, 244, 247, 0.94)),
+    var(--soc-canvas);
+}
+
+.login-panel {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(320px, 400px);
+  gap: 40px;
+  width: min(920px, 100%);
+  padding: 36px;
+  border: 1px solid rgba(190, 183, 171, 0.58);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 28px 80px rgba(91, 77, 53, 0.16), var(--soc-glass-highlight);
+  backdrop-filter: blur(26px) saturate(1.15);
+}
+
+.eyebrow {
+  color: var(--soc-warm-strong);
+  font-size: 12px;
+}
+
+.login-copy h1 {
+  margin: 16px 0 14px;
+  color: #111827;
+  font-size: 36px;
+}
+
+.login-copy p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  line-height: 1.8;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.form-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+}
+
+.login-button {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .login-panel {
+    grid-template-columns: 1fr;
+    padding: 24px;
+  }
+}
+</style>

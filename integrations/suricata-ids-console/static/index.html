@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>码研工坊 IDS 告警分析平台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>码研工坊 IDS 告警分析平台</h1>
+        <p>授权 eve.json 导入、告警分析、聚合降噪、误报与工单闭环</p>
+      </div>
+      <div class="importer">
+        <input id="evePath" type="text" placeholder="/Users/zhangjiyan/Environment/11-logs/04-suricata/eve.json" />
+        <button id="importBtn">导入 eve.json</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="band metrics" id="metrics"></section>
+
+      <section class="band grid two">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>时间趋势</h2>
+            <span id="trendCount"></span>
+          </div>
+          <div class="bars" id="trend"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>规则分类</h2>
+            <span>Top categories</span>
+          </div>
+          <div class="list-bars" id="categories"></div>
+        </div>
+      </section>
+
+      <section class="band grid two">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>源 IP</h2>
+            <span>Top sources</span>
+          </div>
+          <div class="list-bars" id="sources"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>目的 IP</h2>
+            <span>Top destinations</span>
+          </div>
+          <div class="list-bars" id="destinations"></div>
+        </div>
+      </section>
+
+      <section class="band panel">
+        <div class="panel-head">
+          <h2>告警列表</h2>
+          <div class="actions">
+            <a id="exportLink" class="button secondary" href="/api/export.csv">导出 CSV</a>
+            <button id="refreshBtn" class="secondary">刷新</button>
+          </div>
+        </div>
+        <form class="filters" id="filters">
+          <input name="search" type="search" placeholder="搜索 signature / category / IP / proto" />
+          <select name="severity">
+            <option value="">全部等级</option>
+            <option value="1">Critical</option>
+            <option value="2">High</option>
+            <option value="3">Medium</option>
+            <option value="4">Low</option>
+          </select>
+          <input name="src_ip" placeholder="源 IP" />
+          <input name="dest_ip" placeholder="目的 IP" />
+          <input name="proto" placeholder="协议" />
+          <select name="false_positive">
+            <option value="">误报状态</option>
+            <option value="0">未标记误报</option>
+            <option value="1">已标记误报</option>
+          </select>
+          <select name="ignored">
+            <option value="">忽略状态</option>
+            <option value="0">未忽略</option>
+            <option value="1">已忽略</option>
+          </select>
+          <button type="submit">筛选</button>
+        </form>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>等级</th>
+                <th>规则</th>
+                <th>分类</th>
+                <th>源</th>
+                <th>目的</th>
+                <th>协议</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody id="alertsBody"></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button id="prevPage" class="secondary">上一页</button>
+          <span id="pageInfo"></span>
+          <button id="nextPage" class="secondary">下一页</button>
+        </div>
+      </section>
+
+      <section class="band grid two">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>聚合降噪</h2>
+            <span>signature + src + dst + 时间窗口</span>
+          </div>
+          <div id="aggregation" class="compact-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>时间线</h2>
+            <span>当前筛选</span>
+          </div>
+          <div id="timeline" class="timeline"></div>
+        </div>
+      </section>
+
+      <section class="band grid two">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>导入任务日志</h2>
+            <button id="retryBtn" class="secondary">重试失败导入</button>
+          </div>
+          <div id="importLogs" class="compact-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>白名单</h2>
+            <span>导入时跳过匹配项</span>
+          </div>
+          <div id="whitelist" class="compact-list"></div>
+        </div>
+      </section>
+
+      <section class="band panel">
+        <div class="panel-head">
+          <h2>IDS 报表</h2>
+          <div class="actions">
+            <button id="dailyReport" class="secondary">日报 JSON</button>
+            <button id="highReport" class="secondary">高危报告 JSON</button>
+            <button id="ruleReport" class="secondary">规则命中 JSON</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="band panel">
+        <div class="panel-head">
+          <h2>IP 关联分析</h2>
+          <div class="actions">
+            <input id="focusIp" placeholder="输入 IP 聚焦分析" />
+            <button id="ipBtn" class="secondary">分析</button>
+          </div>
+        </div>
+        <div id="ipAnalysis" class="compact-list"></div>
+      </section>
+    </main>
+
+    <aside id="detailDrawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <h2>告警详情</h2>
+        <button id="closeDrawer" class="secondary">关闭</button>
+      </div>
+      <div id="detailContent"></div>
+    </aside>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

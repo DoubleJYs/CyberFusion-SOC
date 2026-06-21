@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-05-31T20:45:00+08:00",
+  "event_type": "alert",
+  "src_ip": "203.0.113.8",
+  "src_port": 53214,
+  "dest_ip": "10.16.0.23",
+  "dest_port": 443,
+  "proto": "TCP",
+  "alert": {
+    "signature": "ET POLICY Suspicious TLS Certificate Observed",
+    "severity": 2,
+    "category": "Potential Corporate Privacy Violation"
+  }
+}

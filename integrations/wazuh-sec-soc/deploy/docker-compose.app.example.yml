@@ -1,0 +1,97 @@
+name: sec-wazuh-soc-app-example
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in an Environment-local .env file}
+      MYSQL_DATABASE: ${DB_NAME:-sec_wazuh_soc}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${DB_PORT:-33306}:3306"
+    volumes:
+      - /Users/zhangjiyan/Environment/sec-wazuh-soc/mysql:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-36379}:6379"
+    volumes:
+      - /Users/zhangjiyan/Environment/sec-wazuh-soc/redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: sec-wazuh-soc-backend:local
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-sec_wazuh_soc}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in an Environment-local .env file}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DATABASE: ${REDIS_DATABASE:-0}
+      APP_UPLOAD_BASE_DIR: /data/uploads
+      LOGGING_FILE_PATH: /app/logs
+      APP_CORS_ALLOWED_ORIGIN_PATTERNS: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:-http://127.0.0.1:18081,http://localhost:18081}
+      APP_RATE_LIMIT_ENABLED: ${APP_RATE_LIMIT_ENABLED:-true}
+      WAZUH_MANAGER_URL: ${WAZUH_MANAGER_URL:-}
+      WAZUH_INDEXER_URL: ${WAZUH_INDEXER_URL:-}
+      WAZUH_MANAGER_USERNAME: ${WAZUH_MANAGER_USERNAME:-}
+      WAZUH_MANAGER_PASSWORD: ${WAZUH_MANAGER_PASSWORD:-}
+      WAZUH_INDEXER_USERNAME: ${WAZUH_INDEXER_USERNAME:-}
+      WAZUH_INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:-}
+      WAZUH_TLS_VERIFY: ${WAZUH_TLS_VERIFY:-true}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
+    volumes:
+      - /Users/zhangjiyan/Environment/sec-wazuh-soc/uploads:/data/uploads
+      - /Users/zhangjiyan/Environment/sec-wazuh-soc/logs/backend:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health/readiness"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  frontend:
+    image: sec-wazuh-soc-frontend:local
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-18081}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+# Store real .env files, certificates, logs, uploads, and Docker data under /Users/zhangjiyan/Environment/sec-wazuh-soc.
+# Keep Wazuh credentials blank unless an authorized test Wazuh Manager / Indexer is available.

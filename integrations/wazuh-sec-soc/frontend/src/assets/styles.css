@@ -1,0 +1,147 @@
+:root {
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  color: var(--soc-text);
+  background: var(--soc-canvas);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.page-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+}
+
+.page-title-row h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.tool-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-actions {
+  justify-content: flex-end;
+}
+
+.panel {
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  background: var(--soc-surface);
+  padding: 16px;
+}
+
+.table-panel {
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  background: var(--soc-surface);
+  overflow: hidden;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 16px;
+}
+
+.page-shell > .el-card {
+  border-radius: 8px;
+}
+
+.page-shell > .el-card .el-card__body {
+  padding: 0;
+}
+
+.page-shell > .el-card .el-table {
+  width: 100%;
+}
+
+.page-shell > .el-card .el-pagination {
+  justify-content: flex-end;
+  padding: 14px 16px;
+}
+
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.el-card,
+.el-drawer,
+.el-table,
+.el-table th.el-table__cell,
+.el-table tr,
+.el-pager li {
+  color: var(--soc-text);
+  background-color: var(--soc-surface);
+}
+
+.el-table td.el-table__cell,
+.el-table th.el-table__cell {
+  border-bottom-color: var(--soc-border);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  background: var(--soc-surface-raised);
+  box-shadow: 0 0 0 1px var(--soc-border) inset;
+}
+
+.el-input__inner,
+.el-select__placeholder,
+.el-textarea__inner {
+  color: var(--soc-text);
+}
+
+.el-drawer {
+  border-left: 1px solid var(--soc-border);
+}
+
+.el-drawer__header,
+.el-dialog__header {
+  color: var(--soc-text);
+}
+
+.form-switch {
+  --el-switch-on-color: #16a34a;
+}
+
+@media (max-width: 760px) {
+  .tool-row,
+  .page-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page-shell > .el-card .el-pagination {
+    justify-content: flex-start;
+    overflow-x: auto;
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "kernel_module_inventory",
+  "name": "内核模块模板",
+  "category": "baseline",
+  "description": "采集内核模块元数据，用于异常驱动、未授权内核扩展和高权限组件审计。",
+  "safe_scope": "仅查询内核模块元数据，不加载、卸载或修改内核模块。",
+  "sections": ["kernel_modules"],
+  "queries": {
+    "kernel_modules": "SELECT name, path, size, status FROM kernel_modules ORDER BY name LIMIT 500;"
+  }
+}

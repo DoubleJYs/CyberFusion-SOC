@@ -1,0 +1,1 @@
+{"sourceType":"wazuh","id":"wazuh-demo-0001","rule":{"id":"5502","level":10,"description":"Demo protected file change review"},"agent":{"name":"prod-app-01","ip":"10.20.1.15"},"data":{"srcip":"10.20.1.15"},"batchId":"DEMO-RANGE-OFFLINE-V1","demoCaseId":"DEMO-FIM-001","evidenceSummary":"Offline Wazuh-style FIM event retained for SOC validation only."}

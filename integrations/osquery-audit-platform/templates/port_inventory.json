@@ -1,0 +1,11 @@
+{
+  "id": "port_inventory",
+  "name": "开放端口模板",
+  "category": "exposure",
+  "description": "采集监听端口与进程 PID，用于异常端口、危险服务和暴露面审计。",
+  "safe_scope": "仅查询本机监听端口元数据，不发起网络扫描。",
+  "sections": ["ports"],
+  "queries": {
+    "ports": "SELECT pid, port, protocol, address FROM listening_ports ORDER BY port LIMIT 500;"
+  }
+}

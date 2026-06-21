@@ -1,0 +1,411 @@
+<template>
+  <div class="page-shell">
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      show-icon
+      :closable="false"
+    >
+      <template #default>
+        <el-button size="small" @click="load">重试</el-button>
+      </template>
+    </el-alert>
+
+    <section class="source-strip">
+      <span>当前数据来源</span>
+      <DataSourceBadge source="mock" />
+      <strong>降级链路：Wazuh/Indexer 实时数据 -> MySQL 同步数据 -> 演示数据</strong>
+    </section>
+
+    <el-tabs v-model="activeView" class="cockpit-tabs">
+      <el-tab-pane label="管理驾驶舱" name="management">
+        <section class="kpi-grid">
+          <RiskCard label="今日告警" :value="overview.todayAlerts" delta="来自模拟/Indexer 数据源" tone="medium" />
+          <RiskCard label="高危告警" :value="overview.highAlerts" delta="critical + high 待处置" tone="critical" />
+          <RiskCard label="待处理工单" :value="overview.pendingTickets" delta="未关闭/未归档" tone="high" />
+          <RiskCard label="受管资产" :value="overview.assets" delta="P0 资产视图" tone="low" />
+        </section>
+
+        <section v-loading="loading" class="dashboard-grid">
+          <div class="soc-panel chart-panel">
+            <div class="panel-title">
+              <strong>七日风险趋势</strong>
+              <span>按事件时间聚合</span>
+            </div>
+            <RiskTrendChart v-if="trend.length" :labels="trend.map((item) => item.date.slice(5))" :values="trend.map((item) => item.count)" />
+            <el-empty v-else description="暂无趋势数据" :image-size="76" />
+          </div>
+          <div class="soc-panel side-panel">
+            <div class="panel-title">
+              <strong>告警等级分布</strong>
+              <span>业务处置状态在 MySQL 保存</span>
+            </div>
+            <div v-for="item in severities" :key="item.name" class="distribution-row">
+              <SeverityBadge :severity="item.name" />
+              <el-progress :percentage="percentage(item.value)" :stroke-width="8" :show-text="false" />
+              <strong>{{ item.value }}</strong>
+            </div>
+            <el-empty v-if="!severities.length" description="暂无等级分布" :image-size="76" />
+          </div>
+        </section>
+
+        <section v-loading="loading" class="management-grid">
+          <div class="soc-panel">
+            <div class="panel-title">
+              <strong>部门风险排行</strong>
+              <span>告警、漏洞、基线、工单综合评分</span>
+            </div>
+            <div v-for="dept in analytics.departmentRisks" :key="dept.deptName" class="dept-risk-row">
+              <div>
+                <strong>{{ dept.deptName }}</strong>
+                <span>{{ dept.assets }} 台资产 / 高危告警 {{ dept.highAlerts }} / 待修复漏洞 {{ dept.openVulnerabilities }}</span>
+              </div>
+              <el-progress :percentage="dept.score" :stroke-width="10" />
+            </div>
+            <el-empty v-if="!analytics.departmentRisks.length" description="暂无部门风险数据" :image-size="76" />
+          </div>
+          <div class="soc-panel">
+            <div class="panel-title">
+              <strong>处置效率</strong>
+              <span>SLA、误报与重复告警</span>
+            </div>
+            <div class="metric-grid">
+              <div class="metric-item">
+                <span>SLA 达成率</span>
+                <strong>{{ analytics.operationMetrics.slaRate }}%</strong>
+              </div>
+              <div class="metric-item">
+                <span>超时工单</span>
+                <strong>{{ analytics.operationMetrics.overdueTickets }}</strong>
+              </div>
+              <div class="metric-item">
+                <span>误报率</span>
+                <strong>{{ analytics.operationMetrics.falsePositiveRate }}%</strong>
+              </div>
+              <div class="metric-item">
+                <span>重复聚合组</span>
+                <strong>{{ analytics.operationMetrics.duplicateGroups }}</strong>
+              </div>
+              <div class="metric-item">
+                <span>平均关闭耗时</span>
+                <strong>{{ analytics.operationMetrics.averageCloseHours }}h</strong>
+              </div>
+              <div class="metric-item">
+                <span>已关闭工单</span>
+                <strong>{{ analytics.operationMetrics.closedTickets }}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane label="分析员工作台" name="analyst">
+        <section v-loading="loading" class="analyst-grid">
+          <div class="soc-panel">
+            <div class="panel-title">
+              <strong>资产风险评分</strong>
+              <span>分值来源可解释</span>
+            </div>
+            <div v-for="asset in analytics.assetRisks" :key="asset.ip" class="score-row">
+              <div class="score-head">
+                <div>
+                  <strong>{{ asset.hostname }}</strong>
+                  <span>{{ asset.ip }} / {{ asset.deptName || '未分配部门' }}</span>
+                </div>
+                <b>{{ asset.score }}</b>
+              </div>
+              <el-progress :percentage="asset.score" :stroke-width="9" />
+              <p>{{ asset.explanation }}</p>
+            </div>
+            <el-empty v-if="!analytics.assetRisks.length" description="暂无资产评分" :image-size="76" />
+          </div>
+
+          <div class="soc-panel">
+            <div class="panel-title">
+              <strong>告警优先级</strong>
+              <span>等级、资产、IOC、重复次数</span>
+            </div>
+            <div v-for="alert in analytics.alertPriorities" :key="alert.alertUid" class="priority-row">
+              <div class="priority-title">
+                <SeverityBadge :severity="alert.severity" />
+                <strong>{{ alert.score }}</strong>
+              </div>
+              <b>{{ alert.ruleDescription }}</b>
+              <span>{{ alert.assetName }} / {{ alert.assetIp }} / {{ formatTime(alert.eventTime) }}</span>
+              <p>{{ alert.reason }}</p>
+            </div>
+            <el-empty v-if="!analytics.alertPriorities.length" description="暂无告警优先级数据" :image-size="76" />
+          </div>
+        </section>
+
+        <section v-loading="loading" class="soc-panel timeline-panel">
+          <div class="panel-title">
+            <strong>安全事件时间线</strong>
+            <span>从事件产生到处置关闭</span>
+          </div>
+          <el-timeline>
+            <el-timeline-item
+              v-for="item in analytics.eventTimeline"
+              :key="`${item.type}-${item.occurredAt}-${item.title}`"
+              :timestamp="formatTime(item.occurredAt)"
+              placement="top"
+            >
+              <div class="timeline-item">
+                <SeverityBadge v-if="item.severity" :severity="item.severity" />
+                <strong>{{ item.type }}：{{ item.title }}</strong>
+                <span>{{ item.assetName || item.operatorName || item.status }}</span>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-if="!analytics.eventTimeline.length" description="暂无事件时间线" :image-size="76" />
+        </section>
+      </el-tab-pane>
+    </el-tabs>
+
+    <section v-loading="loading" class="soc-panel affected-panel">
+      <div class="panel-title">
+        <strong>受影响资产排行</strong>
+        <span>按未关闭告警数量排序</span>
+      </div>
+      <div class="asset-bars">
+        <div v-for="asset in assets" :key="asset.name" class="asset-bar">
+          <span>{{ asset.name }}</span>
+          <el-progress :percentage="percentage(asset.value)" :stroke-width="10" />
+        </div>
+      </div>
+      <el-empty v-if="!assets.length" description="暂无受影响资产" :image-size="76" />
+    </section>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, reactive, ref } from 'vue'
+import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import RiskCard from '@/components/security/RiskCard.vue'
+import RiskTrendChart from '@/components/security/RiskTrendChart.vue'
+import SeverityBadge from '@/components/security/SeverityBadge.vue'
+import { affectedAssets, alertTrend, dashboardOverview, riskAnalytics, severityDistribution } from '@/api/soc'
+import type { RiskAnalytics } from '@/api/soc'
+
+const emptyAnalytics: RiskAnalytics = {
+  assetRisks: [],
+  alertPriorities: [],
+  departmentRisks: [],
+  operationMetrics: {
+    pendingTickets: 0,
+    overdueTickets: 0,
+    closedTickets: 0,
+    slaMetTickets: 0,
+    falsePositiveAlerts: 0,
+    duplicateGroups: 0,
+    slaRate: 100,
+    falsePositiveRate: 0,
+    averageCloseHours: 0,
+  },
+  eventTimeline: [],
+}
+
+const activeView = ref('management')
+const overview = reactive({ todayAlerts: 0, highAlerts: 0, pendingTickets: 0, assets: 0, unhandledAlerts: 0 })
+const analytics = reactive<RiskAnalytics>(structuredClone(emptyAnalytics))
+const trend = ref<Array<{ date: string; count: number }>>([])
+const severities = ref<Array<{ name: string; value: number }>>([])
+const assets = ref<Array<{ name: string; value: number }>>([])
+const loading = ref(false)
+const error = ref('')
+
+onMounted(load)
+
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [overviewRes, trendRes, severityRes, assetRes, analyticsRes] = await Promise.all([
+      dashboardOverview(), alertTrend(), severityDistribution(), affectedAssets(), riskAnalytics(),
+    ])
+    Object.assign(overview, overviewRes.data.data)
+    trend.value = trendRes.data.data
+    severities.value = severityRes.data.data
+    assets.value = assetRes.data.data
+    Object.assign(analytics, analyticsRes.data.data)
+  } catch {
+    error.value = '安全总览数据加载失败，请检查后端服务或 Wazuh/数据库连接。'
+  } finally {
+    loading.value = false
+  }
+}
+
+function percentage(value: number) {
+  const max = Math.max(1, ...severities.value.map((item) => item.value), ...assets.value.map((item) => item.value))
+  return Math.round((value / max) * 100)
+}
+
+function formatTime(value?: string) {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 16)
+}
+</script>
+
+<style scoped>
+.cockpit-tabs {
+  --el-border-color-light: var(--soc-border);
+}
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.source-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--soc-border);
+  border-radius: var(--soc-radius-card);
+  background: var(--soc-surface);
+  padding: 10px 14px;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+}
+.source-strip strong {
+  color: var(--soc-text);
+  font-weight: 500;
+}
+.dashboard-grid,
+.management-grid,
+.analyst-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  gap: 14px;
+}
+.chart-panel,
+.side-panel,
+.affected-panel,
+.timeline-panel,
+.management-grid .soc-panel,
+.analyst-grid .soc-panel {
+  padding: 16px;
+}
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.panel-title span {
+  color: var(--soc-text-muted);
+  font-size: 13px;
+}
+.distribution-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 40px;
+  gap: 10px;
+  align-items: center;
+  min-height: 42px;
+}
+.dept-risk-row,
+.score-row,
+.priority-row {
+  border-bottom: 1px solid var(--soc-border);
+  padding: 12px 0;
+}
+.dept-risk-row:first-of-type,
+.score-row:first-of-type,
+.priority-row:first-of-type {
+  padding-top: 0;
+}
+.dept-risk-row:last-child,
+.score-row:last-child,
+.priority-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.dept-risk-row > div,
+.score-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.dept-risk-row span,
+.score-row span,
+.priority-row span,
+.score-row p,
+.priority-row p {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.score-head b,
+.priority-title strong {
+  font-size: 24px;
+  color: var(--soc-high);
+}
+.priority-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.metric-item {
+  border: 1px solid var(--soc-border);
+  border-radius: var(--soc-radius-card);
+  background: var(--soc-surface-muted);
+  padding: 12px;
+}
+.metric-item span {
+  display: block;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+.metric-item strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--soc-text);
+  font-size: 22px;
+}
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+.timeline-item span {
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+.asset-bars {
+  display: grid;
+  gap: 10px;
+}
+.asset-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .kpi-grid,
+  .dashboard-grid,
+  .management-grid,
+  .analyst-grid {
+    grid-template-columns: 1fr;
+  }
+  .source-strip {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

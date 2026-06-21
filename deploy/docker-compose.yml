@@ -1,0 +1,45 @@
+name: cyberfusion-platform
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your local environment file under /Users/zhangjiyan/Environment/cyberfusion-platform}
+      MYSQL_DATABASE: ${DB_NAME:-cyberfusion_soc}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${DB_PORT:-3306}:3306"
+    volumes:
+      - /Users/zhangjiyan/Environment/cyberfusion-platform/mysql:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - /Users/zhangjiyan/Environment/cyberfusion-platform/redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:4.8.1
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
+
+# Runtime data is intentionally outside /Users/zhangjiyan/Programs.
+# Do not run docker compose down -v unless the user explicitly asks for data removal.

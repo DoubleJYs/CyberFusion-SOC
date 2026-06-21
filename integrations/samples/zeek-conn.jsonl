@@ -1,0 +1,1 @@
+{"sourceType":"zeek","ts":"2026-06-18T10:06:00+08:00","uid":"ZEEK-DEMO-0001","id.orig_h":"203.0.113.44","id.resp_h":"10.20.1.15","proto":"tcp","service":"https","batchId":"DEMO-RANGE-OFFLINE-V1","demoCaseId":"DEMO-NETWORK-IDS-001","evidenceSummary":"Offline Zeek connection metadata used for SOC validation only."}

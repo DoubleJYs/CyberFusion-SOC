@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/windows-docker/Dockerfile
+    ports:
+      - "18080:18080"
+    environment:
+      CYBERCHEF_ENV_ROOT: /Environment
+    volumes:
+      - ${ENV_ROOT:-./.runtime-docker}:/Environment

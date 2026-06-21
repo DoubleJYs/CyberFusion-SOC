@@ -1,0 +1,11 @@
+{
+  "id": "user_inventory",
+  "name": "用户与权限模板",
+  "category": "identity",
+  "description": "采集本地账号元数据，用于弱口令风险线索、访客账号和敏感权限审计。",
+  "safe_scope": "不读取口令、哈希或个人文件，仅记录账号元数据。",
+  "sections": ["users"],
+  "queries": {
+    "users": "SELECT username, uid, gid, directory, shell, type FROM users WHERE username NOT LIKE '_%' ORDER BY uid LIMIT 200;"
+  }
+}

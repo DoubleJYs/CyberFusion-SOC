@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "approval": {
+    "required_role": "soc_approver",
+    "approvers": {
+      "zhangjiyan": [
+        "soc_approver",
+        "soc_lead"
+      ],
+      "webhook-local-approver": [
+        "soc_approver"
+      ]
+    }
+  },
+  "sla": {
+    "default": "8h",
+    "severity": {
+      "critical": "1h",
+      "high": "4h",
+      "10": "4h",
+      "2": "8h",
+      "medium": "8h",
+      "low": "24h"
+    }
+  },
+  "governance": {
+    "destructive_actions_enabled": false,
+    "external_delivery_enabled": false,
+    "audit_mode": "append-only"
+  }
+}

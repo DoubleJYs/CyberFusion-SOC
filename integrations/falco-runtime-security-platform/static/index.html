@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>码研工坊运行时安全告警平台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">F</div>
+        <div>
+          <strong>码研工坊 Runtime SOC</strong>
+          <span>云原生运行时告警</span>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-item active" data-view="dashboard">看板</button>
+        <button class="nav-item" data-view="events">事件列表</button>
+        <button class="nav-item" data-view="rules">规则分析</button>
+        <button class="nav-item" data-view="assets">容器与进程</button>
+        <button class="nav-item" data-view="settings">处置配置</button>
+      </nav>
+      <div class="env-box">
+        <span>运行边界</span>
+        <p>仅导入授权环境 Falco JSON 或 demo 事件；数据库、日志、报告写入 Environment。</p>
+      </div>
+    </aside>
+
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>码研工坊运行时安全告警平台</h1>
+          <p>导入事件、规则命中分析、误报处置、白名单和报告导出闭环。</p>
+        </div>
+        <div class="actions">
+          <button id="import-demo" class="button primary">导入 demo 事件</button>
+          <button id="export-json" class="button">导出 JSON</button>
+          <button id="export-csv" class="button">导出 CSV</button>
+          <select id="report-type" aria-label="报告类型">
+            <option value="daily">安全日报</option>
+            <option value="rules">规则命中报告</option>
+            <option value="containers">容器风险报告</option>
+          </select>
+          <button id="make-report" class="button">生成报告</button>
+        </div>
+      </header>
+
+      <section id="dashboard" class="view active">
+        <div class="metrics">
+          <article class="metric">
+            <span>事件总数</span>
+            <strong id="metric-total">0</strong>
+          </article>
+          <article class="metric high">
+            <span>高危事件</span>
+            <strong id="metric-high">0</strong>
+          </article>
+          <article class="metric">
+            <span>平均风险</span>
+            <strong id="metric-risk">0</strong>
+          </article>
+          <article class="metric">
+            <span>抑制/工单</span>
+            <strong id="metric-disposition">0 / 0</strong>
+          </article>
+        </div>
+
+        <div class="grid two">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>时间趋势</h2>
+              <span>按小时聚合</span>
+            </div>
+            <div id="trend-chart" class="bar-chart"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>规则命中 Top</h2>
+              <span>用于定位高频规则</span>
+            </div>
+            <div id="rule-hits" class="rank-list"></div>
+          </section>
+        </div>
+
+        <div class="grid three">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>严重等级</h2>
+            </div>
+            <div id="priority-breakdown" class="rank-list compact"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>容器分布</h2>
+            </div>
+            <div id="container-distribution" class="rank-list compact"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <h2>主机/节点分布</h2>
+            </div>
+            <div id="host-distribution" class="rank-list compact"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="events" class="view">
+        <section class="panel">
+          <div class="panel-head filters">
+            <div>
+              <h2>事件列表</h2>
+              <span id="event-count">0 条事件</span>
+            </div>
+            <div class="filter-row">
+              <input id="filter-q" placeholder="搜索规则、命令、镜像" />
+              <select id="filter-priority">
+                <option value="">全部等级</option>
+                <option>CRITICAL</option>
+                <option>ERROR</option>
+                <option>WARNING</option>
+                <option>NOTICE</option>
+                <option>INFO</option>
+              </select>
+              <input id="filter-namespace" placeholder="namespace" />
+              <button id="apply-filters" class="button">筛选</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>时间</th>
+                  <th>等级</th>
+                  <th>风险</th>
+                  <th>规则</th>
+                  <th>Kubernetes</th>
+                  <th>容器/进程</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="events-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="rules" class="view">
+        <div class="grid two">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>规则详情</h2>
+              <span>点击规则查看命中事件与标签</span>
+            </div>
+            <div id="rules-list" class="rule-list"></div>
+          </section>
+          <section class="panel detail-panel">
+            <div class="panel-head">
+              <h2 id="rule-detail-title">未选择规则</h2>
+              <span id="rule-detail-meta">等待选择</span>
+            </div>
+            <div id="rule-detail" class="detail-copy"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="assets" class="view">
+        <div class="grid three">
+          <section class="panel">
+            <div class="panel-head"><h2>容器信息</h2></div>
+            <div id="containers-list" class="rank-list compact"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>进程信息</h2></div>
+            <div id="processes-list" class="rank-list compact"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>命令信息</h2></div>
+            <div id="commands-list" class="command-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="settings" class="view">
+        <div class="grid two">
+          <section class="panel">
+            <div class="panel-head">
+              <h2>通知配置</h2>
+              <span>本地记录配置，不主动外发</span>
+            </div>
+            <form id="notification-form" class="form-grid">
+              <input name="name" placeholder="配置名称" required />
+              <select name="channel">
+                <option value="webhook">Webhook</option>
+                <option value="email">Email</option>
+                <option value="soc">统一 SOC</option>
+                <option value="ticket">工单</option>
+              </select>
+              <input name="target" placeholder="目标地址或系统标识" required />
+              <select name="min_priority">
+                <option>ERROR</option>
+                <option>WARNING</option>
+                <option>NOTICE</option>
+                <option>INFO</option>
+              </select>
+              <button class="button primary" type="submit">保存通知</button>
+            </form>
+            <div id="notifications-list" class="settings-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h2>白名单</h2>
+              <span>按规则、namespace、容器、镜像或命令片段匹配</span>
+            </div>
+            <form id="whitelist-form" class="form-grid">
+              <input name="name" placeholder="白名单名称" required />
+              <input name="rule" placeholder="规则名称" />
+              <input name="namespace" placeholder="namespace" />
+              <input name="container_name" placeholder="容器名" />
+              <input name="image" placeholder="镜像" />
+              <input name="process_name" placeholder="进程名" />
+              <input name="command_contains" placeholder="命令包含" />
+              <button class="button primary" type="submit">保存白名单</button>
+            </form>
+            <div id="whitelist-list" class="settings-list"></div>
+          </section>
+        </div>
+        <div class="grid three">
+          <section class="panel">
+            <div class="panel-head"><h2>工单</h2><span>高危未抑制事件自动创建</span></div>
+            <div id="tickets-list" class="settings-list"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>通知投递</h2><span>本地 queued 记录</span></div>
+            <div id="deliveries-list" class="settings-list"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>接入批次</h2><span>支持去重与重放</span></div>
+            <div id="batches-list" class="settings-list"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>报告导出</h2><span>日报、规则、容器风险</span></div>
+            <div id="reports-list" class="settings-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <aside id="event-drawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div>
+          <span id="drawer-priority" class="tag">INFO</span>
+          <h2 id="drawer-rule">事件详情</h2>
+        </div>
+        <button id="drawer-close" class="icon-button" aria-label="关闭">×</button>
+      </div>
+      <div id="drawer-content" class="drawer-content"></div>
+      <form id="disposition-form" class="disposition">
+        <select name="status">
+          <option value="in_review">标记为处置中</option>
+          <option value="false_positive">标记为误报</option>
+          <option value="suppressed">标记为抑制</option>
+          <option value="whitelisted">加入白名单状态</option>
+          <option value="closed">关闭</option>
+        </select>
+        <textarea name="note" placeholder="处置说明"></textarea>
+        <label><input type="checkbox" name="false_positive" /> 误报</label>
+        <button class="button primary" type="submit">保存处置</button>
+      </form>
+    </aside>
+    <div id="toast" class="toast" role="status"></div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

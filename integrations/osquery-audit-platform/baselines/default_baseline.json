@@ -1,0 +1,207 @@
+{
+  "id": "default_endpoint_baseline",
+  "name": "终端主机通用基线",
+  "version": "2026.05",
+  "description": "面向 demo 或授权主机资产结果的生产化基线集，覆盖 SSH 配置、弱口令风险、危险服务、异常端口、敏感权限、软件清单和审计可追溯性。",
+  "policies": [
+    {
+      "id": "host_identity_present",
+      "title": "主机身份信息完整",
+      "severity": "high",
+      "category": "资产完整性",
+      "description": "资产记录应包含主机名、IP、操作系统和所属部门，便于责任定位。",
+      "recommendation": "补齐主机名、IP、操作系统和部门字段；导入真实结果时先做字段映射校验。",
+      "rule": {
+        "type": "host_fields_present",
+        "fields": [
+          "hostname",
+          "ip",
+          "os_name",
+          "department"
+        ]
+      }
+    },
+    {
+      "id": "admin_account_limit",
+      "title": "本地管理员账号数量受控",
+      "severity": "medium",
+      "category": "账号权限",
+      "description": "本地管理员或特权账号数量过多会放大横向移动风险。",
+      "recommendation": "回收不必要的本地管理员权限，保留应急账号并纳入审批。",
+      "rule": {
+        "type": "count_lte",
+        "section": "users",
+        "field": "type",
+        "equals": "admin",
+        "max": 2
+      }
+    },
+    {
+      "id": "guest_account_disabled",
+      "title": "访客账号未启用",
+      "severity": "high",
+      "category": "账号权限",
+      "description": "访客账号启用会降低访问控制边界。",
+      "recommendation": "禁用 guest/visitor 等访客账号，并确认无共享弱口令。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "users",
+        "field": "username",
+        "in": [
+          "guest",
+          "visitor"
+        ]
+      }
+    },
+    {
+      "id": "remote_port_review",
+      "title": "高风险远程端口需审查",
+      "severity": "high",
+      "category": "暴露面",
+      "description": "开放 22/3389/5900 等远程访问端口时应确认业务必要性和访问控制。",
+      "recommendation": "限制远程管理端口来源地址，启用 MFA 或堡垒机，并关闭非必要监听。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "ports",
+        "field": "port",
+        "in": [
+          "22",
+          "3389",
+          "5900"
+        ]
+      }
+    },
+    {
+      "id": "ssh_password_auth_disabled",
+      "title": "SSH 禁止密码认证",
+      "severity": "high",
+      "category": "SSH 配置",
+      "description": "面向服务器资产，SSH PasswordAuthentication 应关闭并使用密钥或堡垒机控制。",
+      "recommendation": "将 sshd_config 中 PasswordAuthentication 设置为 no，变更后重载 sshd 并验证堡垒机策略。",
+      "rule": {
+        "type": "no_rows_match_all",
+        "section": "ssh_config",
+        "match": {
+          "option": [
+            "PasswordAuthentication"
+          ],
+          "value": [
+            "yes",
+            "true",
+            "1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "weak_password_risk_absent",
+      "title": "无弱口令风险线索",
+      "severity": "critical",
+      "category": "弱口令风险",
+      "description": "导入结果或授权检查不应出现默认口令、弱口令或空口令线索。",
+      "recommendation": "立即重置命中账号口令，强制复杂度和轮换策略，并检查登录日志。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "password_risks",
+        "field": "risk",
+        "in": [
+          "weak_password",
+          "default_password",
+          "empty_password"
+        ]
+      }
+    },
+    {
+      "id": "dangerous_service_absent",
+      "title": "危险服务未运行",
+      "severity": "high",
+      "category": "危险服务",
+      "description": "telnet、rsh、未授权 netcat listener 等高危服务不应在终端或服务器上运行。",
+      "recommendation": "停止并卸载不必要危险服务，保留业务例外审批和网络访问限制。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "processes",
+        "field": "name",
+        "in": [
+          "telnetd",
+          "rshd",
+          "rexecd",
+          "nc",
+          "netcat"
+        ]
+      }
+    },
+    {
+      "id": "abnormal_port_absent",
+      "title": "异常端口未暴露",
+      "severity": "high",
+      "category": "异常端口",
+      "description": "23、3389、5900、6379、9200 等端口需要业务审批和访问控制。",
+      "recommendation": "关闭非必要监听；确需开放时限制来源、纳入堡垒机或安全组策略。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "ports",
+        "field": "port",
+        "in": [
+          "23",
+          "3389",
+          "5900",
+          "6379",
+          "9200"
+        ]
+      }
+    },
+    {
+      "id": "sensitive_permission_reviewed",
+      "title": "敏感权限已审查",
+      "severity": "high",
+      "category": "敏感权限",
+      "description": "SUID、全局可写敏感目录或高权限启动项需要审批。",
+      "recommendation": "移除不必要 SUID/全局写权限，保留项记录审批、责任人和到期时间。",
+      "rule": {
+        "type": "no_rows_match",
+        "section": "sensitive_permissions",
+        "field": "risk",
+        "in": [
+          "suid_unreviewed",
+          "world_writable_sensitive",
+          "privileged_startup_unreviewed"
+        ]
+      }
+    },
+    {
+      "id": "osquery_agent_present",
+      "title": "审计采集组件可识别",
+      "severity": "medium",
+      "category": "审计能力",
+      "description": "资产结果中应能识别 osquery 或等效终端审计组件。",
+      "recommendation": "在授权主机上安装并登记 osquery 或等效采集组件，保留版本信息。",
+      "rule": {
+        "type": "any_contains",
+        "section": "software",
+        "field": "name",
+        "contains": "osquery"
+      }
+    },
+    {
+      "id": "security_tool_present",
+      "title": "终端安全工具已登记",
+      "severity": "medium",
+      "category": "防护能力",
+      "description": "应记录 EDR、防病毒或主机防火墙等防护组件。",
+      "recommendation": "补充终端安全工具安装清单，未部署的主机纳入整改计划。",
+      "rule": {
+        "type": "any_contains_any",
+        "section": "software",
+        "field": "name",
+        "contains_any": [
+          "defender",
+          "sentinel",
+          "crowdstrike",
+          "edr",
+          "firewall"
+        ]
+      }
+    }
+  ]
+}

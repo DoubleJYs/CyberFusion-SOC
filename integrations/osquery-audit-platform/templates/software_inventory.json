@@ -1,0 +1,11 @@
+{
+  "id": "software_inventory",
+  "name": "软件清单模板",
+  "category": "asset",
+  "description": "采集软件名称、版本和来源，用于终端防护组件登记和软件资产画像。",
+  "safe_scope": "仅查询软件清单元数据，不读取应用私有数据。",
+  "sections": ["software"],
+  "queries": {
+    "software": "SELECT name, version, source FROM apps ORDER BY name LIMIT 500;"
+  }
+}

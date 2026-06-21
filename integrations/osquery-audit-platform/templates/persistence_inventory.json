@@ -1,0 +1,12 @@
+{
+  "id": "persistence_inventory",
+  "name": "计划任务与启动项模板",
+  "category": "baseline",
+  "description": "采集计划任务和启动项，用于持久化风险、异常启动项和巡检对比。",
+  "safe_scope": "仅查询任务/启动项元数据，不执行任务命令。",
+  "sections": ["scheduled_tasks", "startup_items"],
+  "queries": {
+    "scheduled_tasks": "SELECT event, command, path FROM crontab ORDER BY path, event LIMIT 300;",
+    "startup_items": "SELECT name, path, type, status FROM startup_items ORDER BY name LIMIT 300;"
+  }
+}
