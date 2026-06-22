@@ -44,7 +44,7 @@ app:
     rate-limit:
       enabled: ${APP_RATE_LIMIT_ENABLED:true}
       requests-per-minute: ${APP_RATE_LIMIT_REQUESTS_PER_MINUTE:120}
-      auth-requests-per-minute: ${APP_RATE_LIMIT_AUTH_REQUESTS_PER_MINUTE:20}
+      auth-requests-per-minute: ${APP_RATE_LIMIT_AUTH_REQUESTS_PER_MINUTE:60}
       max-tracked-clients: ${APP_RATE_LIMIT_MAX_TRACKED_CLIENTS:5000}
       excluded-paths: ${APP_RATE_LIMIT_EXCLUDED_PATHS:/health,/v3/api-docs,/swagger-ui,/swagger-ui.html}
 

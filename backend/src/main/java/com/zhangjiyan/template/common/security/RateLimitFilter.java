@@ -44,8 +44,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String path = normalizedPath(request);
         String clientKey = clientIp(request) + ":" + request.getMethod() + ":" + pathGroup(path);
-        long nowMinute = clock.millis() / 60_000;
-        int limit = path.startsWith("/auth/") ? properties.getRateLimit().getAuthRequestsPerMinute() : properties.getRateLimit().getRequestsPerMinute();
+        long nowMillis = clock.millis();
+        long nowMinute = nowMillis / 60_000;
+        int limit = isLoginPath(path) ? properties.getRateLimit().getAuthRequestsPerMinute() : properties.getRateLimit().getRequestsPerMinute();
         Window window = windows.compute(clientKey, (ignored, current) -> {
             if (current == null || current.minute != nowMinute) {
                 return new Window(nowMinute, 1);
@@ -55,7 +56,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         });
         cleanupIfNeeded(nowMinute);
         if (window.count > limit) {
-            writeRateLimit(response);
+            writeRateLimit(response, secondsUntilNextWindow(nowMillis));
             return;
         }
         filterChain.doFilter(request, response);
@@ -72,7 +73,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private String pathGroup(String path) {
         if (path.startsWith("/auth/")) {
-            return "/auth";
+            return path;
         }
         int secondSlash = path.indexOf('/', 1);
         if (secondSlash < 0) {
@@ -90,6 +91,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return request.getRemoteAddr() == null ? "unknown" : request.getRemoteAddr();
     }
 
+    private boolean isLoginPath(String path) {
+        return "/auth/login".equals(path);
+    }
+
     private void cleanupIfNeeded(long nowMinute) {
         if (windows.size() <= properties.getRateLimit().getMaxTrackedClients()) {
             return;
@@ -103,12 +108,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
     }
 
-    private void writeRateLimit(HttpServletResponse response) throws IOException {
+    private long secondsUntilNextWindow(long nowMillis) {
+        return Math.max(1, 60 - ((nowMillis / 1000) % 60));
+    }
+
+    private void writeRateLimit(HttpServletResponse response, long retryAfterSeconds) throws IOException {
         response.setStatus(429);
+        response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(
-                ApiResult.fail(ResultCode.TOO_MANY_REQUESTS, "请求过于频繁，请稍后再试")
+                ApiResult.fail(ResultCode.TOO_MANY_REQUESTS, "请求过于频繁，请稍后再试，约 " + retryAfterSeconds + " 秒后重试")
         ));
     }
 

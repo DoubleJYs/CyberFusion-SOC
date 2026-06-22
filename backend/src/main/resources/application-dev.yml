@@ -14,3 +14,8 @@ spring:
 logging:
   level:
     com.zhangjiyan.template: debug
+
+app:
+  security:
+    rate-limit:
+      auth-requests-per-minute: ${APP_RATE_LIMIT_AUTH_REQUESTS_PER_MINUTE:600}

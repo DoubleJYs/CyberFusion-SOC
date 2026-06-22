@@ -3,7 +3,9 @@ import type { ApiResult } from '@/types/api'
 import type { LoginRequest, LoginResponse } from '@/types/user'
 
 export async function loginApi(data: LoginRequest): Promise<LoginResponse> {
-  const response = await request.post<ApiResult<LoginResponse>>('/auth/login', data)
+  const response = await request.post<ApiResult<LoginResponse>>('/auth/login', data, {
+    headers: { 'X-Silent-Error': 'true' },
+  })
   return response.data.data
 }
 

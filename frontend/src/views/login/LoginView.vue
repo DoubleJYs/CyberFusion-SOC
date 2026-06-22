@@ -8,6 +8,7 @@
       </div>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form" @keyup.enter="submit">
         <el-alert title="本地演示账号：admin，密码以当前本地环境配置为准，仅用于授权测试环境" type="info" show-icon :closable="false" />
+        <el-alert v-if="loginError" :title="loginError" type="warning" show-icon :closable="false" />
         <el-form-item label="账号" prop="username">
           <el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入账号" />
         </el-form-item>
@@ -35,6 +36,7 @@ const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const loginError = ref('')
 const formRef = ref<FormInstance>()
 const form = reactive({ username: 'admin', password: '', rememberMe: true })
 const rules: FormRules = {
@@ -43,15 +45,38 @@ const rules: FormRules = {
 }
 
 async function submit() {
+  if (loading.value) return
   if (!(await formRef.value?.validate().catch(() => false))) return
+  loginError.value = ''
   loading.value = true
   try {
     await authStore.login(form)
     ElMessage.success('登录成功')
     await router.replace(String(route.query.redirect || '/soc/dashboard'))
+  } catch (error) {
+    loginError.value = normalizeLoginError(error)
   } finally {
     loading.value = false
   }
+}
+
+function normalizeLoginError(error: unknown) {
+  const axiosLike = error as {
+    response?: {
+      status?: number
+      data?: { message?: unknown }
+      headers?: Record<string, unknown>
+    }
+    message?: string
+  }
+  const backendMessage = typeof axiosLike.response?.data?.message === 'string' ? axiosLike.response.data.message : ''
+  const message = backendMessage || (error instanceof Error ? error.message : '')
+  if (axiosLike.response?.status === 429 || message.includes('429') || message.includes('频繁')) {
+    const retryAfter = axiosLike.response?.headers?.['retry-after']
+    const retryText = typeof retryAfter === 'string' && retryAfter.trim() ? `约 ${retryAfter} 秒后再试。` : '请稍后再试。'
+    return `登录请求过于频繁，${retryText}请避免连续点击登录按钮。`
+  }
+  return message || '登录失败，请检查账号、密码和后端服务状态。'
 }
 </script>
 

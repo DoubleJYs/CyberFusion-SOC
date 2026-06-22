@@ -37,7 +37,9 @@ class RateLimitFilterTest {
         assertThat(firstResponse.getStatus()).isEqualTo(200);
         assertThat(secondResponse.getStatus()).isEqualTo(200);
         assertThat(thirdResponse.getStatus()).isEqualTo(429);
+        assertThat(thirdResponse.getHeader("Retry-After")).isEqualTo("60");
         assertThat(thirdResponse.getContentAsString()).contains("TOO_MANY_REQUESTS");
+        assertThat(thirdResponse.getContentAsString()).contains("秒后重试");
     }
 
     @Test
@@ -53,6 +55,31 @@ class RateLimitFilterTest {
         filter.doFilter(request, response, new MockFilterChain());
 
         assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void shouldNotLetCurrentUserRequestsExhaustLoginBucket() throws Exception {
+        SecurityHardeningProperties properties = new SecurityHardeningProperties();
+        properties.getRateLimit().setAuthRequestsPerMinute(1);
+        properties.getRateLimit().setRequestsPerMinute(10);
+        RateLimitFilter filter = new RateLimitFilter(properties, new ObjectMapper(),
+                Clock.fixed(Instant.parse("2026-05-27T15:30:00Z"), ZoneOffset.UTC));
+
+        MockHttpServletRequest me = new MockHttpServletRequest("GET", "/api/auth/me");
+        me.setContextPath("/api");
+        me.setRemoteAddr("127.0.0.1");
+        MockHttpServletResponse meResponse = new MockHttpServletResponse();
+        filter.doFilter(me, meResponse, new MockFilterChain());
+
+        MockHttpServletResponse firstLoginResponse = new MockHttpServletResponse();
+        filter.doFilter(loginRequest(), firstLoginResponse, new MockFilterChain());
+
+        MockHttpServletResponse secondLoginResponse = new MockHttpServletResponse();
+        filter.doFilter(loginRequest(), secondLoginResponse, new MockFilterChain());
+
+        assertThat(meResponse.getStatus()).isEqualTo(200);
+        assertThat(firstLoginResponse.getStatus()).isEqualTo(200);
+        assertThat(secondLoginResponse.getStatus()).isEqualTo(429);
     }
 
     private MockHttpServletRequest loginRequest() {

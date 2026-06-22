@@ -52,15 +52,33 @@ request.interceptors.response.use(
       }
       return handleUnauthorized(error.config as InternalAxiosRequestConfig)
     }
+    if (error.response?.status === 429) {
+      const message = responseErrorMessage(error) || retryAfterMessage(error) || '请求过于频繁，请稍后再试'
+      ElMessage.error(message)
+      return Promise.reject(new Error(message))
+    }
     if (error.response?.status === 403) {
       await router.replace('/403')
       ElMessage.error('当前账号无权限访问')
     } else {
-      ElMessage.error(error.message || '网络请求失败')
+      ElMessage.error(responseErrorMessage(error) || error.message || '网络请求失败')
     }
     return Promise.reject(error)
   },
 )
+
+function responseErrorMessage(error: AxiosError) {
+  const data = error.response?.data as { message?: unknown } | undefined
+  return typeof data?.message === 'string' && data.message.trim() ? data.message : ''
+}
+
+function retryAfterMessage(error: AxiosError) {
+  const retryAfter = error.response?.headers?.['retry-after']
+  if (typeof retryAfter === 'string' && retryAfter.trim()) {
+    return `请求过于频繁，请 ${retryAfter} 秒后重试`
+  }
+  return ''
+}
 
 function isAnonymousClientRequest(config?: InternalAxiosRequestConfig) {
   const url = config?.url || ''
