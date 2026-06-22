@@ -6,6 +6,7 @@ import com.zhangjiyan.template.soc.SocOperationService;
 import com.zhangjiyan.template.soc.correlation.CorrelationService;
 import com.zhangjiyan.template.soc.correlation.SocIncidentCluster;
 import com.zhangjiyan.template.soc.dto.SocPageRequest;
+import com.zhangjiyan.template.soc.recommendation.RecommendationService;
 import com.zhangjiyan.template.soc.risk.SocAssetRiskSnapshot;
 import com.zhangjiyan.template.soc.risk.RiskScoringService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +30,7 @@ public class SocAssetController {
     private final SocOperationService service;
     private final RiskScoringService riskScoringService;
     private final CorrelationService correlationService;
+    private final RecommendationService recommendationService;
 
     @Operation(summary = "分页查询资产")
     @GetMapping
@@ -56,5 +58,13 @@ public class SocAssetController {
     @PreAuthorize("hasRole('admin') or hasAuthority('soc:incident:list') or hasAuthority('soc:asset:view')")
     public ApiResult<List<SocIncidentCluster>> incidents(@PathVariable Long id) {
         return ApiResult.ok(correlationService.incidentsForAsset(id));
+    }
+
+    @Operation(summary = "查询资产推荐处理顺序")
+    @GetMapping("/{id}/recommendations")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:asset:view') or hasAuthority('soc:risk-score:view')")
+    public ApiResult<List<RecommendationService.RecommendationItem>> recommendations(@PathVariable Long id,
+                                                                                     @org.springframework.web.bind.annotation.RequestParam(defaultValue = "8") int limit) {
+        return ApiResult.ok(recommendationService.assetRecommendations(id, limit));
     }
 }

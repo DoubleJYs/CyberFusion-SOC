@@ -28,9 +28,13 @@ public class SocRiskScoringPolicy {
     private Integer baselineFailedWeight;
     private Integer fimUnreviewedWeight;
     private Integer externalEventWeight;
+    private Integer incidentOpenWeight;
+    private Integer incidentHighWeight;
     private Integer overdueTicketWeight;
     private Integer openPlaybookTaskWeight;
     private Integer employeePendingTaskWeight;
+    private Integer clientCheckupWarningWeight;
+    private Integer clientCheckupCriticalWeight;
     private Integer closedTicketReduceWeight;
     private Integer completedPlaybookReduceWeight;
     private Integer maxScore;

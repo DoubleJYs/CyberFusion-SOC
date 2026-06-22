@@ -126,6 +126,22 @@
           </div>
           <el-empty v-if="!topIncidents.length" description="暂无事件簇，前往安全事件簇页面执行关联" :image-size="76" />
         </section>
+
+        <section v-loading="loading" class="soc-panel recommendation-panel">
+          <div class="panel-title">
+            <strong>今日优先处理建议 Top 5</strong>
+            <span>事件簇、漏洞、工单和员工待办综合排序</span>
+          </div>
+          <div v-for="item in topRecommendationRows" :key="item.key" class="recommendation-row" @click="openRecommendation(item)">
+            <div>
+              <el-tag :type="priorityTag(item.priority)" effect="plain">{{ priorityText(item.priority) }}</el-tag>
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.reason }}</span>
+            </div>
+            <p>{{ item.recommendedAction }}</p>
+          </div>
+          <el-empty v-if="!topRecommendationRows.length" description="暂无推荐建议" :image-size="76" />
+        </section>
       </el-tab-pane>
 
       <el-tab-pane label="分析员工作台" name="analyst">
@@ -214,8 +230,8 @@ import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
 import RiskCard from '@/components/security/RiskCard.vue'
 import RiskTrendChart from '@/components/security/RiskTrendChart.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
-import { affectedAssets, alertTrend, dashboardOverview, listIncidents, riskAnalytics, severityDistribution, topRiskAssets } from '@/api/soc'
-import type { AssetRiskProfile, IncidentClusterItem, RiskAnalytics } from '@/api/soc'
+import { affectedAssets, alertTrend, dashboardOverview, listIncidents, riskAnalytics, severityDistribution, topRecommendations, topRiskAssets } from '@/api/soc'
+import type { AssetRiskProfile, IncidentClusterItem, RecommendationItem, RiskAnalytics } from '@/api/soc'
 
 const router = useRouter()
 
@@ -245,6 +261,7 @@ const severities = ref<Array<{ name: string; value: number }>>([])
 const assets = ref<Array<{ name: string; value: number }>>([])
 const topRiskProfiles = ref<AssetRiskProfile[]>([])
 const topIncidents = ref<IncidentClusterItem[]>([])
+const topRecommendationRows = ref<RecommendationItem[]>([])
 const loading = ref(false)
 const error = ref('')
 
@@ -287,6 +304,12 @@ async function load() {
     } catch {
       topIncidents.value = []
     }
+    try {
+      const recommendationRes = await topRecommendations(5)
+      topRecommendationRows.value = recommendationRes.data.data
+    } catch {
+      topRecommendationRows.value = []
+    }
   } catch {
     error.value = '安全总览数据加载失败，请检查后端服务或 Wazuh/数据库连接。'
   } finally {
@@ -314,6 +337,31 @@ function incidentEvidenceCount(incident: IncidentClusterItem) {
 function formatTime(value?: string) {
   if (!value) return '-'
   return value.replace('T', ' ').slice(0, 16)
+}
+
+function priorityTag(priority: string) {
+  if (priority === 'critical' || priority === 'high') return 'danger'
+  if (priority === 'medium') return 'warning'
+  return 'info'
+}
+
+function priorityText(priority: string) {
+  if (priority === 'critical') return '严重'
+  if (priority === 'high') return '高'
+  if (priority === 'medium') return '中'
+  return '低'
+}
+
+function openRecommendation(item: RecommendationItem) {
+  if (item.relatedBizType === 'incident') {
+    router.push({ path: '/soc/incidents', query: { keyword: String(item.relatedBizId) } })
+  } else if (item.relatedBizType === 'ticket' || item.relatedBizType === 'playbook_task' || item.relatedBizType === 'client_task') {
+    router.push({ path: '/soc/tickets', query: { keyword: item.title } })
+  } else if (item.relatedBizType === 'vulnerability') {
+    router.push({ path: '/soc/vulnerabilities', query: { keyword: item.title } })
+  } else if (item.assetIp) {
+    router.push({ path: '/soc/assets', query: { keyword: item.assetIp } })
+  }
 }
 </script>
 
@@ -380,6 +428,7 @@ function formatTime(value?: string) {
 }
 .dept-risk-row,
 .incident-row,
+.recommendation-row,
 .score-row,
 .priority-row {
   border-bottom: 1px solid rgba(190, 183, 171, 0.42);
@@ -387,12 +436,14 @@ function formatTime(value?: string) {
 }
 .dept-risk-row:first-of-type,
 .incident-row:first-of-type,
+.recommendation-row:first-of-type,
 .score-row:first-of-type,
 .priority-row:first-of-type {
   padding-top: 0;
 }
 .dept-risk-row:last-child,
 .incident-row:last-child,
+.recommendation-row:last-child,
 .score-row:last-child,
 .priority-row:last-child {
   border-bottom: 0;
@@ -436,6 +487,37 @@ function formatTime(value?: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.recommendation-panel {
+  margin-top: 14px;
+}
+.recommendation-row {
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+}
+.recommendation-row > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+}
+.recommendation-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recommendation-row span {
+  grid-column: 1 / -1;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.recommendation-row p {
+  margin: 0;
+  color: var(--soc-warm-strong);
+  font-size: 12px;
+  line-height: 1.55;
 }
 .priority-title {
   display: flex;

@@ -633,18 +633,80 @@ INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 4, id FROM sys_menu WHERE id IN (2427, 2428)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
+SET @add_risk_incident_open_weight = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE soc_risk_scoring_policy ADD COLUMN incident_open_weight INT NOT NULL DEFAULT 12 AFTER external_event_weight',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'soc_risk_scoring_policy'
+    AND column_name = 'incident_open_weight'
+);
+PREPARE stmt FROM @add_risk_incident_open_weight;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_risk_incident_high_weight = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE soc_risk_scoring_policy ADD COLUMN incident_high_weight INT NOT NULL DEFAULT 20 AFTER incident_open_weight',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'soc_risk_scoring_policy'
+    AND column_name = 'incident_high_weight'
+);
+PREPARE stmt FROM @add_risk_incident_high_weight;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_risk_client_checkup_warning_weight = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE soc_risk_scoring_policy ADD COLUMN client_checkup_warning_weight INT NOT NULL DEFAULT 8 AFTER employee_pending_task_weight',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'soc_risk_scoring_policy'
+    AND column_name = 'client_checkup_warning_weight'
+);
+PREPARE stmt FROM @add_risk_client_checkup_warning_weight;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @add_risk_client_checkup_critical_weight = (
+  SELECT IF(
+    COUNT(*) = 0,
+    'ALTER TABLE soc_risk_scoring_policy ADD COLUMN client_checkup_critical_weight INT NOT NULL DEFAULT 16 AFTER client_checkup_warning_weight',
+    'SELECT 1'
+  )
+  FROM information_schema.columns
+  WHERE table_schema = DATABASE()
+    AND table_name = 'soc_risk_scoring_policy'
+    AND column_name = 'client_checkup_critical_weight'
+);
+PREPARE stmt FROM @add_risk_client_checkup_critical_weight;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
 INSERT INTO soc_risk_scoring_policy
   (id, policy_code, policy_name, description, status, enabled, version,
    critical_asset_weight, internet_exposed_weight, critical_alert_weight, high_alert_weight, medium_alert_weight,
    critical_vulnerability_weight, high_vulnerability_weight, baseline_failed_weight, fim_unreviewed_weight,
-   external_event_weight, overdue_ticket_weight, open_playbook_task_weight, employee_pending_task_weight,
+   external_event_weight, incident_open_weight, incident_high_weight, overdue_ticket_weight, open_playbook_task_weight, employee_pending_task_weight,
+   client_checkup_warning_weight, client_checkup_critical_weight,
    closed_ticket_reduce_weight, completed_playbook_reduce_weight, max_score,
    created_by, updated_by, approved_by, approved_at)
 VALUES
   (501, 'DEFAULT_ASSET_RISK_V1', '默认资产风险评分策略', '用规则权重解释资产风险来源，只用于排序、展示和处置建议，不执行自动修复。', 'active', 1, 1,
    10, 10, 25, 15, 8,
    25, 15, 8, 6,
-   6, 10, 6, 8,
+   6, 12, 20, 10, 6, 8,
+   8, 16,
    8, 5, 100,
    1, 1, 1, NOW())
 ON DUPLICATE KEY UPDATE
@@ -662,9 +724,13 @@ ON DUPLICATE KEY UPDATE
   baseline_failed_weight = VALUES(baseline_failed_weight),
   fim_unreviewed_weight = VALUES(fim_unreviewed_weight),
   external_event_weight = VALUES(external_event_weight),
+  incident_open_weight = VALUES(incident_open_weight),
+  incident_high_weight = VALUES(incident_high_weight),
   overdue_ticket_weight = VALUES(overdue_ticket_weight),
   open_playbook_task_weight = VALUES(open_playbook_task_weight),
   employee_pending_task_weight = VALUES(employee_pending_task_weight),
+  client_checkup_warning_weight = VALUES(client_checkup_warning_weight),
+  client_checkup_critical_weight = VALUES(client_checkup_critical_weight),
   closed_ticket_reduce_weight = VALUES(closed_ticket_reduce_weight),
   completed_playbook_reduce_weight = VALUES(completed_playbook_reduce_weight),
   max_score = VALUES(max_score),

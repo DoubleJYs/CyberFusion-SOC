@@ -13,10 +13,14 @@ import com.zhangjiyan.template.soc.asset.SocAsset;
 import com.zhangjiyan.template.soc.asset.SocAssetMapper;
 import com.zhangjiyan.template.soc.baseline.SocBaselineCheck;
 import com.zhangjiyan.template.soc.baseline.SocBaselineCheckMapper;
+import com.zhangjiyan.template.soc.correlation.SocIncidentCluster;
+import com.zhangjiyan.template.soc.correlation.SocIncidentClusterMapper;
 import com.zhangjiyan.template.soc.external.SocExternalEvent;
 import com.zhangjiyan.template.soc.external.SocExternalEventMapper;
 import com.zhangjiyan.template.soc.fim.SocFileIntegrityEvent;
 import com.zhangjiyan.template.soc.fim.SocFileIntegrityEventMapper;
+import com.zhangjiyan.template.soc.keeper.SocClientCheckup;
+import com.zhangjiyan.template.soc.keeper.SocClientCheckupMapper;
 import com.zhangjiyan.template.soc.playbook.SocTicketTask;
 import com.zhangjiyan.template.soc.playbook.SocTicketTaskMapper;
 import com.zhangjiyan.template.soc.ticket.SocTicket;
@@ -36,6 +40,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
@@ -44,6 +50,7 @@ public class RiskScoringService {
     private static final Set<String> CLOSED_ALERT_STATUS = Set.of("closed", "ignored", "false_positive");
     private static final Set<String> CLOSED_VULN_STATUS = Set.of("fixed", "accepted");
     private static final Set<String> CLOSED_TICKET_STATUS = Set.of("已关闭", "已归档");
+    private static final Set<String> CLOSED_INCIDENT_STATUS = Set.of("closed", "ignored");
     private static final Set<String> COMPLETED_TASK_STATUS = Set.of("completed", "confirmed");
     private static final Set<String> UNSAFE_TEXT = Set.of("javascript", "script", "spel", "groovy", "sql", "shell", "bash", "powershell", "exec", "eval", "curl", "wget", "nmap", "scan");
 
@@ -56,8 +63,10 @@ public class RiskScoringService {
     private final SocBaselineCheckMapper baselineMapper;
     private final SocFileIntegrityEventMapper fileIntegrityMapper;
     private final SocExternalEventMapper externalEventMapper;
+    private final SocIncidentClusterMapper incidentClusterMapper;
     private final SocTicketMapper ticketMapper;
     private final SocTicketTaskMapper ticketTaskMapper;
+    private final SocClientCheckupMapper clientCheckupMapper;
     private final SocSecurityScope securityScope;
     private final ObjectMapper objectMapper;
 
@@ -233,31 +242,39 @@ public class RiskScoringService {
         addFactor(factors, "exposure", "暴露面", input.internetExposed() * nz(policy.getInternetExposedWeight()), input.internetExposed(),
                 "asset", asset.getId(), "资产存在网关、IDS 或网络侧证据，说明暴露面需要持续关注。", "优先复核访问入口、网关策略和网络检测记录。");
         addFactor(factors, "alert_critical", "严重告警", input.criticalAlerts() * nz(policy.getCriticalAlertWeight()), input.criticalAlerts(),
-                "alert", null, "存在未关闭严重告警。", "优先确认告警详情并转入处置工单。");
+                "alert", input.firstCriticalAlertId(), "存在未关闭严重告警。", "优先确认告警详情并转入处置工单。");
         addFactor(factors, "alert_high", "高危告警", input.highAlerts() * nz(policy.getHighAlertWeight()), input.highAlerts(),
-                "alert", null, "存在未关闭高危告警。", "优先复核告警来源、影响资产和处置剧本。");
+                "alert", input.firstHighAlertId(), "存在未关闭高危告警。", "优先复核告警来源、影响资产和处置剧本。");
         addFactor(factors, "alert_medium", "中危告警", input.mediumAlerts() * nz(policy.getMediumAlertWeight()), input.mediumAlerts(),
-                "alert", null, "存在未关闭中危告警。", "确认是否可合并、降噪或进入工单。");
+                "alert", input.firstMediumAlertId(), "存在未关闭中危告警。", "确认是否可合并、降噪或进入工单。");
         addFactor(factors, "vulnerability_critical", "严重漏洞", input.criticalVulnerabilities() * nz(policy.getCriticalVulnerabilityWeight()), input.criticalVulnerabilities(),
-                "vulnerability", null, "存在未修复严重漏洞。", "优先确认组件版本、影响范围和升级窗口。");
+                "vulnerability", input.firstCriticalVulnerabilityId(), "存在未修复严重漏洞。", "优先确认组件版本、影响范围和升级窗口。");
         addFactor(factors, "vulnerability_high", "高危漏洞", input.highVulnerabilities() * nz(policy.getHighVulnerabilityWeight()), input.highVulnerabilities(),
-                "vulnerability", null, "存在未修复高危漏洞。", "安排依赖或系统补丁修复并复测。");
+                "vulnerability", input.firstHighVulnerabilityId(), "存在未修复高危漏洞。", "安排依赖或系统补丁修复并复测。");
         addFactor(factors, "baseline", "基线失败", input.failedBaselines() * nz(policy.getBaselineFailedWeight()), input.failedBaselines(),
-                "baseline", null, "存在未通过基线项。", "按基线整改建议排期修复。");
+                "baseline", input.firstBaselineId(), "存在未通过基线项。", "按基线整改建议排期修复。");
         addFactor(factors, "fim", "文件变更待复核", input.unreviewedFimEvents() * nz(policy.getFimUnreviewedWeight()), input.unreviewedFimEvents(),
-                "fim", null, "存在未复核文件完整性事件。", "确认是否为授权变更并补充说明。");
+                "fim", input.firstFimId(), "存在未复核文件完整性事件。", "确认是否为授权变更并补充说明。");
         addFactor(factors, "external_event", "外部证据", input.highExternalEvents() * nz(policy.getExternalEventWeight()), input.highExternalEvents(),
-                "external_event", null, "存在高风险外部事件证据。", "关联告警和资产上下文，确认是否需要处置。");
+                "external_event", input.firstExternalEventId(), "存在高风险外部事件证据。", "关联告警和资产上下文，确认是否需要处置。");
+        addFactor(factors, "incident_open", "未关闭事件簇", input.openIncidents() * nz(policy.getIncidentOpenWeight()), input.openIncidents(),
+                "incident", input.firstOpenIncidentId(), "存在未关闭安全事件簇，说明多源证据可能属于同一件事。", "优先查看事件簇证据链，再决定转工单或关闭。");
+        addFactor(factors, "incident_high", "高危事件簇", input.highCriticalIncidents() * nz(policy.getIncidentHighWeight()), input.highCriticalIncidents(),
+                "incident", input.firstHighIncidentId(), "存在高危或严重安全事件簇。", "优先处理高危事件簇，确认资产影响和推荐动作。");
         addFactor(factors, "ticket_overdue", "超时工单", input.overdueTickets() * nz(policy.getOverdueTicketWeight()), input.overdueTickets(),
-                "ticket", null, "存在已超时但未关闭工单。", "优先推动工单状态流转或复核阻塞原因。");
+                "ticket", input.firstOverdueTicketId(), "存在已超时但未关闭工单。", "优先推动工单状态流转或复核阻塞原因。");
         addFactor(factors, "playbook_open", "未完成剧本任务", input.openPlaybookTasks() * nz(policy.getOpenPlaybookTaskWeight()), input.openPlaybookTasks(),
-                "playbook_task", null, "存在未完成处置剧本任务。", "按任务清单完成复核、验证和报告记录。");
+                "playbook_task", input.firstOpenPlaybookTaskId(), "存在未完成处置剧本任务。", "按任务清单完成复核、验证和报告记录。");
         addFactor(factors, "employee_pending", "员工待办", input.employeePendingTasks() * nz(policy.getEmployeePendingTaskWeight()), input.employeePendingTasks(),
-                "client_task", null, "存在需要员工确认或提交证据的待办。", "提醒员工提交日志、确认变更或完成本机检查。");
+                "client_task", input.firstEmployeePendingTaskId(), "存在需要员工确认或提交证据的待办。", "提醒员工提交日志、确认变更或完成本机检查。");
+        addFactor(factors, "client_checkup_warning", "员工体检需要注意", input.warningClientCheckups() * nz(policy.getClientCheckupWarningWeight()), input.warningClientCheckups(),
+                "client_checkup", input.firstWarningCheckupId(), "员工安全管家体检结果显示需要注意。", "引导员工查看修复建议、完成本机检查或提交说明。");
+        addFactor(factors, "client_checkup_critical", "员工体检严重风险", input.criticalClientCheckups() * nz(policy.getClientCheckupCriticalWeight()), input.criticalClientCheckups(),
+                "client_checkup", input.firstCriticalCheckupId(), "员工安全管家体检结果为严重风险。", "优先联系员工完成待办和本机检查，并由分析员复核事件簇。");
         addFactor(factors, "ticket_closed", "已关闭工单", -input.closedTickets() * nz(policy.getClosedTicketReduceWeight()), input.closedTickets(),
-                "ticket", null, "已有工单关闭记录，风险可以适度降低。", "保留关闭结论和验证证据。");
+                "ticket", input.firstClosedTicketId(), "已有工单关闭记录，风险可以适度降低。", "保留关闭结论和验证证据。");
         addFactor(factors, "playbook_completed", "已完成剧本任务", -input.completedPlaybookTasks() * nz(policy.getCompletedPlaybookReduceWeight()), input.completedPlaybookTasks(),
-                "playbook_task", null, "处置剧本任务已完成，风险可以适度降低。", "保留任务证据并进入报告。");
+                "playbook_task", input.firstCompletedPlaybookTaskId(), "处置剧本任务已完成，风险可以适度降低。", "保留任务证据并进入报告。");
 
         int rawScore = factors.stream().mapToInt(f -> f.getFactorScore() == null ? 0 : f.getFactorScore()).sum();
         int maxScore = Math.max(1, nz(policy.getMaxScore(), 100));
@@ -290,11 +307,17 @@ public class RiskScoringService {
         long criticalAlerts = alerts.stream().filter(alert -> isOpenAlert(alert) && "critical".equals(alert.getSeverity())).count();
         long highAlerts = alerts.stream().filter(alert -> isOpenAlert(alert) && "high".equals(alert.getSeverity())).count();
         long mediumAlerts = alerts.stream().filter(alert -> isOpenAlert(alert) && "medium".equals(alert.getSeverity())).count();
-        long vulnerabilitiesCritical = vulnerabilityMapper.selectCount(scopedVulnerabilityWrapper(asset).eq(SocVulnerability::getSeverity, "critical").notIn(SocVulnerability::getStatus, CLOSED_VULN_STATUS));
-        long vulnerabilitiesHigh = vulnerabilityMapper.selectCount(scopedVulnerabilityWrapper(asset).eq(SocVulnerability::getSeverity, "high").notIn(SocVulnerability::getStatus, CLOSED_VULN_STATUS));
-        long failedBaselines = baselineMapper.selectCount(scopedBaselineWrapper(asset).eq(SocBaselineCheck::getResult, "failed"));
-        long fim = fileIntegrityMapper.selectCount(scopedFimWrapper(asset).notIn(SocFileIntegrityEvent::getStatus, List.of("confirmed", "ignored", "closed")));
-        long external = externalEventMapper.selectCount(scopedExternalWrapper(asset).in(SocExternalEvent::getSeverity, List.of("critical", "high")).notIn(SocExternalEvent::getStatus, List.of("ignored", "closed")));
+        List<SocVulnerability> vulnerabilitiesCritical = vulnerabilityMapper.selectList(scopedVulnerabilityWrapper(asset).eq(SocVulnerability::getSeverity, "critical").notIn(SocVulnerability::getStatus, CLOSED_VULN_STATUS));
+        List<SocVulnerability> vulnerabilitiesHigh = vulnerabilityMapper.selectList(scopedVulnerabilityWrapper(asset).eq(SocVulnerability::getSeverity, "high").notIn(SocVulnerability::getStatus, CLOSED_VULN_STATUS));
+        List<SocBaselineCheck> failedBaselines = baselineMapper.selectList(scopedBaselineWrapper(asset).eq(SocBaselineCheck::getResult, "failed"));
+        List<SocFileIntegrityEvent> fim = fileIntegrityMapper.selectList(scopedFimWrapper(asset).notIn(SocFileIntegrityEvent::getStatus, List.of("confirmed", "ignored", "closed")));
+        List<SocExternalEvent> external = externalEventMapper.selectList(scopedExternalWrapper(asset).in(SocExternalEvent::getSeverity, List.of("critical", "high")).notIn(SocExternalEvent::getStatus, List.of("ignored", "closed")));
+        List<SocIncidentCluster> incidents = incidentClusterMapper.selectList(scopedIncidentWrapper(asset));
+        long openIncidents = incidents.stream().filter(this::isOpenIncident).count();
+        long highCriticalIncidents = incidents.stream().filter(this::isOpenIncident).filter(incident -> Set.of("critical", "high").contains(incident.getSeverity())).count();
+        SocClientCheckup latestCheckup = latestClientCheckup(asset);
+        long warningCheckups = latestCheckup != null && Set.of("attention", "warning").contains(Objects.toString(latestCheckup.getStatus(), "")) ? 1 : 0;
+        long criticalCheckups = latestCheckup != null && Set.of("serious", "critical").contains(Objects.toString(latestCheckup.getStatus(), "")) ? 1 : 0;
         List<SocTicket> tickets = alertIds.isEmpty()
                 ? List.of()
                 : ticketMapper.selectList(scopedTicketWrapper().in(SocTicket::getAlertId, alertIds));
@@ -307,9 +330,28 @@ public class RiskScoringService {
         long openTasks = tasks.stream().filter(task -> !COMPLETED_TASK_STATUS.contains(task.getStatus()) && !"skipped".equals(task.getStatus())).count();
         long completedTasks = tasks.stream().filter(task -> COMPLETED_TASK_STATUS.contains(task.getStatus())).count();
         long employeePending = tasks.stream().filter(task -> "employee".equals(task.getAssigneeType()) && !COMPLETED_TASK_STATUS.contains(task.getStatus()) && !"skipped".equals(task.getStatus())).count();
-        long exposed = external > 0 || alerts.stream().anyMatch(alert -> Set.of("waf", "suricata", "zeek").contains(alert.getSourceType())) ? 1 : 0;
-        return new CalculationInput(criticalAlerts, highAlerts, mediumAlerts, vulnerabilitiesCritical, vulnerabilitiesHigh,
-                failedBaselines, fim, external, overdueTickets, openTasks, employeePending, closedTickets, completedTasks, exposed);
+        long exposed = !external.isEmpty() || alerts.stream().anyMatch(alert -> Set.of("waf", "suricata", "zeek").contains(alert.getSourceType())) ? 1 : 0;
+        return new CalculationInput(criticalAlerts, highAlerts, mediumAlerts, vulnerabilitiesCritical.size(), vulnerabilitiesHigh.size(),
+                failedBaselines.size(), fim.size(), external.size(), openIncidents, highCriticalIncidents, overdueTickets, openTasks,
+                employeePending, warningCheckups, criticalCheckups, closedTickets, completedTasks, exposed,
+                firstId(alerts, alert -> isOpenAlert(alert) && "critical".equals(alert.getSeverity()), SocAlert::getId),
+                firstId(alerts, alert -> isOpenAlert(alert) && "high".equals(alert.getSeverity()), SocAlert::getId),
+                firstId(alerts, alert -> isOpenAlert(alert) && "medium".equals(alert.getSeverity()), SocAlert::getId),
+                firstId(vulnerabilitiesCritical, item -> true, SocVulnerability::getId),
+                firstId(vulnerabilitiesHigh, item -> true, SocVulnerability::getId),
+                firstId(failedBaselines, item -> true, SocBaselineCheck::getId),
+                firstId(fim, item -> true, SocFileIntegrityEvent::getId),
+                firstId(external, item -> true, SocExternalEvent::getId),
+                firstId(incidents, this::isOpenIncident, SocIncidentCluster::getId),
+                firstId(incidents, incident -> isOpenIncident(incident) && Set.of("critical", "high").contains(incident.getSeverity()), SocIncidentCluster::getId),
+                firstId(tickets, ticket -> ticket.getDueAt() != null && ticket.getDueAt().isBefore(now) && !CLOSED_TICKET_STATUS.contains(ticket.getStatus()), SocTicket::getId),
+                firstId(tasks, task -> !COMPLETED_TASK_STATUS.contains(task.getStatus()) && !"skipped".equals(task.getStatus()), SocTicketTask::getId),
+                firstId(tasks, task -> "employee".equals(task.getAssigneeType()) && !COMPLETED_TASK_STATUS.contains(task.getStatus()) && !"skipped".equals(task.getStatus()), SocTicketTask::getId),
+                latestCheckup != null && warningCheckups > 0 ? latestCheckup.getId() : null,
+                latestCheckup != null && criticalCheckups > 0 ? latestCheckup.getId() : null,
+                firstId(tickets, ticket -> CLOSED_TICKET_STATUS.contains(ticket.getStatus()), SocTicket::getId),
+                firstId(tasks, task -> COMPLETED_TASK_STATUS.contains(task.getStatus()), SocTicketTask::getId)
+        );
     }
 
     private SocRiskScoringPolicy activePolicyOrDefault() {
@@ -346,9 +388,13 @@ public class RiskScoringService {
         policy.setBaselineFailedWeight(8);
         policy.setFimUnreviewedWeight(6);
         policy.setExternalEventWeight(6);
+        policy.setIncidentOpenWeight(12);
+        policy.setIncidentHighWeight(20);
         policy.setOverdueTicketWeight(10);
         policy.setOpenPlaybookTaskWeight(6);
         policy.setEmployeePendingTaskWeight(8);
+        policy.setClientCheckupWarningWeight(8);
+        policy.setClientCheckupCriticalWeight(16);
         policy.setClosedTicketReduceWeight(8);
         policy.setCompletedPlaybookReduceWeight(5);
         policy.setMaxScore(100);
@@ -372,9 +418,13 @@ public class RiskScoringService {
         policy.setBaselineFailedWeight(value(request.baselineFailedWeight(), defaults.getBaselineFailedWeight()));
         policy.setFimUnreviewedWeight(value(request.fimUnreviewedWeight(), defaults.getFimUnreviewedWeight()));
         policy.setExternalEventWeight(value(request.externalEventWeight(), defaults.getExternalEventWeight()));
+        policy.setIncidentOpenWeight(value(request.incidentOpenWeight(), defaults.getIncidentOpenWeight()));
+        policy.setIncidentHighWeight(value(request.incidentHighWeight(), defaults.getIncidentHighWeight()));
         policy.setOverdueTicketWeight(value(request.overdueTicketWeight(), defaults.getOverdueTicketWeight()));
         policy.setOpenPlaybookTaskWeight(value(request.openPlaybookTaskWeight(), defaults.getOpenPlaybookTaskWeight()));
         policy.setEmployeePendingTaskWeight(value(request.employeePendingTaskWeight(), defaults.getEmployeePendingTaskWeight()));
+        policy.setClientCheckupWarningWeight(value(request.clientCheckupWarningWeight(), defaults.getClientCheckupWarningWeight()));
+        policy.setClientCheckupCriticalWeight(value(request.clientCheckupCriticalWeight(), defaults.getClientCheckupCriticalWeight()));
         policy.setClosedTicketReduceWeight(value(request.closedTicketReduceWeight(), defaults.getClosedTicketReduceWeight()));
         policy.setCompletedPlaybookReduceWeight(value(request.completedPlaybookReduceWeight(), defaults.getCompletedPlaybookReduceWeight()));
         policy.setMaxScore(value(request.maxScore(), defaults.getMaxScore()));
@@ -391,8 +441,10 @@ public class RiskScoringService {
                 nz(policy.getCriticalAssetWeight()), nz(policy.getInternetExposedWeight()), nz(policy.getCriticalAlertWeight()),
                 nz(policy.getHighAlertWeight()), nz(policy.getMediumAlertWeight()), nz(policy.getCriticalVulnerabilityWeight()),
                 nz(policy.getHighVulnerabilityWeight()), nz(policy.getBaselineFailedWeight()), nz(policy.getFimUnreviewedWeight()),
-                nz(policy.getExternalEventWeight()), nz(policy.getOverdueTicketWeight()), nz(policy.getOpenPlaybookTaskWeight()),
-                nz(policy.getEmployeePendingTaskWeight()), nz(policy.getClosedTicketReduceWeight()), nz(policy.getCompletedPlaybookReduceWeight()),
+                nz(policy.getExternalEventWeight()), nz(policy.getIncidentOpenWeight()), nz(policy.getIncidentHighWeight()),
+                nz(policy.getOverdueTicketWeight()), nz(policy.getOpenPlaybookTaskWeight()),
+                nz(policy.getEmployeePendingTaskWeight()), nz(policy.getClientCheckupWarningWeight()), nz(policy.getClientCheckupCriticalWeight()),
+                nz(policy.getClosedTicketReduceWeight()), nz(policy.getCompletedPlaybookReduceWeight()),
                 nz(policy.getMaxScore(), 100)
         );
         if (weights.stream().anyMatch(weight -> weight < 0 || weight > 100)) {
@@ -487,6 +539,29 @@ public class RiskScoringService {
         return wrapper;
     }
 
+    private LambdaQueryWrapper<SocIncidentCluster> scopedIncidentWrapper(SocAsset asset) {
+        LambdaQueryWrapper<SocIncidentCluster> wrapper = new LambdaQueryWrapper<SocIncidentCluster>()
+                .eq(SocIncidentCluster::getDeleted, 0)
+                .and(w -> w.eq(SocIncidentCluster::getAssetIp, asset.getIp())
+                        .or().eq(SocIncidentCluster::getPrimaryAssetIp, asset.getIp())
+                        .or().eq(SocIncidentCluster::getHostname, asset.getHostname())
+                        .or().eq(SocIncidentCluster::getPrimaryHostname, asset.getHostname()));
+        securityScope.applyDataScope(wrapper, SocIncidentCluster::getOwnerId, SocIncidentCluster::getDeptId);
+        return wrapper;
+    }
+
+    private SocClientCheckup latestClientCheckup(SocAsset asset) {
+        LambdaQueryWrapper<SocClientCheckup> wrapper = new LambdaQueryWrapper<SocClientCheckup>()
+                .eq(SocClientCheckup::getDeleted, 0)
+                .and(w -> w.eq(SocClientCheckup::getAssetId, asset.getId())
+                        .or().eq(SocClientCheckup::getAssetIp, asset.getIp())
+                        .or().eq(SocClientCheckup::getAssetName, asset.getHostname()))
+                .orderByDesc(SocClientCheckup::getCheckedAt)
+                .last("LIMIT 1");
+        securityScope.applyDataScope(wrapper, SocClientCheckup::getOwnerId, SocClientCheckup::getDeptId);
+        return clientCheckupMapper.selectOne(wrapper);
+    }
+
     private LambdaQueryWrapper<SocTicket> scopedTicketWrapper() {
         LambdaQueryWrapper<SocTicket> wrapper = new LambdaQueryWrapper<SocTicket>().eq(SocTicket::getDeleted, 0);
         securityScope.applyDataScope(wrapper, SocTicket::getAssigneeId, SocTicket::getDeptId);
@@ -495,6 +570,11 @@ public class RiskScoringService {
 
     private boolean isOpenAlert(SocAlert alert) {
         return alert.getStatus() == null || !CLOSED_ALERT_STATUS.contains(alert.getStatus());
+    }
+
+    private boolean isOpenIncident(SocIncidentCluster incident) {
+        String status = Objects.toString(incident.getStatus(), "open");
+        return !CLOSED_INCIDENT_STATUS.contains(status);
     }
 
     private boolean assetImportant(SocAsset asset) {
@@ -516,7 +596,7 @@ public class RiskScoringService {
         factor.setFactorScore((int) Math.max(-100, Math.min(100, score)));
         factor.setFactorCount((int) Math.min(Integer.MAX_VALUE, count));
         factor.setRelatedBizType(bizType);
-        factor.setRelatedBizId(bizId);
+        factor.setRelatedBizId(bizId == null ? 0L : bizId);
         factor.setExplanation(explanation + " 数量：" + count + "，影响分：" + score + "。");
         factor.setRecommendation(recommendation);
         factors.add(factor);
@@ -534,10 +614,23 @@ public class RiskScoringService {
         map.put("failedBaselines", input.failedBaselines());
         map.put("unreviewedFimEvents", input.unreviewedFimEvents());
         map.put("highExternalEvents", input.highExternalEvents());
+        map.put("openIncidents", input.openIncidents());
+        map.put("highCriticalIncidents", input.highCriticalIncidents());
         map.put("overdueTickets", input.overdueTickets());
         map.put("openPlaybookTasks", input.openPlaybookTasks());
         map.put("employeePendingTasks", input.employeePendingTasks());
+        map.put("warningClientCheckups", input.warningClientCheckups());
+        map.put("criticalClientCheckups", input.criticalClientCheckups());
         return map;
+    }
+
+    private <T> Long firstId(List<T> rows, Predicate<T> predicate, Function<T, Long> idGetter) {
+        return rows.stream()
+                .filter(predicate)
+                .map(idGetter)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     private String writeSummary(Map<String, Object> summary) {
@@ -589,8 +682,31 @@ public class RiskScoringService {
     public record CalculationInput(long criticalAlerts, long highAlerts, long mediumAlerts,
                                    long criticalVulnerabilities, long highVulnerabilities,
                                    long failedBaselines, long unreviewedFimEvents, long highExternalEvents,
-                                   long overdueTickets, long openPlaybookTasks, long employeePendingTasks,
-                                   long closedTickets, long completedPlaybookTasks, long internetExposed) {
+                                   long openIncidents, long highCriticalIncidents, long overdueTickets,
+                                   long openPlaybookTasks, long employeePendingTasks,
+                                   long warningClientCheckups, long criticalClientCheckups,
+                                   long closedTickets, long completedPlaybookTasks, long internetExposed,
+                                   Long firstCriticalAlertId, Long firstHighAlertId, Long firstMediumAlertId,
+                                   Long firstCriticalVulnerabilityId, Long firstHighVulnerabilityId,
+                                   Long firstBaselineId, Long firstFimId, Long firstExternalEventId,
+                                   Long firstOpenIncidentId, Long firstHighIncidentId,
+                                   Long firstOverdueTicketId, Long firstOpenPlaybookTaskId,
+                                   Long firstEmployeePendingTaskId, Long firstWarningCheckupId,
+                                   Long firstCriticalCheckupId, Long firstClosedTicketId,
+                                   Long firstCompletedPlaybookTaskId) {
+        public CalculationInput(long criticalAlerts, long highAlerts, long mediumAlerts,
+                                long criticalVulnerabilities, long highVulnerabilities,
+                                long failedBaselines, long unreviewedFimEvents, long highExternalEvents,
+                                long overdueTickets, long openPlaybookTasks, long employeePendingTasks,
+                                long closedTickets, long completedPlaybookTasks, long internetExposed) {
+            this(criticalAlerts, highAlerts, mediumAlerts,
+                    criticalVulnerabilities, highVulnerabilities,
+                    failedBaselines, unreviewedFimEvents, highExternalEvents,
+                    0, 0, overdueTickets, openPlaybookTasks, employeePendingTasks,
+                    0, 0, closedTickets, completedPlaybookTasks, internetExposed,
+                    null, null, null, null, null, null, null, null, null, null,
+                    null, null, null, null, null, null, null);
+        }
     }
 
     public record CalculationResult(int score, String riskLevel, List<SocAssetRiskFactor> factors,

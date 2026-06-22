@@ -85,9 +85,13 @@ export interface AssetRiskCounts {
   failedBaselines: number
   unreviewedFimEvents: number
   highExternalEvents: number
+  openIncidents: number
+  highCriticalIncidents: number
   overdueTickets: number
   openPlaybookTasks: number
   employeePendingTasks: number
+  warningClientCheckups: number
+  criticalClientCheckups: number
   closedTickets: number
   completedPlaybookTasks: number
   internetExposed: number
@@ -121,9 +125,13 @@ export interface RiskScoringPolicyItem {
   baselineFailedWeight: number
   fimUnreviewedWeight: number
   externalEventWeight: number
+  incidentOpenWeight: number
+  incidentHighWeight: number
   overdueTicketWeight: number
   openPlaybookTaskWeight: number
   employeePendingTaskWeight: number
+  clientCheckupWarningWeight: number
+  clientCheckupCriticalWeight: number
   closedTicketReduceWeight: number
   completedPlaybookReduceWeight: number
   maxScore: number
@@ -143,6 +151,42 @@ export interface RiskScoringValidationResult {
 export interface RiskScoringRecalculateResult {
   recalculatedAssets: number
   message: string
+}
+
+export interface RecommendationItem {
+  key: string
+  title: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  reason: string
+  recommendedAction: string
+  relatedBizType: string
+  relatedBizId: number
+  assigneeType: 'analyst' | 'employee' | string
+  status: string
+  assetId?: number
+  assetIp?: string
+  assetName?: string
+  priorityScore: number
+}
+
+export interface ClientNextAction {
+  key: string
+  title: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  reason: string
+  recommendedAction: string
+  relatedBizType: string
+  relatedBizId: number
+  status: string
+}
+
+export interface RecommendationActionRecord {
+  id: number
+  recommendationKey: string
+  actionType: string
+  relatedBizType: string
+  relatedBizId: number
+  createdAt: string
 }
 
 export interface TicketItem {
@@ -1130,6 +1174,13 @@ export function riskAnalytics() {
   return request.get<ApiResult<RiskAnalytics>>('/soc/dashboard/risk-analytics')
 }
 
+export function topRecommendations(limit = 5) {
+  return request.get<ApiResult<RecommendationItem[]>>('/soc/recommendations/top', {
+    params: { limit },
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
 export function listAlerts(params: PageQuery) {
   return request.get<ApiResult<PageResult<AlertItem>>>('/soc/alerts', { params })
 }
@@ -1168,6 +1219,24 @@ export function assetRelatedIncidents(id: number) {
   return request.get<ApiResult<IncidentClusterItem[]>>(`/soc/assets/${id}/incidents`, {
     headers: { 'X-Silent-Error': '1' },
   })
+}
+
+export function assetRecommendations(id: number, limit = 8) {
+  return request.get<ApiResult<RecommendationItem[]>>(`/soc/assets/${id}/recommendations`, {
+    params: { limit },
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function recordRecommendationAction(key: string, data: {
+  actionType?: 'view' | 'apply_playbook' | 'ticket' | 'confirm' | 'note'
+  relatedBizType?: string
+  relatedBizId?: number
+  assetIp?: string
+  assetName?: string
+  note?: string
+}) {
+  return request.post<ApiResult<RecommendationActionRecord>>(`/soc/recommendations/${encodeURIComponent(key)}/record`, data)
 }
 
 export function listIncidents(params: PageQuery) {
@@ -1619,6 +1688,13 @@ export function clientSecurityPosture() {
 export function listSecurityKeeperRecommendations(assetIp: string) {
   return request.get<ApiResult<SecurityKeeperRepairRecommendation[]>>('/client/security-keeper/recommendations', {
     params: { assetIp },
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function listClientNextActions(assetIp: string, limit = 5) {
+  return request.get<ApiResult<ClientNextAction[]>>('/client/security-keeper/next-actions', {
+    params: { assetIp, limit },
     headers: { 'X-Silent-Error': '1' },
   })
 }

@@ -168,11 +168,13 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   clientDeviceRiskProfile,
   listClientTasks,
+  listClientNextActions,
   listSecurityKeeperCheckups,
   runClientSecuritySnapshot,
   runSecurityKeeperCheckup,
   type AssetItem,
   type AssetRiskProfile,
+  type ClientNextAction,
   type ClientDeviceProfile,
   type ClientEvidenceItem,
   type SecurityKeeperCheckupResult,
@@ -220,6 +222,7 @@ const profile = ref<ClientDeviceProfile>()
 const riskProfile = ref<AssetRiskProfile>()
 const checkupResult = ref<SecurityKeeperCheckupResult>()
 const employeeTasks = ref<TicketTaskItem[]>([])
+const backendNextActions = ref<ClientNextAction[]>([])
 const recordsSection = ref<HTMLElement>()
 const lastCheckupAt = ref('')
 
@@ -258,7 +261,73 @@ const statusReason = computed(() => {
 })
 const lastCheckupLabel = computed(() => checkupResult.value?.checkup.checkedAt ? formatTime(checkupResult.value.checkup.checkedAt) : lastCheckupAt.value ? formatTime(lastCheckupAt.value) : '尚未体检')
 
+const riskFactorActions = computed<ActionItem[]>(() => {
+  return (riskProfile.value?.factors || [])
+    .filter((factor) => factor.factorScore > 0)
+    .slice(0, 4)
+    .map((factor) => {
+      const count = factor.factorCount || 1
+      switch (factor.factorType) {
+        case 'incident_high':
+        case 'incident_open':
+          return {
+            title: '配合处理重点安全事件',
+            description: '安全团队发现多条记录可能属于同一件事，请优先完成待办或提交说明。',
+            countText: `${count} 项`,
+            level: factor.factorType === 'incident_high' ? 'danger' : 'warning',
+          } as ActionItem
+        case 'client_checkup_critical':
+        case 'client_checkup_warning':
+          return {
+            title: '完成本机体检',
+            description: '最近一次安全管家体检提示需要关注，请重新体检并查看修复建议。',
+            countText: `${count} 次体检`,
+            level: factor.factorType === 'client_checkup_critical' ? 'danger' : 'warning',
+          } as ActionItem
+        case 'employee_pending':
+        case 'playbook_open':
+          return {
+            title: '完成安全团队待办',
+            description: '安全团队需要你确认信息或提交本机检查记录。',
+            countText: `${count} 项待办`,
+            level: 'warning',
+          } as ActionItem
+        case 'ticket_overdue':
+          return {
+            title: '处理超时事项',
+            description: '这台电脑有关的处理事项已经超时，请尽快联系管理员确认进度。',
+            countText: `${count} 项`,
+            level: 'danger',
+          } as ActionItem
+        case 'vulnerability_critical':
+        case 'vulnerability_high':
+        case 'baseline':
+          return {
+            title: '等待修复安排',
+            description: '当前电脑存在软件、网页或配置风险，安全团队会安排处理。',
+            countText: `${count} 项`,
+            level: factor.factorType === 'vulnerability_critical' ? 'danger' : 'warning',
+          } as ActionItem
+        default:
+          return {
+            title: factor.factorName || '查看安全建议',
+            description: factor.recommendation || factor.explanation || '请按安全团队建议处理。',
+            countText: `${count} 项`,
+            level: factor.factorScore >= 20 ? 'danger' : factor.factorScore >= 8 ? 'warning' : 'info',
+          } as ActionItem
+      }
+    })
+})
+
 const nextActions = computed<ActionItem[]>(() => {
+  if (backendNextActions.value.length) {
+    return backendNextActions.value.slice(0, 3).map((item) => ({
+      title: item.title,
+      description: item.recommendedAction || item.reason,
+      countText: actionStatusText(item.status),
+      level: item.priority === 'critical' || item.priority === 'high' ? 'danger' : item.priority === 'medium' ? 'warning' : 'info',
+    }))
+  }
   if (highestPriorityTask.value) {
     return [{
       title: '优先处理我的待办',
@@ -266,6 +335,9 @@ const nextActions = computed<ActionItem[]>(() => {
       countText: `${pendingEmployeeTasks.value.length} 项待办`,
       level: 'warning',
     }]
+  }
+  if (riskFactorActions.value.length) {
+    return riskFactorActions.value.slice(0, 3)
   }
   if (checkupResult.value?.riskItems.length) {
     const items = checkupResult.value.riskItems
@@ -366,6 +438,11 @@ async function loadWorkbench() {
     ])
     employeeTasks.value = tasksRes?.data.data || []
     riskProfile.value = riskRes?.data.data
+    const actionRes = await listClientNextActions(asset.ip, 5).catch((err) => {
+      appendDiagnostic('next actions', err)
+      return undefined
+    })
+    backendNextActions.value = actionRes?.data.data || []
     await loadLatestCheckup()
   } catch (err) {
     error.value = err instanceof Error ? err.message : '请求失败'
@@ -554,6 +631,7 @@ function useOfflineData() {
     sortOrder: 10,
     createdAt: new Date().toISOString(),
   }]
+  backendNextActions.value = []
 }
 
 function addDataNotice(message: string) {
@@ -598,6 +676,13 @@ async function openLogs() {
 function formatTime(value?: string) {
   if (!value) return '-'
   return value.replace('T', ' ').slice(0, 16)
+}
+
+function actionStatusText(status?: string) {
+  if (!status || status === 'open' || status === 'pending') return '待处理'
+  if (status === 'confirmed' || status === 'completed') return '已确认'
+  if (status === 'submitted') return '已提交'
+  return status
 }
 </script>
 

@@ -87,14 +87,34 @@
             <el-button size="small" @click="currentAsset && recalculateRisk(currentAsset)">重新计算</el-button>
           </div>
           <div v-if="riskProfile" class="risk-profile-body">
-            <p>{{ riskProfile.statusReason }}</p>
-            <em>{{ riskProfile.recommendationSummary }}</em>
+            <div class="risk-reason-block">
+              <span>风险升高原因</span>
+              <p>{{ riskProfile.statusReason }}</p>
+            </div>
             <div class="factor-list">
+              <strong>Top 风险因子</strong>
               <article v-for="factor in riskProfile.factors.slice(0, 5)" :key="`${factor.factorType}-${factor.factorName}`">
                 <span>{{ factor.factorName }}</span>
                 <strong>{{ factor.factorScore > 0 ? '+' : '' }}{{ factor.factorScore }}</strong>
                 <small>{{ factor.explanation }}</small>
               </article>
+            </div>
+            <div class="recommendation-order">
+              <strong>推荐处理顺序</strong>
+              <div v-if="assetRecommendationRows.length" class="recommendation-cards">
+                <article v-for="item in assetRecommendationRows" :key="item.key">
+                  <div>
+                    <el-tag :type="priorityTag(item.priority)" effect="plain">{{ priorityText(item.priority) }}</el-tag>
+                    <strong>{{ item.title }}</strong>
+                  </div>
+                  <p>{{ item.reason }}</p>
+                  <span>{{ item.recommendedAction }}</span>
+                  <el-button size="small" text @click="recordViewRecommendation(item)">查看记录</el-button>
+                </article>
+              </div>
+              <ol v-else>
+                <li v-for="item in riskRecommendations" :key="item">{{ item }}</li>
+              </ol>
             </div>
             <el-empty v-if="!riskProfile.factors.length" description="暂无显著风险因子" :image-size="72" />
           </div>
@@ -116,12 +136,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import AssetRiskTag from '@/components/security/AssetRiskTag.vue'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
-import { assetRiskProfile, listAssets, recalculateAssetRisk, type AssetItem, type AssetRiskProfile } from '@/api/soc'
+import {
+  assetRecommendations,
+  assetRiskProfile,
+  listAssets,
+  recalculateAssetRisk,
+  recordRecommendationAction,
+  type AssetItem,
+  type AssetRiskProfile,
+  type RecommendationItem,
+} from '@/api/soc'
 
 const router = useRouter()
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', riskLevel: '' })
@@ -133,7 +162,19 @@ const selectedAssets = ref<AssetItem[]>([])
 const loading = ref(false)
 const error = ref('')
 const riskProfile = ref<AssetRiskProfile>()
+const assetRecommendationRows = ref<RecommendationItem[]>([])
 const riskProfileLoading = ref(false)
+const riskRecommendations = computed(() => {
+  const factorRecommendations = (riskProfile.value?.factors || [])
+    .filter((factor) => factor.factorScore > 0)
+    .map((factor) => factor.recommendation)
+    .filter(Boolean)
+  const items = [...new Set(factorRecommendations)]
+  if (!items.length && riskProfile.value?.recommendationSummary) {
+    return riskProfile.value.recommendationSummary.split('；').filter(Boolean).slice(0, 3)
+  }
+  return items.slice(0, 3)
+})
 
 onMounted(load)
 async function load() {
@@ -166,9 +207,14 @@ function onSelectionChange(selection: AssetItem[]) {
 async function loadRiskProfile(row: AssetItem) {
   riskProfileLoading.value = true
   riskProfile.value = undefined
+  assetRecommendationRows.value = []
   try {
-    const res = await assetRiskProfile(row.id)
+    const [res, recommendationRes] = await Promise.all([
+      assetRiskProfile(row.id),
+      assetRecommendations(row.id, 8).catch(() => undefined),
+    ])
     riskProfile.value = res.data.data
+    assetRecommendationRows.value = recommendationRes?.data.data || []
   } catch {
     riskProfile.value = undefined
   } finally {
@@ -184,6 +230,8 @@ async function recalculateRisk(row: AssetItem) {
       riskScore: res.data.data.snapshot.score,
       riskLevel: res.data.data.snapshot.riskLevel,
     })
+    const recommendationRes = await assetRecommendations(row.id, 8).catch(() => undefined)
+    assetRecommendationRows.value = recommendationRes?.data.data || []
     ElMessage.success('资产风险画像已重新计算')
   } catch {
     ElMessage.error('风险画像计算失败，请检查权限或后端服务状态')
@@ -211,6 +259,35 @@ function exportSelectedAssets() {
   link.click()
   URL.revokeObjectURL(url)
   ElMessage.success('资产清单已生成')
+}
+
+async function recordViewRecommendation(item: RecommendationItem) {
+  try {
+    await recordRecommendationAction(item.key, {
+      actionType: 'view',
+      relatedBizType: item.relatedBizType,
+      relatedBizId: item.relatedBizId,
+      assetIp: item.assetIp,
+      assetName: item.assetName,
+      note: '资产详情查看推荐处理顺序',
+    })
+    ElMessage.success('已记录查看动作')
+  } catch {
+    ElMessage.warning('推荐查看记录暂时无法写入')
+  }
+}
+
+function priorityTag(priority: string) {
+  if (priority === 'critical' || priority === 'high') return 'danger'
+  if (priority === 'medium') return 'warning'
+  return 'info'
+}
+
+function priorityText(priority: string) {
+  if (priority === 'critical') return '严重'
+  if (priority === 'high') return '高'
+  if (priority === 'medium') return '中'
+  return '低'
 }
 </script>
 
@@ -254,7 +331,9 @@ function exportSelectedAssets() {
 }
 .profile-head div,
 .risk-profile-body,
-.factor-list {
+.factor-list,
+.risk-reason-block,
+.recommendation-order {
   display: grid;
   gap: 8px;
 }
@@ -264,7 +343,9 @@ function exportSelectedAssets() {
 .profile-head span,
 .risk-profile-body p,
 .risk-profile-body em,
-.factor-list small {
+.factor-list small,
+.risk-reason-block span,
+.recommendation-order li {
   color: var(--soc-text-muted);
   font-size: 12px;
   line-height: 1.55;
@@ -275,6 +356,55 @@ function exportSelectedAssets() {
 }
 .risk-profile-body em {
   font-style: normal;
+  color: var(--soc-warm-strong);
+}
+.factor-list > strong,
+.recommendation-order > strong {
+  color: var(--soc-text);
+  font-size: 13px;
+}
+.risk-reason-block span {
+  color: var(--soc-warm-strong);
+  font-weight: 700;
+}
+.recommendation-order ol {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+}
+.recommendation-cards {
+  display: grid;
+  gap: 8px;
+}
+.recommendation-cards article {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(179, 173, 163, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.recommendation-cards article > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.recommendation-cards strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recommendation-cards p,
+.recommendation-cards span {
+  margin: 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.recommendation-cards span {
   color: var(--soc-warm-strong);
 }
 .factor-list article {

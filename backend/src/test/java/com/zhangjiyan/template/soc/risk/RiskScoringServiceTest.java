@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RiskScoringServiceTest {
 
     private final RiskScoringService service = new RiskScoringService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
     @Test
     void calculatesExplainableRiskFromAlertsVulnerabilitiesAndTasks() {
@@ -29,6 +29,36 @@ class RiskScoringServiceTest {
                 .contains("alert_critical", "vulnerability_critical", "ticket_overdue", "employee_pending");
         assertThat(result.recommendationSummary()).contains("告警详情", "组件版本");
         assertThat(result.summary()).containsEntry("criticalAlerts", 1L);
+    }
+
+    @Test
+    void includesIncidentAndClientCheckupFactorsWithRelatedEvidence() {
+        RiskScoringService.CalculationResult result = service.calculate(defaultPolicy(), normalAsset(),
+                new RiskScoringService.CalculationInput(
+                        0, 0, 0,
+                        0, 0,
+                        0, 0, 0,
+                        1, 1, 0,
+                        0, 1,
+                        0, 1,
+                        0, 0, 0,
+                        null, null, null,
+                        null, null, null, null, null,
+                        3001L, 3001L,
+                        null, null, 4101L,
+                        null, 5101L,
+                        null, null
+                ));
+
+        assertThat(result.factors()).extracting(SocAssetRiskFactor::getFactorType)
+                .contains("incident_open", "incident_high", "employee_pending", "client_checkup_critical");
+        assertThat(result.summary())
+                .containsEntry("openIncidents", 1L)
+                .containsEntry("criticalClientCheckups", 1L);
+        assertThat(result.factors()).allSatisfy(factor -> {
+            assertThat(factor.getRelatedBizType()).isNotBlank();
+            assertThat(factor.getRelatedBizId()).isNotNull();
+        });
     }
 
     @Test

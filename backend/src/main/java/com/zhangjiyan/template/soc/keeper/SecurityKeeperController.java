@@ -2,6 +2,7 @@ package com.zhangjiyan.template.soc.keeper;
 
 import com.zhangjiyan.template.common.audit.OperationAudit;
 import com.zhangjiyan.template.common.result.ApiResult;
+import com.zhangjiyan.template.soc.recommendation.RecommendationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import java.util.List;
 public class SecurityKeeperController {
 
     private final SecurityKeeperService service;
+    private final RecommendationService recommendationService;
 
     @Operation(summary = "生成当前电脑一键体检结果")
     @PostMapping("/checkup")
@@ -53,6 +55,14 @@ public class SecurityKeeperController {
     @PreAuthorize("isAuthenticated()")
     public ApiResult<List<SecurityKeeperService.RepairRecommendation>> recommendations(@RequestParam String assetIp) {
         return ApiResult.ok(service.recommendations(assetIp));
+    }
+
+    @Operation(summary = "查询当前电脑下一步动作")
+    @GetMapping("/next-actions")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<List<RecommendationService.ClientNextAction>> nextActions(@RequestParam String assetIp,
+                                                                               @RequestParam(defaultValue = "5") int limit) {
+        return ApiResult.ok(recommendationService.clientNextActions(assetIp, limit));
     }
 
     @Operation(summary = "员工确认修复建议已处理")

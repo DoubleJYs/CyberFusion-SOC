@@ -22,9 +22,13 @@ public record RiskScoringPolicyRequest(
         @Min(0) @Max(100) Integer baselineFailedWeight,
         @Min(0) @Max(100) Integer fimUnreviewedWeight,
         @Min(0) @Max(100) Integer externalEventWeight,
+        @Min(0) @Max(100) Integer incidentOpenWeight,
+        @Min(0) @Max(100) Integer incidentHighWeight,
         @Min(0) @Max(100) Integer overdueTicketWeight,
         @Min(0) @Max(100) Integer openPlaybookTaskWeight,
         @Min(0) @Max(100) Integer employeePendingTaskWeight,
+        @Min(0) @Max(100) Integer clientCheckupWarningWeight,
+        @Min(0) @Max(100) Integer clientCheckupCriticalWeight,
         @Min(0) @Max(100) Integer closedTicketReduceWeight,
         @Min(0) @Max(100) Integer completedPlaybookReduceWeight,
         @Min(1) @Max(100) Integer maxScore
