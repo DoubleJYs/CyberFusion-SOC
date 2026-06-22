@@ -7,4 +7,4 @@ $env:VITE_API_PROXY_TARGET = if ([string]::IsNullOrWhiteSpace($env:VITE_API_PROX
 
 Set-Location (Join-Path $ProjectRoot "frontend")
 pnpm install --frozen-lockfile
-pnpm dev -- --host 127.0.0.1 --port $FrontendPort
+pnpm dev --port $FrontendPort

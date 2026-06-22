@@ -25,8 +25,8 @@ backup_dir="${BACKUP_ROOT}/${timestamp}"
 mkdir -p "${backup_dir}"
 
 printf 'Creating MySQL backup in %s\n' "${backup_dir}"
-DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T mysql \
-  sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"' \
+MYSQL_PWD="${DB_PASSWORD}" DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T -e MYSQL_PWD mysql \
+  sh -c 'mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"' \
   > "${backup_dir}/mysql-${DB_NAME}.sql"
 
 if command -v gzip >/dev/null 2>&1; then

@@ -32,12 +32,12 @@ mysql_dump_gz="${mysql_dump}.gz"
 
 if [[ -f "${mysql_dump_gz}" ]]; then
   printf 'Restoring MySQL from %s\n' "${mysql_dump_gz}"
-  gzip -dc "${mysql_dump_gz}" | DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T mysql \
-    sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"'
+  gzip -dc "${mysql_dump_gz}" | MYSQL_PWD="${DB_PASSWORD}" DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T -e MYSQL_PWD mysql \
+    sh -c 'mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"'
 elif [[ -f "${mysql_dump}" ]]; then
   printf 'Restoring MySQL from %s\n' "${mysql_dump}"
-  DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T mysql \
-    sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"' < "${mysql_dump}"
+  MYSQL_PWD="${DB_PASSWORD}" DB_PASSWORD="${DB_PASSWORD}" DB_NAME="${DB_NAME}" docker compose -f "${COMPOSE_FILE}" exec -T -e MYSQL_PWD mysql \
+    sh -c 'mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"' < "${mysql_dump}"
 else
   printf 'ERROR: MySQL dump not found for database %s in %s\n' "${DB_NAME}" "${BACKUP_DIR}" >&2
   exit 1

@@ -36,9 +36,19 @@ if (-not (Test-Path $DumpPath -PathType Leaf)) {
 }
 
 Write-Host "Restoring MySQL from $DumpPath"
-Get-Content -Path $DumpPath -Raw | docker compose -f $ComposeFile exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"'
-if ($LASTEXITCODE -ne 0) {
-    throw "mysql restore failed with exit code $LASTEXITCODE"
+$previousMysqlPwd = $env:MYSQL_PWD
+try {
+    $env:MYSQL_PWD = $env:DB_PASSWORD
+    Get-Content -Path $DumpPath -Raw | docker compose -f $ComposeFile exec -T -e MYSQL_PWD mysql sh -c 'mysql --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"'
+    if ($LASTEXITCODE -ne 0) {
+        throw "mysql restore failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    if ($null -eq $previousMysqlPwd) {
+        Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
+    } else {
+        $env:MYSQL_PWD = $previousMysqlPwd
+    }
 }
 
 $RedisDump = Join-Path $BackupDir "redis-dump.rdb"

@@ -37,15 +37,50 @@ function Assert-Command {
 
 function Wait-MySql {
     Write-Host "Waiting for MySQL..."
+    $previousMysqlPwd = $env:MYSQL_PWD
     for ($i = 1; $i -le 40; $i++) {
-        docker compose exec -T mysql mysqladmin ping -h 127.0.0.1 -uroot "-p$DbPassword" *> $null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "MySQL is ready."
-            return
+        try {
+            $env:MYSQL_PWD = $DbPassword
+            docker compose exec -T -e MYSQL_PWD mysql mysqladmin ping -h 127.0.0.1 -uroot *> $null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "MySQL is ready."
+                return
+            }
+        } finally {
+            if ($null -eq $previousMysqlPwd) {
+                Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
+            } else {
+                $env:MYSQL_PWD = $previousMysqlPwd
+            }
         }
         Start-Sleep -Seconds 2
     }
     throw "MySQL did not become ready in time."
+}
+
+function Invoke-ComposeMySqlFile {
+    param(
+        [string]$SqlPath,
+        [string]$Database = ""
+    )
+    $previousMysqlPwd = $env:MYSQL_PWD
+    try {
+        $env:MYSQL_PWD = $DbPassword
+        $args = @("compose", "exec", "-T", "-e", "MYSQL_PWD", "mysql", "mysql", "--default-character-set=utf8mb4", "-uroot")
+        if (-not [string]::IsNullOrWhiteSpace($Database)) {
+            $args += $Database
+        }
+        Get-Content -Path $SqlPath -Raw | docker @args
+        if ($LASTEXITCODE -ne 0) {
+            throw "$SqlPath import failed."
+        }
+    } finally {
+        if ($null -eq $previousMysqlPwd) {
+            Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
+        } else {
+            $env:MYSQL_PWD = $previousMysqlPwd
+        }
+    }
 }
 
 function Wait-Http {
@@ -98,11 +133,8 @@ try {
 
     if (-not $SkipDbInit) {
         Write-Host "Importing schema.sql and data.sql..."
-        cmd.exe /c "docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -p$DbPassword < `"$SchemaSql`""
-        if ($LASTEXITCODE -ne 0) { throw "schema.sql import failed." }
-
-        cmd.exe /c "docker compose exec -T mysql mysql --default-character-set=utf8mb4 -uroot -p$DbPassword cyberfusion_soc < `"$DataSql`""
-        if ($LASTEXITCODE -ne 0) { throw "data.sql import failed." }
+        Invoke-ComposeMySqlFile -SqlPath $SchemaSql
+        Invoke-ComposeMySqlFile -SqlPath $DataSql -Database "cyberfusion_soc"
     }
 } finally {
     Pop-Location
@@ -124,7 +156,7 @@ $FrontendCommand = @"
 `$env:VITE_API_PROXY_TARGET = 'http://127.0.0.1:$ServerPort'
 Set-Location '$FrontendDir'
 pnpm install --frozen-lockfile
-pnpm dev -- --host 127.0.0.1 --port $FrontendPort
+pnpm dev --port $FrontendPort
 "@
 
 Start-Process powershell.exe -ArgumentList @("-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $BackendCommand)

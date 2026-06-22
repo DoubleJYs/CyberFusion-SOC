@@ -92,6 +92,7 @@ d = json.loads(sys.argv[1])
 expr = sys.argv[2]
 message = sys.argv[3]
 safe_names = {
+    "__builtins__": {},
     "d": d,
     "all": all,
     "any": any,
@@ -100,7 +101,7 @@ safe_names = {
     "set": set,
     "str": str,
 }
-ok = bool(eval(expr, {"__builtins__": {}}, safe_names))
+ok = bool(eval(expr, safe_names, {}))
 if not ok:
     raise SystemExit(message)
 ' "$body" "$expr" "$message" || fail "$message"
@@ -235,6 +236,24 @@ api_call GET "/soc/tickets/${ticket_id}" "$admin_token" "" 200 || fail "ticket t
 assert_json "$last_body" "'Demo Range' in json.dumps(d['data']['timeline'], ensure_ascii=False)" "ticket timeline includes Demo Range source"
 assert_json "$last_body" "len(d['data'].get('tasks') or []) >= 1" "ticket detail includes playbook tasks"
 task_id="$(printf '%s' "$last_body" | json_query "d['data']['tasks'][0]['id']")"
+api_call POST /soc/risk-scoring/recalculate "$admin_token" "" 200 || fail "asset risk recalculation"
+assert_json "$last_body" "d['data']['recalculatedAssets'] >= 1" "asset risk recalculation covers demo assets"
+api_call GET "/soc/risk-scoring/top-assets?limit=5" "$admin_token" "" 200 || fail "top risk assets"
+assert_json "$last_body" "any(any(f.get('factorType') in ['incident_open','incident_high'] for f in item.get('factors') or []) for item in d['data'])" "risk profile includes incident cluster factors"
+assert_json "$last_body" "any(any(f.get('factorType') in ['playbook_open','employee_pending'] for f in item.get('factors') or []) for item in d['data'])" "risk profile includes playbook or employee task factors"
+asset_id="$(printf '%s' "$last_body" | json_query "d['data'][0]['asset']['id']")"
+api_call GET "/soc/recommendations/top?limit=10" "$admin_token" "" 200 || fail "top recommendation actions"
+assert_json "$last_body" "len(d['data']) >= 3" "recommendation API returns prioritized actions"
+assert_json "$last_body" "any(r.get('relatedBizType') == 'incident' for r in d['data'])" "recommendations include incident cluster action"
+assert_json "$last_body" "any(r.get('relatedBizType') == 'vulnerability' for r in d['data'])" "recommendations include vulnerability action"
+assert_json "$last_body" "any(r.get('relatedBizType') in ['ticket','playbook_task','client_task'] for r in d['data'])" "recommendations include ticket or task action"
+recommendation_key="$(printf '%s' "$last_body" | json_query "d['data'][0]['key']")"
+recommendation_type="$(printf '%s' "$last_body" | json_query "d['data'][0]['relatedBizType']")"
+recommendation_id="$(printf '%s' "$last_body" | json_query "d['data'][0]['relatedBizId']")"
+api_call POST "/soc/recommendations/${recommendation_key}/record" "$admin_token" "{\"actionType\":\"view\",\"relatedBizType\":\"${recommendation_type}\",\"relatedBizId\":${recommendation_id},\"note\":\"Acceptance recommendation view ${BATCH_ID}\"}" 200 || fail "record recommendation action"
+assert_json "$last_body" "d['data']['recommendationKey'] == '${recommendation_key}'" "recommendation adoption record is written"
+api_call GET "/soc/assets/${asset_id}/recommendations?limit=10" "$admin_token" "" 200 || fail "asset recommendations"
+assert_json "$last_body" "len(d['data']) >= 1 and all(r.get('reason') and r.get('recommendedAction') for r in d['data'])" "asset recommendations are explainable"
 api_call POST "/soc/tickets/${ticket_id}/tasks/${task_id}/start" "$admin_token" "{\"remark\":\"Acceptance task start ${BATCH_ID}\"}" 200 || fail "start ticket task"
 api_call POST "/soc/tickets/${ticket_id}/tasks/${task_id}/complete" "$admin_token" "{\"remark\":\"Acceptance task complete ${BATCH_ID}\",\"evidenceText\":\"dry-run acceptance evidence\"}" 200 || fail "complete ticket task"
 
@@ -299,6 +318,9 @@ api_call GET "/client/tasks" "$employee_token" "" 200 || fail "employee tasks"
 assert_json "$last_body" "all(r.get('assigneeType') == 'employee' for r in d['data'])" "employee task API only returns employee tasks"
 api_call GET "/client/devices?pageNum=1&pageSize=10" "$employee_token" "" 200 || fail "employee devices"
 assert_json "$last_body" "all(r.get('ownerId') in [5, None] for r in d['data']['records'])" "employee client devices are scoped to current user"
+employee_asset_ip="$(printf '%s' "$last_body" | json_query "d['data']['records'][0]['ip']")"
+api_call GET "/client/security-keeper/next-actions?assetIp=${employee_asset_ip}&limit=5" "$employee_token" "" 200 || fail "employee next actions"
+assert_json "$last_body" "all(r.get('title') and r.get('recommendedAction') and r.get('relatedBizType') for r in d['data'])" "employee next actions use ordinary actionable language"
 
 section "Summary"
 printf 'Mode: %s\n' "$MODE"

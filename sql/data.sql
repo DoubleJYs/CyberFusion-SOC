@@ -353,7 +353,7 @@ INSERT INTO sys_user (id, username, password_hash, nickname, email, mobile, dept
 VALUES
   (1, 'admin', '$2a$10$YHt2b5R57EgMvgQePeSZLOsBEtPWCy3hoDJh.yqDbFYsS7B24e2f2', '管理员', 'admin@example.local', NULL, 1, 1, 1),
   (2, 'demo', '$2a$10$YHt2b5R57EgMvgQePeSZLOsBEtPWCy3hoDJh.yqDbFYsS7B24e2f2', '演示用户', 'demo@example.local', NULL, 2, 3, 1)
-ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), password_hash = VALUES(password_hash), dept_id = VALUES(dept_id), post_id = VALUES(post_id), status = VALUES(status);
+ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), email = VALUES(email), mobile = VALUES(mobile), dept_id = VALUES(dept_id), post_id = VALUES(post_id), status = VALUES(status);
 
 INSERT INTO sys_role (id, role_code, role_name, data_scope, status)
 VALUES
@@ -580,7 +580,9 @@ VALUES
   (2435, 2015, '关联规则新增', NULL, NULL, NULL, 'button', 'soc:correlation-rule:create', 32, 0, 1),
   (2436, 2015, '关联规则编辑', NULL, NULL, NULL, 'button', 'soc:correlation-rule:update', 33, 0, 1),
   (2437, 2015, '关联规则发布', NULL, NULL, NULL, 'button', 'soc:correlation-rule:publish', 34, 0, 1),
-  (2438, 2015, '关联规则停用', NULL, NULL, NULL, 'button', 'soc:correlation-rule:disable', 35, 0, 1)
+  (2438, 2015, '关联规则停用', NULL, NULL, NULL, 'button', 'soc:correlation-rule:disable', 35, 0, 1),
+  (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
+  (2601, 2600, '我的电脑安全助手', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1)
 ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), name = VALUES(name), path = VALUES(path), component = VALUES(component), icon = VALUES(icon), permission = VALUES(permission), type = VALUES(type), sort = VALUES(sort), visible = VALUES(visible), status = VALUES(status);
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -613,6 +615,17 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 3, id FROM sys_menu WHERE id IN (2430, 2431, 2432, 2433, 2434, 2435, 2436, 2437, 2438)
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT role_id, menu_id
+FROM (
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+  UNION ALL
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+  UNION ALL
+  SELECT 5 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+) AS client_menu_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO soc_correlation_rule (id, rule_code, rule_key, rule_name, description, enabled, status, version, rule_type, time_window_minutes, min_score, min_count, group_by_fields_json, source_types_json, event_types_json, group_by_json, threshold, timeframe_seconds, sequence_json, severity_min, severity_floor, weights_json, safety_note, approved_by, approved_at)
