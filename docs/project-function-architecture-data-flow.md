@@ -116,7 +116,7 @@ CyberFusion calculates an explainable asset risk profile from existing SOC recor
 2. Backend stores scoring policy lifecycle rows in `soc_risk_scoring_policy`.
 3. `POST /api/soc/risk-scoring/recalculate` recalculates every in-scope asset from current database records.
 4. `POST /api/soc/risk-scoring/recalculate/{assetId}` recalculates one asset.
-5. Calculation reads existing rows from `soc_asset`, `soc_alert`, `soc_vulnerability`, `soc_baseline_check`, `soc_file_integrity_event`, `soc_external_event`, `soc_ticket`, and `soc_ticket_task`.
+5. Calculation reads existing rows from `soc_asset`, `soc_alert`, `soc_vulnerability`, `soc_baseline_check`, `soc_file_integrity_event`, `soc_external_event`, `soc_incident_cluster`, `soc_ticket`, `soc_ticket_task`, and `soc_client_checkup`.
 6. Backend writes a point-in-time summary to `soc_asset_risk_snapshot`.
 7. Backend writes explainable factors to `soc_asset_risk_factor`.
 8. Backend updates `soc_asset.risk_score` and `soc_asset.risk_level` for list sorting and quick display.
@@ -133,9 +133,12 @@ Positive factors increase priority:
 - failed baseline checks.
 - unreviewed FIM events.
 - high-risk external evidence from WAF, ZAP, Wazuh, Suricata, Zeek, and related adapters.
+- open security incident clusters.
+- high or critical security incident clusters.
 - overdue tickets.
 - open response playbook tasks.
 - employee pending tasks.
+- recent employee Security Keeper checkup status of `attention`, `warning`, `serious`, or `critical`.
 - production or critical asset hints.
 - internet-exposed or gateway/IDS evidence.
 
@@ -158,6 +161,7 @@ The final score is clipped to `0..maxScore` and mapped to:
 - No policy row can store executable logic, payloads, commands, public URLs, notification targets, or automation scripts.
 - Recalculation only reads existing SOC tables and writes snapshot/factor records.
 - Recalculation does not start ZAP, Trivy, Wazuh, Suricata, Zeek, Docker, shell commands, or external webhooks.
+- Incident clusters, playbook tasks, employee tasks, and Security Keeper checkups are scored as explainable context only. They do not trigger automatic remediation.
 - If no active database policy exists, the backend uses an internal numeric fallback policy so demos do not fail with a 500.
 - Data-scope checks are applied before returning admin and employee risk profiles.
 
@@ -225,3 +229,47 @@ Reserved but not implemented in v1:
 - Rules do not contain user-provided expressions, SQL, scripts, payloads, scanners, or external query definitions.
 - Incident correlation is manually triggered and idempotent by `correlation_key`.
 - Closing an incident or converting it to a ticket only updates SOC records and timeline entries.
+
+## Remediation Recommendation Ranking v1 Flow
+
+CyberFusion A3 converts existing SOC context into explainable next actions. It is a deterministic prioritization layer, not an Agent, not black-box ML, and not an automatic remediation engine.
+
+1. Dashboard calls `GET /api/soc/recommendations/top`.
+2. Asset detail calls `GET /api/soc/assets/{id}/recommendations`.
+3. Employee Security Keeper calls `GET /api/client/security-keeper/next-actions?assetIp={ip}`.
+4. Backend reads existing records from `soc_incident_cluster`, `soc_vulnerability`, `soc_ticket`, `soc_ticket_task`, `soc_client_checkup`, `soc_asset_risk_snapshot`, and `soc_asset_risk_factor`.
+5. Backend calculates a priority score from explicit rules:
+   - high or critical incident clusters rank first.
+   - high or critical vulnerabilities rank next.
+   - overdue tickets are promoted.
+   - incomplete response-playbook tasks are promoted.
+   - employee-assigned pending tasks are promoted.
+   - closed tickets, completed tasks, confirmed tasks, or already-recorded confirmations are down-ranked.
+6. Each recommendation returns `title`, `priority`, `reason`, `recommendedAction`, `relatedBizType`, `relatedBizId`, `assigneeType`, and `status`.
+7. Admin pages show analyst-facing recommendations such as event-cluster handling, vulnerability remediation, ticket follow-up, and playbook task completion.
+8. Employee pages translate the same context into ordinary language such as:
+   - `请先完成本机检查`.
+   - `请提交安全日志`.
+   - `请确认安全团队分配的待办`.
+9. Recommendation adoption is recorded by `POST /api/soc/recommendations/{key}/record`.
+10. Adoption records are stored in the existing `soc_client_recommendation_action` table with action types such as `view`, `apply_playbook`, `ticket`, `confirm`, and `note`.
+
+### Recommendation Data Objects
+
+| Object | Role in the flow |
+| --- | --- |
+| `soc_asset_risk_factor` | Provides explainable risk factors and related business object ids. |
+| `soc_incident_cluster` | Supplies high-priority multi-source evidence clusters. |
+| `soc_vulnerability` | Supplies unresolved component or dependency vulnerabilities. |
+| `soc_ticket` | Supplies overdue or still-open work items. |
+| `soc_ticket_task` | Supplies response playbook tasks and employee tasks. |
+| `soc_client_checkup` | Supplies employee Security Keeper checkup status. |
+| `soc_client_recommendation_action` | Stores recommendation adoption or view records; no new recommendation master table is required. |
+
+### Recommendation Safety Boundary
+
+- Recommendations only read existing SOC tables and write adoption records.
+- They do not execute commands, run scanners, call external WAF/IDS/SIEM/EDR systems, send notifications, or modify host settings.
+- They do not store scripts, expressions, payloads, public targets, tokens, API keys, passwords, or private keys.
+- Employee requests are scoped to the current authenticated user's visible asset through existing data-scope checks.
+- A recommendation can guide the user into existing playbook, ticket, or employee-task flows, but those flows remain manual and auditable.

@@ -4,6 +4,265 @@ Date: 2026-06-19
 
 Scope: `/Users/zhangjiyan/Programs/projects/cyberspace_Security_shot_time/00-cyberfusion-platform`
 
+## Docker MySQL Client Fallback 2026-06-22
+
+Scope: local runtime diagnostics and SQL refresh documentation for environments without a host `mysql` command.
+
+Changes verified:
+
+- `scripts/smoke/dev-doctor.sh` no longer requires a host MySQL client for schema, seed, menu, and permission diagnostics.
+- The doctor uses host `mysql` when available and falls back to `docker exec cyberfusion-platform-mysql-1 mysql` when host `mysql` is missing.
+- `scripts/win/dev-doctor.ps1` has the same local-client-first, Docker-client-fallback behavior.
+- `scripts/win/run-dev.ps1` now imports `schema.sql` and `data.sql` through the Docker Compose MySQL client with `MYSQL_PWD`, instead of passing the password through a `-p...` command argument.
+- `scripts/mac/backup-runtime.sh`, `scripts/mac/restore-runtime.sh`, `scripts/win/backup-runtime.ps1`, and `scripts/win/restore-runtime.ps1` now pass `MYSQL_PWD` from the explicit local `DB_PASSWORD` instead of relying on container `MYSQL_ROOT_PASSWORD`.
+- `scripts/smoke/cleanup-demo-data.sh` now requires `DB_PASSWORD` for both dry-run and confirm modes, and passes it through `MYSQL_PWD` to the Docker MySQL client.
+- SQL checks prefer `DB_PASSWORD` when it is present. If it is absent in local development, `scripts/smoke/dev-doctor.sh` can read the existing Docker MySQL container `MYSQL_ROOT_PASSWORD` into process memory, use the Docker MySQL client, and still avoid printing or writing the password.
+- `README.md` and `docs/common-bugs.md` now show Docker client commands for `SELECT 1`, `schema.sql`, `data.sql`, and menu/policy seed refresh so local MySQL installation is optional.
+
+Validation results:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| `command -v mysql || true` | PASS | No host `mysql` command was found in the current environment; fallback path was required. |
+| `bash -n scripts/mac/backup-runtime.sh scripts/mac/restore-runtime.sh scripts/smoke/cleanup-demo-data.sh scripts/smoke/dev-doctor.sh scripts/smoke/check-visibility.sh scripts/smoke/run-acceptance.sh scripts/smoke/check-release-safety.sh` | PASS | Shell runtime and smoke scripts parse successfully. |
+| `scripts/smoke/cleanup-demo-data.sh --help` | PASS | Help text is available without `DB_PASSWORD`. |
+| `scripts/smoke/cleanup-demo-data.sh` | BLOCKED/EXPECTED | Without `DB_PASSWORD`, cleanup dry-run exits before connecting to MySQL and explains the missing credential. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. With no shell `DB_PASSWORD`, the doctor used the Docker MySQL container fallback without printing the password. |
+| `DB_PASSWORD='__invalid_for_fallback_probe__' scripts/smoke/dev-doctor.sh ...` | BLOCKED/EXPECTED | With a non-secret invalid password and no host `mysql`, the doctor used the Docker client and returned MySQL `ERROR 1045`, proving fallback reached the container client. |
+| `DB_PASSWORD='__compose_config_only__' MYSQL_PWD='__fallback_env_probe__' docker compose exec -T -e MYSQL_PWD mysql sh -c 'test -n "$MYSQL_PWD" ...'` | PASS | Verified Docker Compose can pass `MYSQL_PWD` into the MySQL container without printing its value. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. |
+| `mvn -pl backend test` | PASS | 44 tests run, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `git diff --check` | PASS | No whitespace errors; existing CRLF notices for unrelated Windows files remain. |
+
+Remaining note:
+
+- Write operations such as cleanup and schema refresh still require an explicit operator-controlled `DB_PASSWORD`; the Docker container fallback is used by read-only diagnostics.
+
+## Main MySQL Volume Reconciliation 2026-06-22
+
+Scope: non-destructive reconciliation of the primary Docker MySQL volume `cyberfusion-platform-mysql-1` against the current source SQL and smoke scripts.
+
+Final status: resolved by archiving the unreadable Environment MySQL directory and initializing a fresh Environment-managed primary MySQL directory. The old directory was preserved at `/Users/zhangjiyan/Environment/cyberfusion-platform/mysql-auth-blocked-20260622-154059`. No Docker volume was deleted, no old root password was reset, and no old database directory was cleared.
+
+Current primary database facts:
+
+- Main container: `cyberfusion-platform-mysql-1`.
+- Published port: `127.0.0.1:3306->3306/tcp`.
+- Container state: running.
+- Docker health status: healthy.
+- Intended database name from compose and scripts: `cyberfusion_soc`.
+- SQL-level table checks pass for `soc_incident_cluster`, `soc_incident_evidence`, `soc_correlation_rule`, `soc_risk_scoring_policy`, `soc_asset_risk_snapshot`, and `soc_asset_risk_factor`.
+- SQL-level menu checks pass for `/soc/incidents`, `/soc/policies`, `/soc/tickets`, `/soc/reports`, and `/client/workbench`.
+
+Authentication result:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Old archived directory | BLOCKED/ARCHIVED | The previous data directory could not be authenticated with the available password and was preserved as `mysql-auth-blocked-20260622-154059`. |
+| Fresh primary SQL query | PASS | `SELECT 1` against `cyberfusion_soc` returned `1` through the Docker MySQL client. The password was supplied only as a process environment variable and was not written to source. |
+| Docker health signal | PASS/WEAK | The container is healthy, but the acceptance proof is the real SQL query plus live smoke, not health alone. |
+
+Actions taken:
+
+- No Docker volume was deleted.
+- No old root password was reset.
+- The unreadable old data directory was moved aside under Environment instead of being deleted.
+- A fresh Environment-managed MySQL directory was initialized by Docker Compose.
+- A pre-refresh logical backup of the fresh primary database was exported to `/Users/zhangjiyan/Environment/cyberfusion-platform/backups/main-before-schema-refresh-20260622-154223.sql.gz`.
+- Current `sql/schema.sql` and `sql/data.sql` were applied successfully.
+- `sql/data.sql` was updated to include the `/client/workbench` employee-side menu seed required by the reconciliation checklist.
+- `scripts/smoke/dev-doctor.sh` now checks all five key menu paths from the reconciliation checklist.
+
+Validation results for this reconciliation pass:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| `docker ps` primary database check | PASS | `cyberfusion-platform-mysql-1` is running on `127.0.0.1:3306` and reports Docker health `healthy`. |
+| SQL authentication | PASS | `SELECT 1` returned `1`. |
+| Key table check | PASS | SQL count for the six required SOC tables returned `6`. |
+| Key menu check | PASS | SQL count for `/soc/incidents`, `/soc/policies`, `/soc/tickets`, `/soc/reports`, and `/client/workbench` returned `5`. |
+| Direct frontend listener | PASS | `lsof` showed Vite listening on `127.0.0.1:5174`. |
+| Direct backend listener | PASS | Spring Boot started on `18080` against the fresh primary database. |
+| `/api/health` | PASS | Returned `UP`; database, schema, seed, and Redis dependencies all reported `UP`. |
+| `mvn -pl backend test` | PASS | 44 tests run, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. |
+| `bash -n scripts/smoke/dev-doctor.sh scripts/smoke/check-visibility.sh scripts/smoke/run-acceptance.sh scripts/smoke/check-release-safety.sh` | PASS | Shell smoke scripts parse successfully. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 58 pass, 0 fail. |
+
+Remaining note:
+
+- The archived old directory is a physical fallback only. Because it could not be SQL-authenticated, it was not logically dumped or migrated row-by-row.
+
+## Runtime Solidification And Demo Data Governance 2026-06-22
+
+Scope: local startup scripts, Vite proxy recurrence prevention, dev doctor live checks, demo data cleanup dry-run, and smoke acceptance closure.
+
+Status note: this section records an earlier same-day runtime pass. The current primary-volume state is superseded by the "Main MySQL Volume Reconciliation 2026-06-22" section above: as of the latest check, `18080` is not listening and the primary MySQL volume cannot be SQL-authenticated from the current shell because `DB_PASSWORD` is missing and the container environment password returns `ERROR 1045`.
+
+Changes verified:
+
+- macOS and Windows frontend startup scripts default to frontend `5174`, backend `18080`, and `VITE_API_PROXY_TARGET=http://127.0.0.1:18080`.
+- `scripts/mac/frontend-dev.sh` now starts Vite with a clean `vite --host 127.0.0.1 --port 5174` command shape.
+- `scripts/smoke/dev-doctor.sh` checks frontend/backend listeners, frontend `/api/health` proxy, backend `/api/health`, required tables, seed rows, admin menus/permissions, and employee 403 boundaries.
+- `scripts/smoke/cleanup-demo-data.sh` defaults to dry-run and reports only scoped demo/smoke rows. Real cleanup requires `--confirm`.
+- `README.md` and `docs/common-bugs.md` document standard startup, proxy target recurrence prevention, demo data accumulation, and safe cleanup.
+
+Live verification:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Backend startup script | PASS | `DB_PASSWORD` was read from the local Docker MySQL container environment and `scripts/mac/backend-dev.sh` started Spring Boot on `18080`. The password was not written to source. |
+| Frontend startup script | PASS | `scripts/mac/frontend-dev.sh` started Vite on `5174` with `VITE_API_PROXY_TARGET=http://127.0.0.1:18080`. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. Confirmed ports, proxy, health, key tables, admin menus/permissions, and employee 403 boundaries. |
+| `scripts/smoke/cleanup-demo-data.sh` | PASS | Dry-run only. Reported scoped demo rows: 17 external events, 17 alerts, 1 vulnerability, 5 incident clusters, 52 incident evidence rows, 4 tickets, 14 timelines, 3 ticket tasks, 5 playbook logs, 10 reports, 36 notification logs. No data was deleted. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. |
+| `mvn -pl backend test` | PASS | 43 tests run, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 55 pass, 0 fail. |
+
+Demo cleanup safety notes:
+
+- Default mode is dry-run and ends with `ROLLBACK`.
+- `--confirm` is required before any delete statements are committed.
+- Target rows are limited to known demo/smoke batch IDs, demo-range CVEs, linked demo incident clusters/evidence, linked demo tickets/tasks/timeline rows, security-validation reports, playbook match logs, and dry-run notification logs.
+- The script never deletes Docker volumes and does not target non-demo business data.
+
+## Asset Risk Scoring Enhancement v2.1 2026-06-22
+
+Scope: explainable asset risk scoring enhancement using existing incident clusters, response playbook tasks, employee tasks, and Security Keeper checkups.
+
+Changes verified:
+
+- `soc_risk_scoring_policy` now includes numeric weights for open incident clusters, high-risk incident clusters, employee checkup warning status, and employee checkup critical status.
+- `RiskScoringService` still uses the existing `soc_asset_risk_snapshot` and `soc_asset_risk_factor` tables, and now records related business type and related business id for generated factors.
+- Asset risk recalculation reads existing SOC rows only: alerts, vulnerabilities, baselines, FIM, external events, incident clusters, tickets, playbook tasks, employee tasks, and Security Keeper checkups.
+- `/client/workbench` prioritizes employee-friendly next actions from risk factors when a risk profile is available.
+- `scripts/smoke/run-acceptance.sh --dry-run` now recalculates asset risk after the demo incident and playbook chain, then asserts incident-cluster and playbook/employee-task factors are present.
+
+Validation:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| `mvn -pl backend test` | PASS | 44 tests run, 0 failures, 0 errors. Added coverage for incident/checkup factors and related evidence ids. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api --mysql-container cyberfusion-live-smoke-mysql` | PASS | 15 pass, 0 warn, 0 fail. Backend ran from current source on `18080`; frontend ran on `5174`; health, required tables, menus, permissions, and employee 403 boundaries passed. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 58 pass, 0 fail. Added asset risk recalculation and assertions for incident-cluster and playbook/employee-task factors. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. |
+
+Live runtime note:
+
+- The existing `cyberfusion-platform-mysql-1` data volume rejected both the compose environment password and the documented local container password during this pass.
+- To avoid deleting or resetting that volume, validation used an isolated smoke MySQL container on local port `3307`, initialized from the current `sql/schema.sql` and `sql/data.sql`.
+- The backend was started with `DB_PORT=3307` for this validation only. No Docker volume was deleted, and no production/customer data was accessed.
+
+Safety notes:
+
+- The enhancement does not add scanning, Agent behavior, shell execution, automatic remediation, or real notifications.
+- Risk policies remain numeric weights plus descriptive text; unsafe script, shell, SQL, scanner, downloader, and expression wording is still rejected.
+- Employee-facing text avoids raw SOC terms where possible and routes action to existing safe pages: repair suggestions, security logs, safe toolbox, and pending tasks.
+
+## Remediation Recommendation Ranking v1 2026-06-22
+
+Scope: A3 recommendation ranking that turns existing risk factors, incident clusters, alerts, vulnerabilities, tickets, response playbook tasks, employee tasks, and Security Keeper checkups into explainable next actions.
+
+Coverage added:
+
+- `GET /api/soc/recommendations/top` returns Dashboard Top 5 recommendations for analysts.
+- `GET /api/soc/assets/{id}/recommendations` returns asset-scoped recommended handling order.
+- `GET /api/client/security-keeper/next-actions?assetIp={ip}` returns employee-facing next actions in ordinary language.
+- `POST /api/soc/recommendations/{key}/record` writes recommendation adoption/view records to `soc_client_recommendation_action`.
+- `scripts/smoke/run-acceptance.sh --dry-run` now checks that recommendations include incident-cluster, vulnerability, ticket/task, and employee next-action coverage.
+
+Ranking rules:
+
+| Input | Effect |
+| --- | --- |
+| High or critical incident cluster | Promoted to highest priority. |
+| High or critical vulnerability | Promoted after event clusters. |
+| Overdue ticket | Promoted as operational blocker. |
+| Incomplete response playbook task | Promoted as manual closure work. |
+| Employee pending task | Promoted for employee Security Keeper next action. |
+| Closed ticket, completed task, confirmed/submitted recommendation | Down-ranked instead of removed from history. |
+
+Validation status:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| `mvn -pl backend test` | PASS | 49 tests run, 0 failures, 0 errors after adding recommendation service and rate-limit coverage. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. Backend was restarted from current source on `18080`; Docker MySQL fallback verified key tables and seed rows. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. Admin, analyst, and employee visibility/permission checks passed. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 65 pass, 0 fail. Covered recommendation API, incident/vulnerability/ticket/task recommendation types, adoption record, asset recommendations, and employee ordinary-language next actions. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. No shell/script execution boundary regressions, no real notification sender, no high-confidence secrets. |
+
+Safety notes:
+
+- A3 does not add Agent behavior, ML models, scanner execution, public target access, shell execution, automatic remediation, or real notification sending.
+- Recommendations are generated from existing SOC records and are explainable through `reason` plus `recommendedAction`.
+- Employee endpoint remains scoped to the authenticated employee's visible asset.
+
+## Runtime Regression Closure 2026-06-21
+
+Scope: live startup regression, health diagnostics, local smoke verification, seed password stability, and startup issue prevention.
+
+### Live Smoke Blocking Closure 2026-06-21 23:49
+
+This pass was executed because the live runtime was initially not listening on `5174` and `18080`.
+
+Blocking cause:
+
+- `soc_incident_cluster`, `soc_correlation_rule`, and `soc_incident_evidence` existed in the local Docker MySQL database.
+- The real blocker was that the frontend and backend processes were not running.
+
+Recovery action:
+
+- Started backend from the current source checkout on `127.0.0.1:18080`.
+- Started frontend on `127.0.0.1:5174` with `VITE_API_PROXY_TARGET=http://127.0.0.1:18080`.
+- Did not delete Docker volumes and did not reset database passwords.
+
+Live verification:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Required incident/correlation tables | PASS | `soc_correlation_rule`, `soc_incident_cluster`, and `soc_incident_evidence` are present. |
+| `GET /api/health` | PASS | Returned HTTP 200 with `database`, `schema`, `seed`, and `redis` all `UP`. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 5 pass, 0 warn, 0 fail. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. Admin sees `/soc/policies`, `/soc/incidents`, `/soc/tickets`, `/soc/reports`; employee receives 403 for policy, incident, and correlation-rule APIs. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 55 pass, 0 fail. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. |
+| `mvn -pl backend test` | PASS | 43 tests run, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+
+Changes verified:
+
+- `sql/data.sql` no longer overwrites existing `sys_user.password_hash` for existing `admin` and `demo` rows. New databases still receive the BCrypt seed hash.
+- `GET /api/health` reports `database`, `schema`, `seed`, and `redis`, plus `version` and active Spring profile.
+- `scripts/smoke/dev-doctor.sh` checks frontend/backend ports, backend Java process start time, `/api/health`, Docker MySQL required tables, and key menu/permission seed rows.
+- `scripts/win/dev-doctor.ps1` provides the same read-only diagnostics for Windows environments.
+- `docs/common-bugs.md` records recovery steps for backend not listening, stale backend processes, missing tables, admin password mismatch, and smoke sandbox false negatives.
+
+Live validation results from 2026-06-21:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 5 pass, 0 warn, 0 fail. Health reported database/schema/seed/redis `UP`, 13 required tables present, and key seed rows present. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 checks passed; no source `.env`, high-confidence secrets, runtime DB/log files, or unexpected large source artifacts. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. Admin, analyst, and employee visibility/permission checks passed. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 55 pass, 0 fail. Demo batch, structured evidence, incident cluster, ticket, report, policy, adapter, playbook, and dry-run notification chain passed. |
+| `mvn -pl backend test` | PASS | 43 tests run, 0 failures, 0 errors. |
+
+Runtime notes:
+
+- Backend was restarted from the current checkout on `127.0.0.1:18080`.
+- Frontend was restarted on `127.0.0.1:5174` with `VITE_API_PROXY_TARGET=http://127.0.0.1:18080`.
+- The live smoke scripts call only local services and do not scan public targets, execute attack payloads, or send real notifications.
+
 ## Correlation Engine v1
 
 Date: 2026-06-21

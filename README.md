@@ -40,15 +40,22 @@ cd deploy
 DB_PASSWORD="$LOCAL_DB_PASSWORD" docker compose up -d
 
 cd ..
-mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$LOCAL_DB_PASSWORD" < sql/schema.sql
-mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$LOCAL_DB_PASSWORD" cyberfusion_soc < sql/data.sql
+MYSQL_PWD="$LOCAL_DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
+  mysql --default-character-set=utf8mb4 -uroot < sql/schema.sql
+MYSQL_PWD="$LOCAL_DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
+  mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < sql/data.sql
 
-cd backend
-DB_PASSWORD="$LOCAL_DB_PASSWORD" mvn spring-boot:run
+DB_PASSWORD="$LOCAL_DB_PASSWORD" scripts/mac/backend-dev.sh
 
-cd ../frontend
-pnpm install --frozen-lockfile
-pnpm dev
+scripts/mac/frontend-dev.sh
+```
+
+The frontend script defaults to `FRONTEND_PORT=5174` and automatically sets
+`VITE_API_PROXY_TARGET=http://127.0.0.1:18080`. If you start Vite manually, keep
+the same proxy target:
+
+```sh
+VITE_API_PROXY_TARGET=http://127.0.0.1:18080 pnpm --dir frontend dev --host 127.0.0.1 --port 5174
 ```
 
 Windows PowerShell:
@@ -61,11 +68,38 @@ $env:CYBERFUSION_ENV_ROOT = "$env:USERPROFILE\CyberFusion\Environment\cyberfusio
 
 Default URLs:
 
-- Frontend: `http://127.0.0.1:5173` or the port passed to the dev script, commonly `5174`.
-- Backend API: `http://127.0.0.1:8080/api` or the `ServerPort` passed to the dev script.
-- Swagger: `http://127.0.0.1:8080/api/swagger-ui.html`
+- Frontend: `http://127.0.0.1:5174` when using the local dev scripts, or the port passed to the dev script.
+- Backend API: `http://127.0.0.1:18080/api` when using the local dev scripts, or the `ServerPort` passed to the dev script.
+- Health: `http://127.0.0.1:18080/api/health`
+- Swagger: `http://127.0.0.1:18080/api/swagger-ui.html`
 
-Demo account: `admin / Admin@123456` from the seed SQL. Some local demo databases may have changed the admin password to `admin123`; the smoke scripts also accept that fallback unless `CYBERFUSION_ADMIN_PASSWORD` is set. These are local demo-only accounts; the SQL stores BCrypt hashes.
+Demo account: `admin / Admin@123456` from the seed SQL. Some local demo databases may have changed the admin password to `admin123`; the smoke scripts also accept that fallback unless `CYBERFUSION_ADMIN_PASSWORD` is set. These are local demo-only accounts; the SQL stores BCrypt hashes. Re-running `sql/data.sql` preserves existing user password hashes and will not reset an already-initialized admin password.
+
+## Runtime Doctor
+
+Before live smoke or after any startup issue, run the read-only doctor:
+
+```sh
+scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
+```
+
+The doctor checks frontend/backend ports, the frontend `/api` proxy to the backend, backend Java process start time, `/api/health`, required SOC tables, key menu/permission seed rows, admin `/auth/me` menus/permissions, and employee 403 boundaries for SOC-only APIs. It does not delete volumes, reset passwords, import demo data, scan targets, execute local terminal commands, or send notifications.
+
+The doctor does not require a local `mysql` command. It uses local `mysql` when available, otherwise it falls back to the MySQL client inside `cyberfusion-platform-mysql-1`. In both modes `DB_PASSWORD` must come from the local environment and is not printed.
+
+Safe backend startup sequence:
+
+1. Start MySQL/Redis with Docker Compose and keep runtime data under Environment.
+2. Apply `sql/schema.sql`, then `sql/data.sql`, then `scripts/sql/apply-latest-menu-and-policy-seed.sql` for already-initialized local databases.
+3. Stop any stale Java process that is still listening on the backend port.
+4. Start the backend from the current source checkout with the active local `DB_PASSWORD`.
+5. Confirm `GET /api/health` reports `database`, `schema`, `seed`, and `redis`.
 
 ## Local VM Field Compatibility
 
@@ -112,6 +146,7 @@ pnpm --dir frontend typecheck
 docker compose -f deploy/docker-compose.yml config
 docker compose -f deploy/demo-range/docker-compose.yml config
 scripts/smoke/check-release-safety.sh
+scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
 scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
 scripts/smoke/run-acceptance.sh --dry-run
 ```
@@ -119,6 +154,22 @@ scripts/smoke/run-acceptance.sh --dry-run
 `scripts/smoke/run-acceptance.sh --dry-run` still calls the local API to prove the acceptance chain. It covers demo batch import, evidence, linked alerts, incident correlation, incident-cluster detail, alert-to-incident lookup, incident-to-ticket conversion, recommended response playbook application, ticket tasks, report generation, policy checks, adapter preview, and dry-run notifications. The dry-run boundary means it uses local demo data and dry-run notification logs only; it does not scan public targets and does not send real email, webhook, Feishu, WeCom, DingTalk, Slack, or SIEM/WAF/IDS traffic. Set `CYBERFUSION_API_BASE` if the backend is not on `http://localhost:18080/api`.
 
 Before running live acceptance, start the backend from the current source checkout with Environment-managed database variables. `DB_PASSWORD` must match the active local MySQL container; an incorrect value can allow the backend process to start but make `/api/auth/login` return `500`.
+
+## Demo Data Governance
+
+Repeated live smoke runs reuse stable demo identifiers and are designed to be idempotent, but reports, dry-run notification logs, tickets, and incident evidence can still accumulate during manual demos. Use the cleanup script in dry-run mode first:
+
+```sh
+scripts/smoke/cleanup-demo-data.sh
+```
+
+The script only targets demo/smoke scoped rows for `DEMO-RANGE-OFFLINE-V1` and `DEMO-RANGE-ACCEPTANCE-SMOKE`: multi-source events, linked alerts, Trivy demo vulnerabilities, incident clusters/evidence, linked demo tickets/tasks/timeline rows, security-validation reports, playbook match logs, and dry-run notification logs. It does not delete Docker volumes or unrelated business data.
+
+Real cleanup requires explicit confirmation:
+
+```sh
+scripts/smoke/cleanup-demo-data.sh --batch-id DEMO-RANGE-ACCEPTANCE-SMOKE --confirm
+```
 
 Optional page smoke screenshots:
 
@@ -139,9 +190,12 @@ The visibility check includes the customer demo route, `/soc/incidents`, `/soc/p
 It logs in with local demo users, prints `/api/auth/me` menu paths, checks key frontend routes such as `/showcase`, `/soc/policies`, `/client/tasks`, checks policy/adapter/playbook APIs, and confirms employees receive `403` for policy APIs. Existing databases may need a schema and seed refresh because `sql/data.sql` is only applied automatically for newly initialized databases:
 
 ```sh
-docker exec -i cyberfusion-platform-mysql-1 sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" cyberfusion_soc' < sql/schema.sql
-docker exec -i cyberfusion-platform-mysql-1 sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" cyberfusion_soc' < sql/data.sql
-docker exec -i cyberfusion-platform-mysql-1 sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" cyberfusion_soc' < scripts/sql/apply-latest-menu-and-policy-seed.sql
+MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
+  mysql --default-character-set=utf8mb4 -uroot < sql/schema.sql
+MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
+  mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < sql/data.sql
+MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
+  mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < scripts/sql/apply-latest-menu-and-policy-seed.sql
 ```
 
 After refreshing SQL, restart the backend process so `/api` loads the latest `backend/target/classes`. A Java process that was started before the latest Maven build can still serve old controller/service code.
