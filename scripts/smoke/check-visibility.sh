@@ -246,11 +246,24 @@ def walk(items):
         walk(item.get("children") or [])
 walk(d["data"]["menus"])'
   LAST_BODY="$ADMIN_ME"
+  if printf '%s' "$ADMIN_ME" | json_assert "any(role in ['admin','super_admin'] for role in ((d.get('data') or {}).get('roles') or []))"; then
+    record_pass "role:super-admin" "admin identity has admin/super_admin role"
+  else
+    record_fail "role:super-admin" "admin identity lacks admin/super_admin role"
+  fi
   check_menu_path "/soc/policies" "menu:/soc/policies"
   check_menu_path "/soc/alerts" "menu:/soc/alerts"
   check_menu_path "/soc/incidents" "menu:/soc/incidents"
+  check_menu_path "/soc/capabilities" "menu:/soc/capabilities"
+  check_menu_path "/soc/rules" "menu:/soc/rules"
+  check_menu_path "/soc/alert-noise" "menu:/soc/alert-noise"
+  check_menu_path "/soc/baselines" "menu:/soc/baselines"
+  check_menu_path "/soc/fim" "menu:/soc/fim"
+  check_menu_path "/soc/external-events" "menu:/soc/external-events"
+  check_menu_path "/soc/settings" "menu:/soc/settings"
   check_menu_path "/soc/tickets" "menu:/soc/tickets"
   check_menu_path "/soc/reports" "menu:/soc/reports"
+  check_menu_path "/system/user" "menu:/system/user"
 fi
 
 for route in /showcase /soc/policies /soc/alerts /soc/incidents /soc/tickets /soc/reports /client/workbench /client/tasks '/client/local-range?ip=10.20.1.15&host=prod-app-01&os=Linux'; do
@@ -262,14 +275,20 @@ for route in /showcase /soc/policies /soc/incidents /client/tasks /client/local-
 done
 check_source_text "source-tab:correlation-rules" "事件关联规则" "$ROOT_DIR/frontend/src/views/soc/PolicyCenterView.vue"
 check_source_text "source-api:correlation-rules" "/soc/correlation-rules" "$ROOT_DIR/frontend/src/api/soc.ts"
+check_source_text "source-tab:algorithm-governance" "算法治理" "$ROOT_DIR/frontend/src/views/soc/PolicyCenterView.vue"
+check_source_text "source-api:algorithm-center" "/soc/algorithm-center" "$ROOT_DIR/frontend/src/api/soc.ts"
+check_source_text "source-view-mode" "viewMode" "$ROOT_DIR/frontend/src/stores/app.ts" "$ROOT_DIR/frontend/src/layouts/AdminLayout.vue"
+check_source_text "source-role-experience" "super_admin" "$ROOT_DIR/frontend/src/utils/roleExperience.ts" "$ROOT_DIR/frontend/src/components/AppLayout/SidebarMenu.vue"
 
 if [[ -n "$ADMIN_TOKEN" ]]; then
   check_api_status "policy-local-list" GET /soc/policies/local-check-commands "$ADMIN_TOKEN" 200
   check_api_status "policy-adapter-list" GET /soc/policies/event-adapters "$ADMIN_TOKEN" 200
   check_api_status "policy-playbook-list" GET /soc/policies/playbooks "$ADMIN_TOKEN" 200
+  check_api_status "algorithm-overview" GET /soc/algorithm-center/overview "$ADMIN_TOKEN" 200
   check_api_status "integration-catalog" GET /soc/integrations/catalog "$ADMIN_TOKEN" 200
   check_api_status "correlation-rule-list" GET '/soc/correlation-rules?pageNum=1&pageSize=5' "$ADMIN_TOKEN" 200
   check_api_status "incident-list" GET '/soc/incidents?pageNum=1&pageSize=5' "$ADMIN_TOKEN" 200
+  check_api_status "operations-overview" GET '/soc/operations/overview' "$ADMIN_TOKEN" 200
   check_api_status "client-commands" GET '/client/local-terminal/commands?os=Linux' "$ADMIN_TOKEN" 200
   check_api_status "demo-evidence-chain" GET '/soc/demo-range/batches/DEMO-RANGE-OFFLINE-V1/evidence-chain' "$ADMIN_TOKEN" 200
 fi
@@ -293,6 +312,8 @@ if [[ -n "$ANALYST_TOKEN" ]]; then
   check_api_status "analyst-alerts" GET '/soc/alerts?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
   check_api_status "analyst-incidents" GET '/soc/incidents?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
   check_api_status "analyst-correlation-rules" GET '/soc/correlation-rules?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
+  check_api_status "analyst-algorithm-evaluations" GET '/soc/algorithm-center/evaluations?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
+  check_api_status "analyst-denied-algorithm-replay" POST /soc/algorithm-center/replay "$ANALYST_TOKEN" 403 '{"algorithmType":"all","saveEvaluation":false}'
   check_api_status "analyst-tickets" GET '/soc/tickets?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
   check_api_status "analyst-reports" GET '/soc/reports?pageNum=1&pageSize=1' "$ANALYST_TOKEN" 200
 else
@@ -303,10 +324,36 @@ EMPLOYEE_TOKEN="$(login "$EMPLOYEE_USER" "$EMPLOYEE_PASSWORD" || true)"
 if [[ -n "$EMPLOYEE_TOKEN" ]]; then
   record_pass "employee-login" "$EMPLOYEE_USER"
   check_api_status "employee-denied-policy" GET /soc/policies/local-check-commands "$EMPLOYEE_TOKEN" 403
+  check_api_status "employee-denied-assets" GET '/soc/assets?pageNum=1&pageSize=1' "$EMPLOYEE_TOKEN" 403
   check_api_status "employee-denied-incidents" GET '/soc/incidents?pageNum=1&pageSize=1' "$EMPLOYEE_TOKEN" 403
   check_api_status "employee-denied-correlation-rules" GET '/soc/correlation-rules?pageNum=1&pageSize=1' "$EMPLOYEE_TOKEN" 403
+  check_api_status "employee-denied-system" GET '/system/users?pageNum=1&pageSize=1' "$EMPLOYEE_TOKEN" 403
+  check_api_status "employee-denied-algorithm-overview" GET /soc/algorithm-center/overview "$EMPLOYEE_TOKEN" 403
+  check_api_status "employee-denied-algorithm-replay" POST /soc/algorithm-center/replay "$EMPLOYEE_TOKEN" 403 '{"algorithmType":"all","saveEvaluation":false}'
+  check_api_status "employee-denied-operations" GET '/soc/operations/overview' "$EMPLOYEE_TOKEN" 403
   check_api_status "employee-client-commands" GET '/client/local-terminal/commands?os=Linux' "$EMPLOYEE_TOKEN" 200
   check_api_status "employee-client-tasks" GET /client/tasks "$EMPLOYEE_TOKEN" 200
+  check_api_status "employee-me" GET /auth/me "$EMPLOYEE_TOKEN" 200
+  EMPLOYEE_ME="$LAST_BODY"
+  if printf '%s' "$EMPLOYEE_ME" | python3 -c '
+import json, sys
+body = json.load(sys.stdin)
+paths = []
+def walk(items):
+    for item in items or []:
+        path = item.get("path")
+        if path:
+            paths.append(path)
+        walk(item.get("children") or [])
+walk((body.get("data") or {}).get("menus") or [])
+bad = [path for path in paths if path in ("/dashboard", "/soc", "/system") or path.startswith("/soc/") or path.startswith("/system/")]
+raise SystemExit(1 if bad else 0)
+'
+  then
+    record_pass "employee-menu-simple" "employee /auth/me menus exclude SOC and system paths"
+  else
+    record_fail "employee-menu-simple" "employee /auth/me menus include SOC or system paths"
+  fi
 else
   record_fail "employee-login" "cannot login as $EMPLOYEE_USER"
 fi

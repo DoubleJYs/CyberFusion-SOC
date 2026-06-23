@@ -23,11 +23,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = header.substring(AuthConstants.TOKEN_PREFIX.length());
             try {
                 LoginUser loginUser = JwtUtils.parseAccessToken(token);
+                List<String> permissions = RolePermissionBoundary.filterPermissions(loginUser.roles(), loginUser.permissions());
+                LoginUser boundedUser = new LoginUser(loginUser.userId(), loginUser.username(), loginUser.nickname(), loginUser.roles(), permissions);
                 List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                loginUser.roles().forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role)));
-                loginUser.permissions().forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission)));
+                boundedUser.roles().forEach(role -> authorities.add(new SimpleGrantedAuthority("ROLE_" + role)));
+                boundedUser.permissions().forEach(permission -> authorities.add(new SimpleGrantedAuthority(permission)));
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(loginUser, null, authorities);
+                        new UsernamePasswordAuthenticationToken(boundedUser, null, authorities);
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (RuntimeException ignored) {
                 SecurityContextHolder.clearContext();

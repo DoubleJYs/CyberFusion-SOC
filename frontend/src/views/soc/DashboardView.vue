@@ -40,6 +40,115 @@
           <RiskCard label="受管资产" :value="overview.assets" delta="P0 资产视图" tone="low" />
         </section>
 
+        <section v-if="operations" v-loading="operationsLoading" class="soc-panel operations-panel">
+          <div class="panel-title">
+            <strong>运营指标中心</strong>
+            <span>事件簇、风险、SLA、推荐动作和员工待办的可解释指标</span>
+          </div>
+          <div class="operation-metric-grid">
+            <button
+              v-for="metric in operationHeroMetrics"
+              :key="metric.metricCode"
+              class="operation-metric-card"
+              type="button"
+              @click="openMetric(metric.drilldownTarget)"
+            >
+              <span>{{ metric.metricName }}</span>
+              <strong>{{ metricValue(metric) }}</strong>
+              <small>{{ metric.explanation }}</small>
+            </button>
+          </div>
+          <div class="operation-detail-grid">
+            <div>
+              <h3>SLA 与工单效率</h3>
+              <div class="operation-progress-row">
+                <span>关闭率</span>
+                <el-progress :percentage="operations.sla.closeRate" :stroke-width="8" />
+              </div>
+              <div class="operation-progress-row">
+                <span>剧本完成率</span>
+                <el-progress :percentage="operations.sla.playbookCompletionRate" :stroke-width="8" />
+              </div>
+              <p>MTTA {{ operations.sla.mttaHours }}h / MTTR {{ operations.sla.mttrHours }}h / 超时 {{ operations.sla.overdueTickets }} 个</p>
+            </div>
+            <div>
+              <h3>推荐与员工完成</h3>
+              <div class="operation-progress-row">
+                <span>推荐采纳率</span>
+                <el-progress :percentage="operations.recommendationAdoption.adoptionRate" :stroke-width="8" />
+              </div>
+              <div class="operation-progress-row">
+                <span>员工待办完成率</span>
+                <el-progress :percentage="operations.clientTasks.completionRate" :stroke-width="8" />
+              </div>
+              <p>体检覆盖率 {{ operations.clientTasks.checkupCoverageRate }}% / 逾期待办 {{ operations.clientTasks.overdueTasks }} 个</p>
+            </div>
+            <div>
+              <h3>风险变化趋势</h3>
+              <RiskTrendChart
+                v-if="operations.riskTrend.points.some((item) => item.snapshotCount > 0)"
+                :labels="operations.riskTrend.points.map((item) => item.date.slice(5))"
+                :values="operations.riskTrend.points.map((item) => item.averageScore)"
+              />
+              <el-empty v-else description="暂无风险快照" :image-size="60" />
+              <p>24h {{ signedMetric(operations.riskTrend.change24h) }} / 7d {{ signedMetric(operations.riskTrend.change7d) }}</p>
+            </div>
+          </div>
+          <div class="operation-top-grid">
+            <div>
+              <h3>Top 风险资产</h3>
+              <button
+                v-for="asset in operations.topRiskAssets"
+                :key="asset.assetId"
+                class="operation-list-row"
+                type="button"
+                @click="openMetric(asset.drilldownTarget)"
+              >
+                <span>
+                  <strong>{{ asset.hostname || asset.assetIp || '-' }}</strong>
+                  <small>{{ asset.assetIp || asset.deptName || '资产风险画像' }}</small>
+                </span>
+                <el-tag size="small" effect="plain">{{ asset.riskScore }}</el-tag>
+              </button>
+              <el-empty v-if="!operations.topRiskAssets.length" description="暂无高风险资产" :image-size="52" />
+            </div>
+            <div>
+              <h3>Top 事件簇</h3>
+              <button
+                v-for="incident in operations.topIncidents"
+                :key="incident.incidentId"
+                class="operation-list-row"
+                type="button"
+                @click="openMetric(incident.drilldownTarget)"
+              >
+                <span>
+                  <strong>{{ incident.title || incident.clusterNo }}</strong>
+                  <small>{{ incident.asset || incident.clusterNo || '安全事件簇' }}</small>
+                </span>
+                <el-tag size="small" effect="plain">{{ incident.score }}</el-tag>
+              </button>
+              <el-empty v-if="!operations.topIncidents.length" description="暂无事件簇" :image-size="52" />
+            </div>
+            <div>
+              <h3>Top 趋势异常</h3>
+              <button
+                v-for="trendSource in operations.topTrendSources"
+                :key="`${trendSource.title}-${trendSource.assetIp}-${trendSource.sourceType}`"
+                class="operation-list-row"
+                type="button"
+                @click="openMetric(trendSource.drilldownTarget)"
+              >
+                <span>
+                  <strong>{{ trendSource.title }}</strong>
+                  <small>{{ trendSource.assetIp || trendSource.sourceType || trendSource.explanation }}</small>
+                </span>
+                <el-tag size="small" effect="plain">{{ trendSource.currentCount }}</el-tag>
+              </button>
+              <el-empty v-if="!operations.topTrendSources.length" description="暂无趋势异常" :image-size="52" />
+            </div>
+          </div>
+        </section>
+
         <section v-loading="loading" class="dashboard-grid">
           <div class="soc-panel chart-panel">
             <div class="panel-title">
@@ -125,6 +234,25 @@
             <b>{{ incident.score }}</b>
           </div>
           <el-empty v-if="!topIncidents.length" description="暂无事件簇，前往安全事件簇页面执行关联" :image-size="76" />
+        </section>
+
+        <section v-loading="loading" class="soc-panel trend-anomaly-panel">
+          <div class="panel-title">
+            <strong>趋势异常 Top 5</strong>
+            <span>当前 24 小时窗口对比 7 天均值</span>
+          </div>
+          <div v-for="item in topTrendAnomalyRows" :key="`${item.assetIp}-${item.sourceType}-${item.eventType}-${item.title}`" class="trend-anomaly-row" @click="openTrendAnomaly(item)">
+            <div>
+              <div class="trend-anomaly-title">
+                <SeverityBadge :severity="item.severity" />
+                <strong>{{ item.title }}</strong>
+                <b>{{ item.anomalyScore }}</b>
+              </div>
+              <span>{{ item.assetIp || '-' }} / {{ item.sourceType || '-' }} / 当前 {{ item.currentCount }} 条，基线 {{ item.baselineCount }} 条，{{ item.changeRatio }}x</span>
+              <p>{{ item.reason }}</p>
+            </div>
+          </div>
+          <el-empty v-if="!topTrendAnomalyRows.length" description="暂无趋势异常" :image-size="76" />
         </section>
 
         <section v-loading="loading" class="soc-panel recommendation-panel">
@@ -230,8 +358,8 @@ import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
 import RiskCard from '@/components/security/RiskCard.vue'
 import RiskTrendChart from '@/components/security/RiskTrendChart.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
-import { affectedAssets, alertTrend, dashboardOverview, listIncidents, riskAnalytics, severityDistribution, topRecommendations, topRiskAssets } from '@/api/soc'
-import type { AssetRiskProfile, IncidentClusterItem, RecommendationItem, RiskAnalytics } from '@/api/soc'
+import { affectedAssets, alertTrend, dashboardOverview, listIncidents, operationsOverview, riskAnalytics, severityDistribution, topRecommendations, topRiskAssets, topTrendAnomalies } from '@/api/soc'
+import type { AssetRiskProfile, IncidentClusterItem, OperationMetricItem, OperationsOverview, RecommendationItem, RiskAnalytics, TrendAnomalyItem } from '@/api/soc'
 
 const router = useRouter()
 
@@ -262,7 +390,10 @@ const assets = ref<Array<{ name: string; value: number }>>([])
 const topRiskProfiles = ref<AssetRiskProfile[]>([])
 const topIncidents = ref<IncidentClusterItem[]>([])
 const topRecommendationRows = ref<RecommendationItem[]>([])
+const topTrendAnomalyRows = ref<TrendAnomalyItem[]>([])
+const operations = ref<OperationsOverview>()
 const loading = ref(false)
+const operationsLoading = ref(false)
 const error = ref('')
 
 const unifiedAssetRiskRows = computed(() => {
@@ -276,6 +407,20 @@ const unifiedAssetRiskRows = computed(() => {
     }))
   }
   return analytics.assetRisks
+})
+
+const operationHeroMetrics = computed(() => {
+  const codes = [
+    'incident.open.count',
+    'incident.high_risk.count',
+    'ticket.close.rate',
+    'recommendation.adoption.rate',
+    'client_task.completion.rate',
+    'trend.anomaly.count',
+  ]
+  return codes
+    .map((code) => operations.value?.metrics.find((metric) => metric.metricCode === code))
+    .filter(Boolean) as OperationMetricItem[]
 })
 
 onMounted(load)
@@ -292,6 +437,14 @@ async function load() {
     severities.value = severityRes.data.data
     assets.value = assetRes.data.data
     Object.assign(analytics, analyticsRes.data.data)
+    operationsLoading.value = true
+    try {
+      operations.value = (await operationsOverview()).data.data
+    } catch {
+      operations.value = undefined
+    } finally {
+      operationsLoading.value = false
+    }
     try {
       const topRiskRes = await topRiskAssets(5)
       topRiskProfiles.value = topRiskRes.data.data
@@ -309,6 +462,12 @@ async function load() {
       topRecommendationRows.value = recommendationRes.data.data
     } catch {
       topRecommendationRows.value = []
+    }
+    try {
+      const trendAnomalyRes = await topTrendAnomalies(5)
+      topTrendAnomalyRows.value = trendAnomalyRes.data.data
+    } catch {
+      topTrendAnomalyRows.value = []
     }
   } catch {
     error.value = '安全总览数据加载失败，请检查后端服务或 Wazuh/数据库连接。'
@@ -363,6 +522,34 @@ function openRecommendation(item: RecommendationItem) {
     router.push({ path: '/soc/assets', query: { keyword: item.assetIp } })
   }
 }
+
+function openTrendAnomaly(item: TrendAnomalyItem) {
+  router.push({
+    path: '/soc/external-events',
+    query: {
+      assetIp: item.assetIp || undefined,
+      sourceType: item.sourceType && item.sourceType !== 'multi_source' ? item.sourceType : undefined,
+      eventType: item.eventType && !item.eventType.includes('rise') ? item.eventType : undefined,
+    },
+  })
+}
+
+function openMetric(target?: string) {
+  if (!target) return
+  router.push(target)
+}
+
+function metricValue(metric: OperationMetricItem) {
+  const percentCodes = ['ticket.close.rate', 'recommendation.adoption.rate', 'client_checkup.coverage.rate', 'client_task.completion.rate', 'playbook.completion.rate']
+  if (percentCodes.includes(metric.metricCode)) {
+    return `${metric.value}%`
+  }
+  return String(metric.value ?? '-')
+}
+
+function signedMetric(value: number) {
+  return value > 0 ? `+${value}` : String(value)
+}
 </script>
 
 <style scoped>
@@ -373,6 +560,122 @@ function openRecommendation(item: RecommendationItem) {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+.operations-panel {
+  padding: 16px;
+}
+.operation-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.operation-metric-card {
+  min-height: 136px;
+  text-align: left;
+  border: 1px solid rgba(190, 183, 171, 0.56);
+  border-radius: var(--soc-radius-card);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 248, 238, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  padding: 14px;
+}
+.operation-metric-card span,
+.operation-metric-card small {
+  display: block;
+  color: var(--soc-text-muted);
+  line-height: 1.5;
+}
+.operation-metric-card strong {
+  display: block;
+  margin: 8px 0;
+  color: var(--soc-text);
+  font-size: 28px;
+  line-height: 1.1;
+}
+.operation-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.operation-detail-grid > div {
+  border: 1px solid rgba(190, 183, 171, 0.46);
+  border-radius: var(--soc-radius-card);
+  background: rgba(255, 255, 255, 0.56);
+  padding: 12px;
+}
+.operation-detail-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.operation-detail-grid p {
+  margin: 10px 0 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.operation-progress-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+.operation-top-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.operation-top-grid > div {
+  min-width: 0;
+  border: 1px solid rgba(190, 183, 171, 0.46);
+  border-radius: var(--soc-radius-card);
+  background: rgba(255, 255, 255, 0.52);
+  padding: 12px;
+}
+.operation-top-grid h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.operation-list-row {
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(190, 183, 171, 0.32);
+  background: transparent;
+  color: var(--soc-text);
+  cursor: pointer;
+  padding: 8px 0;
+  text-align: left;
+}
+.operation-list-row:last-of-type {
+  border-bottom: 0;
+}
+.operation-list-row span {
+  min-width: 0;
+}
+.operation-list-row strong,
+.operation-list-row small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operation-list-row strong {
+  max-width: 240px;
+  font-size: 13px;
+}
+.operation-list-row small {
+  max-width: 240px;
+  margin-top: 4px;
+  color: var(--soc-text-muted);
 }
 .source-strip {
   display: flex;
@@ -402,6 +705,7 @@ function openRecommendation(item: RecommendationItem) {
 .side-panel,
 .affected-panel,
 .incident-panel,
+.trend-anomaly-panel,
 .timeline-panel,
 .management-grid .soc-panel,
 .analyst-grid .soc-panel {
@@ -428,6 +732,7 @@ function openRecommendation(item: RecommendationItem) {
 }
 .dept-risk-row,
 .incident-row,
+.trend-anomaly-row,
 .recommendation-row,
 .score-row,
 .priority-row {
@@ -436,6 +741,7 @@ function openRecommendation(item: RecommendationItem) {
 }
 .dept-risk-row:first-of-type,
 .incident-row:first-of-type,
+.trend-anomaly-row:first-of-type,
 .recommendation-row:first-of-type,
 .score-row:first-of-type,
 .priority-row:first-of-type {
@@ -443,6 +749,7 @@ function openRecommendation(item: RecommendationItem) {
 }
 .dept-risk-row:last-child,
 .incident-row:last-child,
+.trend-anomaly-row:last-child,
 .recommendation-row:last-child,
 .score-row:last-child,
 .priority-row:last-child {
@@ -490,6 +797,38 @@ function openRecommendation(item: RecommendationItem) {
 }
 .recommendation-panel {
   margin-top: 14px;
+}
+.trend-anomaly-panel {
+  margin-top: 14px;
+}
+.trend-anomaly-row {
+  cursor: pointer;
+}
+.trend-anomaly-row span,
+.trend-anomaly-row p {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.trend-anomaly-row p {
+  color: var(--soc-warm-strong);
+}
+.trend-anomaly-title {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.trend-anomaly-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trend-anomaly-title b {
+  color: var(--soc-high);
+  font-size: 22px;
 }
 .recommendation-row {
   display: grid;
@@ -570,6 +909,9 @@ function openRecommendation(item: RecommendationItem) {
 }
 @media (max-width: 980px) {
   .kpi-grid,
+  .operation-metric-grid,
+  .operation-detail-grid,
+  .operation-top-grid,
   .dashboard-grid,
   .management-grid,
   .analyst-grid {

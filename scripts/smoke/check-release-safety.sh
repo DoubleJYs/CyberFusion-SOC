@@ -62,7 +62,9 @@ if find . -type f -size +25M \
   -not -path './frontend/node_modules/*' \
   -not -path './frontend/dist/*' \
   -not -path './backend/target/*' \
+  -not -path '*/backend/target/*' \
   -not -path './docs/screenshots/*' \
+  -not -path './docs/screenshots.zip' \
   -print | grep -q .; then
   find . -type f -size +25M -print
   fail "large source artifact found"

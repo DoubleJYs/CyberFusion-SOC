@@ -189,6 +189,137 @@ export interface RecommendationActionRecord {
   createdAt: string
 }
 
+export interface TrendAnomalyItem {
+  title: string
+  assetIp: string
+  sourceType: string
+  eventType: string
+  severity: string
+  currentCount: number
+  baselineCount: number
+  changeRatio: number
+  anomalyScore: number
+  reason: string
+  recommendation: string
+  windowStart: string
+  windowEnd: string
+}
+
+export interface TrendAggregationItem {
+  bucket: string
+  granularity: 'hour' | 'day' | string
+  assetIp: string
+  sourceType: string
+  eventType: string
+  ruleId: string
+  severity: string
+  count: number
+}
+
+export interface AlgorithmStatusCard {
+  algorithmType: string
+  displayName: string
+  activePolicyCount: number
+  draftPolicyCount: number
+  disabledPolicyCount: number
+  lastRunAt?: string
+  recentHitCount: number
+  falsePositiveCount: number
+  ignoredCount: number
+  closedCount: number
+  sourceCoverage: string[]
+  updatedBy?: number
+  version?: number
+  summary: string
+}
+
+export interface AlgorithmPolicyVersion {
+  algorithmType: string
+  policyId?: number
+  policyCode: string
+  policyName: string
+  status: string
+  enabled: boolean
+  version: number
+  updatedBy?: number
+  updatedAt?: string
+  sourceCoverage?: string
+  description?: string
+}
+
+export interface AlgorithmEvaluation {
+  id: number
+  evaluationNo: string
+  algorithmType: string
+  policyId?: number
+  policyVersion?: number
+  batchId?: string
+  timeRangeStart?: string
+  timeRangeEnd?: string
+  inputCount: number
+  outputCount: number
+  diffSummaryJson?: string
+  resultSummary: string
+  createdBy?: number
+  createdAt: string
+}
+
+export interface AlgorithmEvaluationItem {
+  id: number
+  evaluationId: number
+  itemType: string
+  itemName: string
+  previewResultJson?: string
+  reason: string
+  sortOrder: number
+  createdAt: string
+}
+
+export interface AlgorithmOverview {
+  cards: AlgorithmStatusCard[]
+  policyVersions: AlgorithmPolicyVersion[]
+  recentEvaluations: AlgorithmEvaluation[]
+}
+
+export interface AlgorithmReplayRequest {
+  algorithmType?: string
+  policyId?: number
+  policyVersion?: number
+  batchId?: string
+  timeRangeStart?: string
+  timeRangeEnd?: string
+  policyMode?: string
+  saveEvaluation?: boolean
+}
+
+export interface AlgorithmPreviewItem {
+  itemType: string
+  title: string
+  reason: string
+  previewResult: Record<string, unknown>
+}
+
+export interface AlgorithmReplayResult {
+  dryRun: boolean
+  realWrites: boolean
+  evaluationId?: number
+  evaluationNo?: string
+  inputCount: number
+  outputCount: number
+  resultSummary: string
+  diffSummary: Record<string, unknown>
+  incidentPreview: AlgorithmPreviewItem[]
+  riskPreview: AlgorithmPreviewItem[]
+  recommendationPreview: AlgorithmPreviewItem[]
+  trendPreview: AlgorithmPreviewItem[]
+  allItems: AlgorithmPreviewItem[]
+}
+
+export interface AlgorithmEvaluationDetail {
+  evaluation: AlgorithmEvaluation
+  items: AlgorithmEvaluationItem[]
+}
+
 export interface TicketItem {
   id: number
   ticketNo: string
@@ -1139,6 +1270,103 @@ export interface RiskAnalytics {
   eventTimeline: SecurityTimelineItem[]
 }
 
+export interface OperationMetricItem {
+  metricCode: string
+  metricName: string
+  value: number | string | boolean | null
+  trend: string
+  explanation: string
+  drilldownTarget: string
+}
+
+export interface OperationTicketSlaMetrics {
+  totalTickets: number
+  pendingTickets: number
+  overdueTickets: number
+  closeRate: number
+  mttaHours: number
+  mttrHours: number
+  playbookApplications: number
+  playbookTasks: number
+  completedPlaybookTasks: number
+  playbookCompletionRate: number
+}
+
+export interface OperationRiskTrendPoint {
+  date: string
+  averageScore: number
+  snapshotCount: number
+}
+
+export interface OperationRiskTrendMetrics {
+  points: OperationRiskTrendPoint[]
+  change24h: number
+  change7d: number
+}
+
+export interface OperationRecommendationAdoptionMetrics {
+  totalRecommendations: number
+  adoptedRecommendations: number
+  viewedRecommendations: number
+  adoptionRate: number
+}
+
+export interface OperationClientTaskMetrics {
+  totalTasks: number
+  completedTasks: number
+  overdueTasks: number
+  completionRate: number
+  totalAssets: number
+  checkedAssets: number
+  checkupCoverageRate: number
+}
+
+export interface OperationTopRiskAsset {
+  assetId: number
+  hostname: string
+  assetIp: string
+  riskLevel: string
+  riskScore: number
+  deptName?: string
+  drilldownTarget: string
+}
+
+export interface OperationTopIncidentCluster {
+  incidentId: number
+  clusterNo: string
+  title: string
+  asset?: string
+  severity: string
+  score: number
+  evidenceCount: number
+  status: string
+  drilldownTarget: string
+}
+
+export interface OperationTrendSourceMetric {
+  title: string
+  assetIp?: string
+  sourceType?: string
+  eventType?: string
+  severity?: string
+  currentCount: number
+  anomalyScore: number
+  explanation: string
+  drilldownTarget: string
+}
+
+export interface OperationsOverview {
+  metrics: OperationMetricItem[]
+  sla: OperationTicketSlaMetrics
+  riskTrend: OperationRiskTrendMetrics
+  recommendationAdoption: OperationRecommendationAdoptionMetrics
+  clientTasks: OperationClientTaskMetrics
+  topRiskAssets: OperationTopRiskAsset[]
+  topIncidents: OperationTopIncidentCluster[]
+  topTrendSources: OperationTrendSourceMetric[]
+  generatedAt: string
+}
+
 export interface PageQuery {
   pageNum: number
   pageSize: number
@@ -1174,9 +1402,75 @@ export function riskAnalytics() {
   return request.get<ApiResult<RiskAnalytics>>('/soc/dashboard/risk-analytics')
 }
 
+export function operationsOverview() {
+  return request.get<ApiResult<OperationsOverview>>('/soc/operations/overview', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function operationsSla() {
+  return request.get<ApiResult<OperationTicketSlaMetrics>>('/soc/operations/sla', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function operationsRiskTrend() {
+  return request.get<ApiResult<OperationRiskTrendMetrics>>('/soc/operations/risk-trend', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function operationsRecommendationAdoption() {
+  return request.get<ApiResult<OperationRecommendationAdoptionMetrics>>('/soc/operations/recommendation-adoption', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function operationsClientTasks() {
+  return request.get<ApiResult<OperationClientTaskMetrics>>('/soc/operations/client-tasks', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
 export function topRecommendations(limit = 5) {
   return request.get<ApiResult<RecommendationItem[]>>('/soc/recommendations/top', {
     params: { limit },
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function topTrendAnomalies(limit = 5) {
+  return request.get<ApiResult<TrendAnomalyItem[]>>('/soc/trends/anomalies/top', {
+    params: { limit },
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function trendAnomalies(params: {
+  assetIp?: string
+  sourceType?: string
+  eventType?: string
+  ruleId?: string
+  severity?: string
+  limit?: number
+}) {
+  return request.get<ApiResult<TrendAnomalyItem[]>>('/soc/trends/anomalies', {
+    params,
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function trendAggregations(params: {
+  assetIp?: string
+  sourceType?: string
+  eventType?: string
+  ruleId?: string
+  severity?: string
+  granularity?: 'hour' | 'day'
+  limit?: number
+}) {
+  return request.get<ApiResult<TrendAggregationItem[]>>('/soc/trends/aggregations', {
+    params,
     headers: { 'X-Silent-Error': '1' },
   })
 }
@@ -1567,6 +1861,31 @@ export function publishCorrelationRule(id: number) {
 
 export function disableCorrelationRule(id: number) {
   return request.post<ApiResult<CorrelationRuleItem>>(`/soc/correlation-rules/${id}/disable`)
+}
+
+export function algorithmOverview() {
+  return request.get<ApiResult<AlgorithmOverview>>('/soc/algorithm-center/overview', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function replayAlgorithm(data: AlgorithmReplayRequest) {
+  return request.post<ApiResult<AlgorithmReplayResult>>('/soc/algorithm-center/replay', data, {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function listAlgorithmEvaluations(params: PageQuery & { algorithmType?: string; batchId?: string }) {
+  return request.get<ApiResult<PageResult<AlgorithmEvaluation>>>('/soc/algorithm-center/evaluations', {
+    params,
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function algorithmEvaluationDetail(id: number) {
+  return request.get<ApiResult<AlgorithmEvaluationDetail>>(`/soc/algorithm-center/evaluations/${id}`, {
+    headers: { 'X-Silent-Error': '1' },
+  })
 }
 
 export function eventAdapterMappings(id: number) {

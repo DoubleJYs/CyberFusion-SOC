@@ -132,7 +132,13 @@
             <el-tag effect="plain">同一资产上下文</el-tag>
           </div>
           <div class="backend-grid">
-            <button v-for="link in backendLinks" :key="link.path" type="button" @click="openBackend(link.path)">
+            <button
+              v-for="link in backendLinks"
+              :key="link.path"
+              type="button"
+              :class="{ guarded: !canOpenBackendPath(link.path) }"
+              @click="openBackend(link.path, backendQuery())"
+            >
               <strong>{{ link.label }}</strong>
               <span>{{ link.desc }}</span>
             </button>
@@ -252,6 +258,7 @@ import {
   loadClientProfile,
 } from '@/composables/useClientDeviceContext'
 import { loadClientRuntimeCompatibility } from '@/composables/useClientRuntimeCompatibility'
+import { useClientBackendNavigation } from '@/composables/useClientBackendNavigation'
 
 type AdminModule = 'identity' | 'defense' | 'scope' | 'backend' | 'policy' | 'actions'
 type PostureState = 'ok' | 'warn' | 'risk'
@@ -260,6 +267,7 @@ type PolicyState = 'ok' | 'warn' | 'risk'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { canOpenBackendPath, openBackend } = useClientBackendNavigation()
 const loading = ref(false)
 const error = ref('')
 const errorDiagnostic = ref('')
@@ -567,12 +575,8 @@ function backendQuery() {
   return asset ? { assetIp: asset.ip, keyword: asset.hostname, source: 'client-device-admin' } : { source: 'client-device-admin' }
 }
 
-function openBackend(path: string) {
-  void router.push({ path, query: backendQuery() })
-}
-
 function openHighestAlert() {
-  void router.push({ path: '/soc/alerts', query: { ...backendQuery(), openAlertId: profile.alerts[0]?.id } })
+  void openBackend('/soc/alerts', { ...backendQuery(), openAlertId: profile.alerts[0]?.id })
 }
 
 async function runSnapshot() {
@@ -808,7 +812,7 @@ async function copySummary() {
 
 .device-admin-aside button.active,
 .device-admin-aside button:hover,
-.backend-grid button:hover,
+.backend-grid button:hover:not(.guarded),
 .employee-action-grid button:hover:not(:disabled) {
   border-color: rgba(212, 147, 74, 0.56);
   background: rgba(255, 248, 238, 0.84);
@@ -984,7 +988,8 @@ async function copySummary() {
   font-weight: 700;
 }
 
-.employee-action-grid button:disabled {
+.employee-action-grid button:disabled,
+.backend-grid button.guarded {
   cursor: not-allowed;
   opacity: 0.5;
 }

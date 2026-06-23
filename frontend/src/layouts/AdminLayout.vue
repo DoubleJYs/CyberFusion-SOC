@@ -24,14 +24,21 @@
         </div>
         <div class="header-right">
           <span class="runtime-pill"><i />平台运行中</span>
+          <el-tag class="experience-tag" effect="plain">{{ experience.label }}</el-tag>
+          <el-segmented
+            class="view-mode-switch"
+            :model-value="appStore.viewMode"
+            :options="viewModeOptions"
+            @change="setViewMode"
+          />
           <el-button type="primary" :icon="Promotion" @click="router.push('/showcase')">安全运营演示台</el-button>
           <el-dropdown trigger="click" class="entry-dropdown">
             <el-button :icon="Menu">更多入口</el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item :icon="DataAnalysis" @click="router.push('/soc/dashboard')">SOC 专家后台</el-dropdown-item>
-                <el-dropdown-item v-if="isAdmin" :icon="Setting" @click="router.push('/system/user')">系统管理</el-dropdown-item>
-                <el-dropdown-item :icon="Monitor" @click="router.push('/client/workbench')">员工端</el-dropdown-item>
+                <el-dropdown-item v-if="experience.isPlatformAdmin" :icon="Setting" @click="router.push('/system/user')">系统管理</el-dropdown-item>
+                <el-dropdown-item v-if="canOpenClient" :icon="Monitor" @click="router.push('/client/workbench')">员工端</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -60,6 +67,7 @@
             <span>{{ pageContext.description }}</span>
           </div>
           <div class="page-context-pills">
+            <el-tag effect="dark">{{ appStore.viewMode }}</el-tag>
             <el-tag v-for="pill in pageContext.pills" :key="pill" effect="plain">{{ pill }}</el-tag>
           </div>
         </section>
@@ -101,12 +109,19 @@ import { changeCurrentPassword } from '@/api/user'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { buildInfo } from '@/utils/buildInfo'
+import { roleExperience, type ViewMode } from '@/utils/roleExperience'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
-const isAdmin = computed(() => authStore.roles.includes('admin'))
+const experience = computed(() => roleExperience(authStore.roles, authStore.userInfo))
+const canOpenClient = computed(() => experience.value.isSuperAdmin || experience.value.isPlatformAdmin || authStore.hasPermission('client:workbench:view'))
+const viewModeOptions = [
+  { label: '简洁', value: 'simple' },
+  { label: '详细', value: 'detail' },
+  { label: '专家', value: 'expert' },
+]
 const profileVisible = ref(false)
 const passwordSaving = ref(false)
 const passwordFormRef = ref<FormInstance>()
@@ -267,6 +282,10 @@ async function savePassword() {
     passwordSaving.value = false
   }
 }
+
+function setViewMode(mode: string | number | boolean) {
+  appStore.setViewMode(String(mode) as ViewMode)
+}
 </script>
 
 <style scoped>
@@ -392,6 +411,14 @@ async function savePassword() {
   color: #157347;
   font-size: 12px;
   font-weight: 650;
+}
+
+.experience-tag {
+  max-width: 128px;
+}
+
+.view-mode-switch {
+  width: 168px;
 }
 
 .runtime-pill i {

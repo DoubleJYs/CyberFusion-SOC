@@ -44,6 +44,25 @@ The employee-side local check flow now separates maintainable policy from the ex
 - The employee UI never exposes disabled or draft policies.
 - The fallback catalog remains available only to avoid breaking demos when the database has not been initialized.
 
+## Role Navigation And View Density Flow
+
+B1 adds a lightweight role-experience layer over the existing RBAC model. It does not delete routes or business functions.
+
+1. Login still loads roles, permissions, and menu rows from `sys_user`, `sys_role`, `sys_menu`, and `sys_role_menu`.
+2. Backend `RolePermissionBoundary` filters employee/customer-class effective permissions so stale local menu grants cannot expose `soc:*`, `system:*`, or `dashboard:view`.
+3. Frontend maps compatible role names into personas:
+   - `super_admin` and local `admin` -> full expert view.
+   - `security_engineer` and `security_admin` -> policy governance view.
+   - `analyst` and `security_analyst` -> operations view.
+   - `employee`, `ops`, and `user` -> Security Keeper view.
+   - `customer` and `demo` -> showcase view.
+4. The router chooses the default entry from that persona, while all compatible routes remain registered and still require backend permission.
+5. `viewMode` controls density:
+   - `simple`: conclusion, next action, key metrics.
+   - `detail`: operator tables and drawer details.
+   - `expert`: raw JSON, diagnostics, full `relation_reason`, adapter mapping, policy versions, and audit entry points.
+6. Super administrators default to `expert`; employees and customer/demo accounts default to `simple`.
+
 ## Policy Tables
 
 `soc_local_check_command` stores local read-only check policy:
@@ -273,3 +292,240 @@ CyberFusion A3 converts existing SOC context into explainable next actions. It i
 - They do not store scripts, expressions, payloads, public targets, tokens, API keys, passwords, or private keys.
 - Employee requests are scoped to the current authenticated user's visible asset through existing data-scope checks.
 - A recommendation can guide the user into existing playbook, ticket, or employee-task flows, but those flows remain manual and auditable.
+
+## Trend Anomaly Detection v1 Flow
+
+CyberFusion A4 adds a read-only statistical signal layer for analysts. It detects unusual changes in existing SOC records and explains the reason in plain operational terms. It is not black-box ML, not an Agent, not a scanner, and not an external collector.
+
+1. Trend APIs read in-scope `soc_external_event` and `soc_alert` rows from the recent analysis window.
+2. Backend applies existing `SocSecurityScope` filters before returning any trend result.
+3. Signals are normalized to structured fields already present in the schema:
+   - `assetIp`
+   - `sourceType`
+   - `eventType`
+   - `ruleId`
+   - `severity`
+   - `eventTime`
+4. `GET /api/soc/trends/aggregations` groups signals by `assetIp`, `sourceType`, `eventType`, `ruleId`, `severity`, and hour/day bucket.
+5. `GET /api/soc/trends/anomalies` and `/api/soc/trends/anomalies/top` compare the current 24-hour window against the previous 7-day daily average.
+6. Detection rules are deterministic:
+   - volume spike: current count exceeds the 7-day average by a fixed ratio.
+   - severity ratio rise: high/critical share rises materially over the baseline.
+   - consecutive asset activity: one asset appears across multiple hourly windows.
+   - cross-source rise: one asset has WAF/ZAP/Wazuh/Suricata/Zeek sources rising in the same current window.
+7. Each anomaly returns `title`, `assetIp`, `sourceType`, `eventType`, `severity`, `currentCount`, `baselineCount`, `changeRatio`, `anomalyScore`, `reason`, and `recommendation`.
+8. `/soc/dashboard` shows Trend Anomaly Top 5.
+9. `/soc/assets` detail shows recent anomaly trends for the selected asset.
+10. `/soc/external-events` shows trend hints matching the current filters.
+11. Report generation reads the same Top 5 summary and includes it in the report summary and recommendation text.
+
+### Trend Data Objects
+
+No new database table is required in v1.
+
+| Existing object | Role in trend detection |
+| --- | --- |
+| `soc_external_event` | Primary multi-source event signal table. It provides source, event type, rule, severity, asset, and event time. |
+| `soc_alert` | Alert signal table. It supplements trends with linked alert severity, source, event type, asset, and event time. |
+| `soc_asset` | Used by the asset page to choose the asset IP filter; trend calculation itself does not mutate assets. |
+| `soc_report` | Stores generated report text that can include the trend anomaly summary. |
+
+### Trend Safety Boundary
+
+- Trend detection only reads existing SOC records and returns calculated summaries.
+- It does not execute commands, run scans, connect to external WAF/IDS/SIEM/EDR systems, send notifications, or perform automatic remediation.
+- It does not evaluate user-provided expressions, SQL, scripts, rules, or payloads.
+- It does not store raw customer logs in a new table.
+- Employee users cannot access `/api/soc/trends/*` because the endpoints require SOC dashboard, event, or asset permissions.
+
+## SOC Operations Metrics Center v1 Flow
+
+CyberFusion A5 adds a read-only operations metric layer for managers and analysts. It aggregates existing SOC records into explainable operation indicators. It does not add detection, Agent behavior, black-box ML, automatic repair, external sender behavior, or public scanning.
+
+1. `/soc/dashboard` calls `GET /api/soc/operations/overview`.
+2. The backend returns a metric catalog. Every metric includes:
+   - `metricCode`
+   - `metricName`
+   - `value`
+   - `trend`
+   - `explanation`
+   - `drilldownTarget`
+3. The metric catalog reads existing data from:
+   - `soc_incident_cluster`
+   - `soc_asset`
+   - `soc_asset_risk_snapshot`
+   - `soc_ticket`
+   - `soc_ticket_task`
+   - `soc_playbook_match_log`
+   - `soc_client_checkup`
+   - `soc_client_recommendation_action`
+   - `soc_notification_log`
+   - A4 trend anomaly APIs.
+4. Detailed endpoints expose the same data by operational topic:
+   - `GET /api/soc/operations/sla`
+   - `GET /api/soc/operations/risk-trend`
+   - `GET /api/soc/operations/recommendation-adoption`
+   - `GET /api/soc/operations/client-tasks`
+5. `/soc/dashboard` shows:
+   - open and high-risk incident clusters.
+   - ticket total, pending, overdue, close rate, MTTA, and MTTR.
+   - recommendation count and adoption rate.
+   - playbook application count and task completion rate.
+   - employee task total/completed/overdue counts.
+   - Security Keeper checkup coverage.
+   - risk trend changes and Top trend anomaly sources.
+6. `security_validation` report generation appends the operations summary to the report text:
+   - 24h and 7d risk change.
+   - ticket efficiency.
+   - recommendation adoption rate.
+   - employee task completion rate.
+   - dry-run notification count.
+
+### Operations Metric Data Objects
+
+No new database table is required in v1.
+
+| Existing object | Role in operations metrics |
+| --- | --- |
+| `soc_incident_cluster` | Counts open/high-risk security cases and provides Top incident clusters. |
+| `soc_asset` | Provides accessible assets and current risk score/risk level. |
+| `soc_asset_risk_snapshot` | Provides 7-day risk trend points and 24h/7d score deltas. |
+| `soc_ticket` | Provides total, pending, overdue, closed, MTTA, and MTTR metrics. |
+| `soc_ticket_task` | Provides response playbook task completion and employee task completion. |
+| `soc_playbook_match_log` | Counts playbook application events. |
+| `soc_client_checkup` | Provides Security Keeper checkup coverage. |
+| `soc_client_recommendation_action` | Stores recommendation views/adoptions used to calculate adoption rate. |
+| `soc_notification_log` | Counts `DRY_RUN` notification evidence for reports. |
+
+### Operations Safety Boundary
+
+- Operations metrics only read existing SOC records and return aggregate summaries.
+- Recommendation adoption reads/writes remain in the existing recommendation endpoint; the operations endpoints themselves do not mutate data.
+- Operations metrics do not execute commands, run local terminal checks, start scanners, call external systems, send notifications, or modify tickets.
+- Operations endpoints require SOC dashboard permission. Employee accounts cannot access `/api/soc/operations/*`.
+- The metric explanations are derived from deterministic count/rate rules, not black-box AI or model inference.
+
+## Report and Demo Story Upgrade v1 Flow
+
+CyberFusion A6 is a presentation and reporting layer over existing SOC data. It does not add detection logic, Agent behavior, black-box ML, scanners, automated repair, or external senders.
+
+1. `/showcase` loads the customer story from existing APIs:
+   - Demo Range evidence chain.
+   - external events, alerts, vulnerabilities, tickets, reports.
+   - incident clusters.
+   - Top risk asset profile.
+   - Top recommendation actions.
+   - operations overview.
+2. The customer story is ordered as:
+   - evidence import.
+   - incident cluster.
+   - risk scoring.
+   - recommended action.
+   - ticket handling.
+   - employee task.
+   - report output.
+3. `/soc/demo-range` shows the same post-import outcome in expert mode:
+   - `batchId`.
+   - multi-source evidence count.
+   - incident cluster count.
+   - Top risk asset.
+   - Top 3 recommendations.
+   - ticket and employee-task status.
+   - dry-run notification count.
+4. `security_validation` report generation reads:
+   - `DemoRangeEvidenceChain` summary.
+   - `soc_incident_cluster` rows matching the batch or correlation key.
+   - operations overview metrics.
+   - Top risk asset, recommendation adoption, client-task metrics, and trend anomaly summary.
+5. The report stores business-readable text in existing `soc_report.summary` and `soc_report.recommendation` fields. No new report table is required.
+6. `/soc/reports` parses the report summary markers and displays:
+   - management summary.
+   - technical evidence.
+   - handling progress.
+   - employee collaboration.
+   - safety boundary.
+7. Export continues to reuse the existing pseudo PDF and Excel export paths.
+
+### Report Story Data Objects
+
+| Existing object | Role in A6 |
+| --- | --- |
+| `soc_external_event` | Evidence import count, source coverage, batch context, and technical evidence drawer. |
+| `soc_alert` | Linked alert count and highest-priority risk explanation. |
+| `soc_vulnerability` | Component vulnerability count and risk contribution. |
+| `soc_incident_cluster` | Incident-chain count, evidence relationship count, and business story anchor. |
+| `soc_asset` / `soc_asset_risk_snapshot` | Top risk asset, risk score, risk level, and 24h/7d score changes. |
+| `soc_ticket` / `soc_ticket_task` | Handling progress, response playbook task status, and employee-task status. |
+| `soc_client_recommendation_action` | Recommendation adoption count and adoption rate. |
+| `soc_notification_log` | `DRY_RUN` notification evidence. |
+| `soc_report` | Stores the generated `security_validation` report text and supports existing export. |
+
+### Report Story Safety Boundary
+
+- A6 only organizes existing SOC records and offline demo evidence into customer-facing copy.
+- It does not run scans, execute commands, generate payloads, call external WAF/IDS/SIEM/EDR systems, send notifications, or repair endpoints.
+- The report explicitly states: no public-network scanning, no real notification sending, and no attack execution.
+- Employee accounts cannot access SOC report management APIs; they only see their scoped Security Keeper pages and assigned tasks.
+
+## Algorithm Governance and Replay Evaluation v1 Flow
+
+CyberFusion A7 adds a governance and dry-run evaluation layer over existing deterministic algorithms. It does not add new detection capability, Agent behavior, black-box ML, scanners, automatic remediation, or external integrations.
+
+1. An administrator or security engineer opens `/soc/policies` and selects `算法治理`.
+2. The frontend calls `GET /api/soc/algorithm-center/overview`.
+3. The backend aggregates strategy state from:
+   - `soc_correlation_rule` for event correlation rules.
+   - `soc_risk_scoring_policy` for asset risk scoring policy versions.
+   - built-in recommendation ranking logic backed by incident, vulnerability, ticket, employee-task, and checkup records.
+   - built-in trend anomaly logic backed by recent external events and alerts.
+4. The overview returns one card per governance object:
+   - active, draft, and disabled strategy counts.
+   - latest run time.
+   - recent hit count.
+   - false-positive, ignored, and closed counts where available.
+   - source coverage.
+   - latest updater and version.
+5. For dry-run replay, the operator selects a `batchId` or a time range and chooses `active` or `draft` policy mode.
+6. `POST /api/soc/algorithm-center/replay` reads existing `soc_external_event` and `soc_alert` records and produces preview results:
+   - predicted incident clusters.
+   - predicted asset risk score changes.
+   - recommended actions.
+   - trend anomaly previews.
+   - diff summary against current incident, ticket, and report counts.
+7. Each preview item includes an explainable `reason`.
+8. If `saveEvaluation=true`, only evaluation evidence is stored:
+   - `soc_algorithm_evaluation`
+   - `soc_algorithm_evaluation_item`
+9. Replay never writes real production results:
+   - no `soc_incident_cluster` insert/update.
+   - no `soc_asset_risk_snapshot` update.
+   - no `soc_ticket` creation.
+   - no `soc_report` generation.
+   - no notification or external sender call.
+
+### Algorithm Governance Data Objects
+
+| Object | Role in A7 |
+| --- | --- |
+| `soc_correlation_rule` | Event correlation policy lifecycle and version source. |
+| `soc_risk_scoring_policy` | Risk scoring policy lifecycle and version source. |
+| `soc_external_event` | Replay input signal source for imported evidence. |
+| `soc_alert` | Replay input signal source for linked alerts. |
+| `soc_incident_cluster` | Current result baseline for diff comparison only. |
+| `soc_asset` / `soc_asset_risk_snapshot` | Current risk baseline for dry-run risk delta preview only. |
+| `soc_ticket` / `soc_report` | Current business-result counts for no-write comparison only. |
+| `soc_algorithm_evaluation` | Optional saved dry-run evaluation header. |
+| `soc_algorithm_evaluation_item` | Optional saved dry-run preview item and reason. |
+
+### Algorithm Governance Permission Boundary
+
+- `admin` and security engineers can view governance status and execute replay.
+- `analyst` can read saved evaluation results but cannot execute replay.
+- employee accounts cannot access algorithm governance endpoints.
+- Permission is enforced in the backend with `soc:algorithm:view`, `soc:algorithm:replay`, and `soc:algorithm:evaluation`; frontend hiding is not the only control.
+
+### Algorithm Governance Safety Boundary
+
+- Replay reads already-imported SOC records only.
+- Replay does not execute shell commands, scan networks, call external systems, run user-provided scripts, or send notifications.
+- The implementation is deterministic and explainable. It is not black-box AI or ML.

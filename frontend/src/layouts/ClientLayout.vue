@@ -14,7 +14,7 @@
         <RouterLink :to="clientRoute('/client/data-report')">提交日志</RouterLink>
       </nav>
       <div class="client-actions">
-        <el-button :icon="Monitor" @click="router.push('/soc/dashboard')">管理端</el-button>
+        <el-button v-if="canOpenAdmin" :icon="Monitor" @click="openAdmin">管理端</el-button>
         <el-dropdown>
           <el-button text>
             <el-icon><User /></el-icon>
@@ -41,11 +41,20 @@ import { Monitor, User } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { buildClientDeviceRouteQuery } from '@/composables/useClientDeviceContext'
+import { useClientBackendNavigation } from '@/composables/useClientBackendNavigation'
 import { buildInfo } from '@/utils/buildInfo'
+import { defaultRouteForExperience } from '@/utils/roleExperience'
+import { computed } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { canOpenBackendPath, openBackend } = useClientBackendNavigation()
+const adminEntryPath = computed(() => defaultRouteForExperience(authStore.roles, authStore.userInfo, authStore.menus))
+const canOpenAdmin = computed(() => {
+  const path = adminEntryPath.value
+  return (path.startsWith('/soc') || path.startsWith('/system')) && canOpenBackendPath(path)
+})
 
 function clientRoute(path: string) {
   return {
@@ -61,6 +70,10 @@ function clientRoute(path: string) {
 async function logout() {
   await authStore.logout()
   await router.replace('/login')
+}
+
+function openAdmin() {
+  void openBackend(adminEntryPath.value)
 }
 </script>
 

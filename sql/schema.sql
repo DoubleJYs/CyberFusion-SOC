@@ -998,6 +998,40 @@ CREATE TABLE IF NOT EXISTS soc_incident_evidence (
   KEY idx_soc_incident_evidence_batch_demo (batch_id, demo_case_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS soc_algorithm_evaluation (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  evaluation_no VARCHAR(64) NOT NULL,
+  algorithm_type VARCHAR(64) NOT NULL COMMENT 'all, correlation, risk_scoring, recommendation, trend_anomaly',
+  policy_id BIGINT NULL,
+  policy_version INT NULL,
+  batch_id VARCHAR(128) NULL,
+  time_range_start DATETIME NULL,
+  time_range_end DATETIME NULL,
+  input_count INT NOT NULL DEFAULT 0,
+  output_count INT NOT NULL DEFAULT 0,
+  diff_summary_json JSON NULL,
+  result_summary VARCHAR(1000) NOT NULL,
+  created_by BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_algorithm_evaluation_no (evaluation_no),
+  KEY idx_soc_algorithm_evaluation_type (algorithm_type, created_at),
+  KEY idx_soc_algorithm_evaluation_batch (batch_id, created_at),
+  KEY idx_soc_algorithm_evaluation_operator (created_by, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_algorithm_evaluation_item (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  evaluation_id BIGINT NOT NULL,
+  item_type VARCHAR(64) NOT NULL COMMENT 'incident_cluster, risk_change, recommendation, trend_anomaly',
+  item_name VARCHAR(255) NOT NULL,
+  preview_result_json JSON NULL,
+  reason VARCHAR(1000) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_soc_algorithm_eval_item_eval (evaluation_id, sort_order),
+  KEY idx_soc_algorithm_eval_item_type (item_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS soc_vulnerability (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   cve_id VARCHAR(64) NOT NULL,

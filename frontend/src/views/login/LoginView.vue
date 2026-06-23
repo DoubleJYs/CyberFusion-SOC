@@ -8,12 +8,17 @@
       </div>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form" @keyup.enter="submit">
         <el-alert title="本地演示账号：admin，密码以当前本地环境配置为准，仅用于授权测试环境" type="info" show-icon :closable="false" />
-        <el-alert v-if="loginError" :title="loginError" type="warning" show-icon :closable="false" />
+        <el-alert v-if="loginError" type="warning" show-icon :closable="false">
+          <template #title>
+            <span>{{ loginError }}</span>
+            <el-button v-if="showHealthAction" link type="primary" class="health-link" @click="openHealth">查看健康诊断</el-button>
+          </template>
+        </el-alert>
         <el-form-item label="账号" prop="username">
-          <el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入账号" />
+          <el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入账号" @input="clearLoginError" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" size="large" type="password" autocomplete="current-password" show-password placeholder="请输入密码" />
+          <el-input v-model="form.password" size="large" type="password" autocomplete="current-password" show-password placeholder="请输入密码" @input="clearLoginError" />
         </el-form-item>
         <div class="form-row">
           <el-checkbox v-model="form.rememberMe">记住我</el-checkbox>
@@ -26,17 +31,21 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
+import { firstRoutePathFromMenus } from '@/router/menuRoutes'
 
 const authStore = useAuthStore()
+const appStore = useAppStore()
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const loginError = ref('')
+const showHealthAction = computed(() => loginError.value.includes('登录服务暂时不可用') || loginError.value.includes('后端'))
 const formRef = ref<FormInstance>()
 const form = reactive({ username: 'admin', password: '', rememberMe: true })
 const rules: FormRules = {
@@ -51,8 +60,9 @@ async function submit() {
   loading.value = true
   try {
     await authStore.login(form)
+    appStore.applyRoleExperience(authStore.roles, authStore.userInfo)
     ElMessage.success('登录成功')
-    await router.replace(String(route.query.redirect || '/soc/dashboard'))
+    await router.replace(String(route.query.redirect || firstRoutePathFromMenus(authStore.menus, authStore.roles, authStore.userInfo)))
   } catch (error) {
     loginError.value = normalizeLoginError(error)
   } finally {
@@ -76,7 +86,20 @@ function normalizeLoginError(error: unknown) {
     const retryText = typeof retryAfter === 'string' && retryAfter.trim() ? `约 ${retryAfter} 秒后再试。` : '请稍后再试。'
     return `登录请求过于频繁，${retryText}请避免连续点击登录按钮。`
   }
+  if ((axiosLike.response?.status && axiosLike.response.status >= 500) || message.includes('status code 500')) {
+    return '登录服务暂时不可用。请确认后端已启动、数据库已初始化，并访问 /api/health 查看诊断；当前本地种子账号默认使用 README 中记录的演示密码。'
+  }
   return message || '登录失败，请检查账号、密码和后端服务状态。'
+}
+
+function clearLoginError() {
+  if (loginError.value) {
+    loginError.value = ''
+  }
+}
+
+function openHealth() {
+  window.open('/api/health', '_blank', 'noopener,noreferrer')
 }
 </script>
 
@@ -137,6 +160,12 @@ function normalizeLoginError(error: unknown) {
 
 .login-button {
   width: 100%;
+}
+
+.health-link {
+  margin-left: 8px;
+  padding: 0;
+  vertical-align: baseline;
 }
 
 @media (max-width: 760px) {

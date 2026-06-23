@@ -1,0 +1,8 @@
+package com.zhangjiyan.template.soc.algorithm;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface SocAlgorithmEvaluationItemMapper extends BaseMapper<SocAlgorithmEvaluationItem> {
+}

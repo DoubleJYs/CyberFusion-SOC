@@ -110,7 +110,7 @@ class ResponsePlaybookServiceTest {
         };
         SocOperationService operationService = new SocOperationService(
                 null, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, new ObjectMapper()
+                null, null, null, null, null, null, null, null, null, null, null, new ObjectMapper()
         ) {
             @Override
             public SocAlert alertDetail(Long id) {

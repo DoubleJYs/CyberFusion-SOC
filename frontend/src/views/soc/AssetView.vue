@@ -120,6 +120,27 @@
           </div>
           <el-empty v-else description="风险画像暂不可用，可稍后重试" :image-size="72" />
         </section>
+        <section class="asset-trend-card">
+          <div class="profile-head">
+            <div>
+              <strong>近期异常趋势</strong>
+              <span>对比当前窗口和 7 天均值，展示可解释的趋势异常。</span>
+            </div>
+            <el-tag effect="plain">{{ assetTrendRows.length }} 项</el-tag>
+          </div>
+          <div v-if="assetTrendRows.length" class="asset-trend-list">
+            <article v-for="item in assetTrendRows" :key="`${item.title}-${item.sourceType}-${item.eventType}`">
+              <div>
+                <SeverityBadge :severity="item.severity" />
+                <strong>{{ item.title }}</strong>
+                <b>{{ item.anomalyScore }}</b>
+              </div>
+              <p>{{ item.reason }}</p>
+              <span>{{ item.recommendation }}</span>
+            </article>
+          </div>
+          <el-empty v-else description="暂无近期趋势异常" :image-size="72" />
+        </section>
         <section class="client-handoff">
           <div>
             <strong>用户端联动</strong>
@@ -141,15 +162,18 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import AssetRiskTag from '@/components/security/AssetRiskTag.vue'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import {
   assetRecommendations,
   assetRiskProfile,
   listAssets,
   recalculateAssetRisk,
   recordRecommendationAction,
+  trendAnomalies,
   type AssetItem,
   type AssetRiskProfile,
   type RecommendationItem,
+  type TrendAnomalyItem,
 } from '@/api/soc'
 
 const router = useRouter()
@@ -163,6 +187,7 @@ const loading = ref(false)
 const error = ref('')
 const riskProfile = ref<AssetRiskProfile>()
 const assetRecommendationRows = ref<RecommendationItem[]>([])
+const assetTrendRows = ref<TrendAnomalyItem[]>([])
 const riskProfileLoading = ref(false)
 const riskRecommendations = computed(() => {
   const factorRecommendations = (riskProfile.value?.factors || [])
@@ -208,13 +233,16 @@ async function loadRiskProfile(row: AssetItem) {
   riskProfileLoading.value = true
   riskProfile.value = undefined
   assetRecommendationRows.value = []
+  assetTrendRows.value = []
   try {
-    const [res, recommendationRes] = await Promise.all([
+    const [res, recommendationRes, trendRes] = await Promise.all([
       assetRiskProfile(row.id),
       assetRecommendations(row.id, 8).catch(() => undefined),
+      trendAnomalies({ assetIp: row.ip, limit: 5 }).catch(() => undefined),
     ])
     riskProfile.value = res.data.data
     assetRecommendationRows.value = recommendationRes?.data.data || []
+    assetTrendRows.value = trendRes?.data.data || []
   } catch {
     riskProfile.value = undefined
   } finally {
@@ -232,6 +260,8 @@ async function recalculateRisk(row: AssetItem) {
     })
     const recommendationRes = await assetRecommendations(row.id, 8).catch(() => undefined)
     assetRecommendationRows.value = recommendationRes?.data.data || []
+    const trendRes = await trendAnomalies({ assetIp: row.ip, limit: 5 }).catch(() => undefined)
+    assetTrendRows.value = trendRes?.data.data || []
     ElMessage.success('资产风险画像已重新计算')
   } catch {
     ElMessage.error('风险画像计算失败，请检查权限或后端服务状态')
@@ -423,6 +453,51 @@ function priorityText(priority: string) {
   color: var(--soc-warm-strong);
 }
 .drawer-stack { display: grid; gap: 16px; }
+.asset-trend-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(190, 183, 171, 0.46);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.66);
+}
+.asset-trend-list {
+  display: grid;
+  gap: 8px;
+}
+.asset-trend-list article {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(179, 173, 163, 0.32);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.asset-trend-list article > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.asset-trend-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-trend-list b {
+  color: var(--soc-high);
+  font-size: 18px;
+}
+.asset-trend-list p,
+.asset-trend-list span {
+  margin: 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.asset-trend-list span {
+  color: var(--soc-warm-strong);
+}
 .client-handoff {
   display: grid;
   gap: 12px;

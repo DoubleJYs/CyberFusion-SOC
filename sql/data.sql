@@ -270,6 +270,40 @@ CREATE TABLE IF NOT EXISTS soc_incident_evidence (
   KEY idx_soc_incident_evidence_batch_demo (batch_id, demo_case_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS soc_algorithm_evaluation (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  evaluation_no VARCHAR(64) NOT NULL,
+  algorithm_type VARCHAR(64) NOT NULL,
+  policy_id BIGINT NULL,
+  policy_version INT NULL,
+  batch_id VARCHAR(128) NULL,
+  time_range_start DATETIME NULL,
+  time_range_end DATETIME NULL,
+  input_count INT NOT NULL DEFAULT 0,
+  output_count INT NOT NULL DEFAULT 0,
+  diff_summary_json JSON NULL,
+  result_summary VARCHAR(1000) NOT NULL,
+  created_by BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_algorithm_evaluation_no (evaluation_no),
+  KEY idx_soc_algorithm_evaluation_type (algorithm_type, created_at),
+  KEY idx_soc_algorithm_evaluation_batch (batch_id, created_at),
+  KEY idx_soc_algorithm_evaluation_operator (created_by, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_algorithm_evaluation_item (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  evaluation_id BIGINT NOT NULL,
+  item_type VARCHAR(64) NOT NULL,
+  item_name VARCHAR(255) NOT NULL,
+  preview_result_json JSON NULL,
+  reason VARCHAR(1000) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 100,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_soc_algorithm_eval_item_eval (evaluation_id, sort_order),
+  KEY idx_soc_algorithm_eval_item_type (item_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 SET @add_correlation_rule_code = (SELECT IF(COUNT(*) = 0, 'ALTER TABLE soc_correlation_rule ADD COLUMN rule_code VARCHAR(128) NULL AFTER id', 'SELECT 1') FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'soc_correlation_rule' AND column_name = 'rule_code');
 PREPARE stmt FROM @add_correlation_rule_code;
 EXECUTE stmt;
@@ -498,6 +532,15 @@ VALUES
   (6, 'auditor', '只读审计员', 'all', 1)
 ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), data_scope = VALUES(data_scope), status = VALUES(status);
 
+INSERT INTO sys_role (id, role_code, role_name, data_scope, status)
+VALUES
+  (7, 'super_admin', '超级管理员兼容角色', 'all', 1),
+  (8, 'security_engineer', '安全工程师', 'all', 1),
+  (9, 'analyst', '运营分析员', 'dept_tree', 1),
+  (10, 'employee', '员工安全管家用户', 'self', 1),
+  (11, 'customer', '客户演示用户', 'self', 1)
+ON DUPLICATE KEY UPDATE role_name = VALUES(role_name), data_scope = VALUES(data_scope), status = VALUES(status);
+
 INSERT INTO sys_role_dept (role_id, dept_id)
 VALUES
   (4, 11),
@@ -514,6 +557,15 @@ ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), email = VALUES(email), mobi
 
 INSERT INTO sys_user_role (id, user_id, role_id)
 VALUES (3, 3, 3), (4, 4, 4), (5, 5, 5), (6, 6, 6)
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_user_role (id, user_id, role_id)
+VALUES
+  (7, 1, 7),
+  (8, 3, 8),
+  (9, 4, 9),
+  (10, 5, 10),
+  (11, 2, 11)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_menu (id, parent_id, name, path, component, icon, type, permission, sort, visible, status)
@@ -581,8 +633,15 @@ VALUES
   (2436, 2015, '关联规则编辑', NULL, NULL, NULL, 'button', 'soc:correlation-rule:update', 33, 0, 1),
   (2437, 2015, '关联规则发布', NULL, NULL, NULL, 'button', 'soc:correlation-rule:publish', 34, 0, 1),
   (2438, 2015, '关联规则停用', NULL, NULL, NULL, 'button', 'soc:correlation-rule:disable', 35, 0, 1),
+  (2439, 2015, '算法治理查看', NULL, NULL, NULL, 'button', 'soc:algorithm:view', 41, 0, 1),
+  (2440, 2015, '算法回放评估', NULL, NULL, NULL, 'button', 'soc:algorithm:replay', 42, 0, 1),
+  (2441, 2015, '算法评估记录', NULL, NULL, NULL, 'button', 'soc:algorithm:evaluation', 43, 0, 1),
   (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
-  (2601, 2600, '我的电脑安全助手', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1)
+  (2601, 2600, '我的电脑', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1),
+  (2602, 2600, '我的待办', '/client/tasks', 'client/ClientOperationsView', 'Tickets', 'menu', 'client:tasks:view', 20, 1, 1),
+  (2603, 2600, '提交日志', '/client/data-report', 'client/ClientDataReportView', 'DocumentChecked', 'menu', 'client:data-report:view', 30, 1, 1),
+  (2604, 2600, '安全工具', '/client/local-range', 'client/ClientLocalRangeView', 'Tools', 'menu', 'client:local-range:view', 40, 1, 1),
+  (2605, 2600, '安全日志', '/client/security-logs', 'client/ClientSecurityLogsView', 'Document', 'menu', 'client:security-logs:view', 50, 1, 1)
 ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), name = VALUES(name), path = VALUES(path), component = VALUES(component), icon = VALUES(icon), permission = VALUES(permission), type = VALUES(type), sort = VALUES(sort), visible = VALUES(visible), status = VALUES(status);
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -620,13 +679,44 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT role_id, menu_id
 FROM (
-  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2439, 2440, 2441)
   UNION ALL
-  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2439, 2440, 2441)
   UNION ALL
-  SELECT 5 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2600, 2601)
+  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2441)
+) AS algorithm_menu_seed
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT role_id, menu_id
+FROM (
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id BETWEEN 2600 AND 2605
+  UNION ALL
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id BETWEEN 2600 AND 2605
+  UNION ALL
+  SELECT 5 AS role_id, id AS menu_id FROM sys_menu WHERE id BETWEEN 2600 AND 2605
+  UNION ALL
+  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id BETWEEN 2600 AND 2605
+  UNION ALL
+  SELECT 10 AS role_id, id AS menu_id FROM sys_menu WHERE id BETWEEN 2600 AND 2605
 ) AS client_menu_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 7, id FROM sys_menu
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 8, menu_id FROM sys_role_menu WHERE role_id = 3
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 9, menu_id FROM sys_role_menu WHERE role_id = 4
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+DELETE FROM sys_role_menu
+WHERE role_id IN (2, 5, 10, 11)
+  AND menu_id NOT BETWEEN 2600 AND 2605;
 
 INSERT INTO soc_correlation_rule (id, rule_code, rule_key, rule_name, description, enabled, status, version, rule_type, time_window_minutes, min_score, min_count, group_by_fields_json, source_types_json, event_types_json, group_by_json, threshold, timeframe_seconds, sequence_json, severity_min, severity_floor, weights_json, safety_note, approved_by, approved_at)
 VALUES

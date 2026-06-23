@@ -70,6 +70,28 @@
       </div>
     </section>
 
+    <section v-if="trendHints.length" class="soc-panel trend-hint-panel">
+      <div class="trend-hint-head">
+        <div>
+          <span class="adapter-kicker">TREND ANOMALY</span>
+          <h2>趋势异常提示</h2>
+          <p>按当前筛选条件对比当前窗口和 7 天均值，帮助判断是否需要优先复核。</p>
+        </div>
+        <el-tag effect="plain">{{ trendHints.length }} 项</el-tag>
+      </div>
+      <div class="trend-hint-list">
+        <article v-for="item in trendHints" :key="`${item.title}-${item.assetIp}-${item.sourceType}`">
+          <div>
+            <SeverityBadge :severity="item.severity" />
+            <strong>{{ item.title }}</strong>
+            <b>{{ item.anomalyScore }}</b>
+          </div>
+          <span>{{ item.assetIp || '-' }} / {{ item.sourceType || '-' }} / 当前 {{ item.currentCount }} 条，基线 {{ item.baselineCount }} 条，{{ item.changeRatio }}x</span>
+          <p>{{ item.reason }}</p>
+        </article>
+      </div>
+    </section>
+
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false">
       <template #default><el-button size="small" @click="load">重试</el-button></template>
     </el-alert>
@@ -106,10 +128,14 @@
           <span>源/目的</span><strong>{{ current.srcIp || '-' }} -> {{ current.destIp || '-' }}</strong>
           <span>目标 URL</span><strong>{{ current.targetUrl || '-' }}</strong>
           <span>处置动作</span><strong>{{ current.action || '-' }}</strong>
-          <span>请求 ID</span><strong>{{ current.requestId || '-' }}</strong>
-          <span>Demo Case</span><strong>{{ current.demoCaseId || '-' }}</strong>
-          <span>Batch ID</span><strong>{{ current.batchId || '-' }}</strong>
-          <span>关联键</span><strong>{{ current.correlationKey || '-' }}</strong>
+          <template v-if="appStore.showAdvanced">
+            <span>请求 ID</span><strong>{{ current.requestId || '-' }}</strong>
+            <span>Demo Case</span><strong>{{ current.demoCaseId || '-' }}</strong>
+            <span>Batch ID</span><strong>{{ current.batchId || '-' }}</strong>
+          </template>
+          <template v-if="appStore.showRawEvidence">
+            <span>关联键</span><strong>{{ current.correlationKey || '-' }}</strong>
+          </template>
           <span>IOC</span><strong>{{ current.ioc || '-' }}</strong>
           <span>统一告警</span><strong>{{ current.alertId ? `#${current.alertId}` : '未关联' }}</strong>
           <span>状态</span><strong><StatusBadge :status="current.status" /></strong>
@@ -135,11 +161,11 @@
           <el-button @click="setStatus('ignored')">忽略</el-button>
           <el-button type="danger" @click="setStatus('closed')">关闭</el-button>
         </div>
-        <div class="event-json">
+        <div v-if="appStore.showRawEvidence" class="event-json">
           <strong>规范化事件</strong>
           <pre>{{ formatJson(current.normalizedEvent) }}</pre>
         </div>
-        <div class="event-json">
+        <div v-if="appStore.showRawEvidence" class="event-json">
           <strong>原始事件</strong>
           <pre>{{ formatJson(current.rawEvent) }}</pre>
         </div>
@@ -201,18 +227,23 @@ import {
   listIncidents,
   listExternalEvents,
   sendShuffleDemoNotification,
+  trendAnomalies,
   updateExternalEventStatus,
   type CyberChefAnalysis,
   type ExternalEventItem,
   type ExternalSourceSummary,
-  type IncidentClusterItem
+  type IncidentClusterItem,
+  type TrendAnomalyItem
 } from '@/api/soc'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
 const router = useRouter()
+const appStore = useAppStore()
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', sourceType: '', severity: '', status: '', eventType: '' })
 const rows = ref<ExternalEventItem[]>([])
 const summary = ref<ExternalSourceSummary[]>([])
+const trendHints = ref<TrendAnomalyItem[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
@@ -383,13 +414,21 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [listRes, summaryRes] = await Promise.all([
+    const [listRes, summaryRes, trendRes] = await Promise.all([
       listExternalEvents(query),
-      externalEventSummary()
+      externalEventSummary(),
+      trendAnomalies({
+        assetIp: routeQuery('assetIp') || undefined,
+        sourceType: query.sourceType || undefined,
+        eventType: query.eventType || undefined,
+        severity: query.severity || undefined,
+        limit: 3,
+      }).catch(() => undefined)
     ])
     rows.value = listRes.data.data.records
     total.value = listRes.data.data.total
     summary.value = summaryRes.data.data
+    trendHints.value = trendRes?.data.data || []
     openRouteEventIfNeeded()
   } catch {
     error.value = '安全记录加载失败，请检查权限或后端服务状态。'
@@ -565,6 +604,65 @@ function formatJson(value?: string) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+.trend-hint-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+.trend-hint-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.trend-hint-head h2 {
+  margin: 4px 0 6px;
+  color: var(--soc-text);
+  font-size: 18px;
+}
+.trend-hint-head p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.trend-hint-list {
+  display: grid;
+  gap: 8px;
+}
+.trend-hint-list article {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(179, 173, 163, 0.34);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.trend-hint-list article > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.trend-hint-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trend-hint-list b {
+  color: var(--soc-high);
+  font-size: 20px;
+}
+.trend-hint-list span,
+.trend-hint-list p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.trend-hint-list p {
+  color: var(--soc-warm-strong);
 }
 .drawer-stack {
   display: grid;

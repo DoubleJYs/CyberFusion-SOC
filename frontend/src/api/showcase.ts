@@ -8,10 +8,14 @@ import {
   listReports,
   listTickets,
   listVulnerabilities,
+  operationsOverview,
+  topRecommendations,
   topRiskAssets,
   type AlertItem,
   type ExternalEventItem,
   type IncidentClusterItem,
+  type OperationsOverview,
+  type RecommendationItem,
   type ReportItem,
   type TicketItem,
   type VulnerabilityItem,
@@ -29,6 +33,16 @@ export interface ShowcaseStep {
   countLabel: string
   count: number
   primaryAction: string
+}
+
+export interface ShowcaseStoryStep {
+  key: string
+  title: string
+  status: string
+  countLabel: string
+  count: number
+  explanation: string
+  route: string
 }
 
 export interface ShowcaseEvidence {
@@ -76,9 +90,12 @@ export interface ShowcaseData {
   openTickets: number
   playbookSummary: string
   steps: ShowcaseStep[]
+  storySteps: ShowcaseStoryStep[]
   evidence: ShowcaseEvidence[]
   closure: ShowcaseClosure
   report: ShowcaseReportSummary
+  recommendations: RecommendationItem[]
+  operations?: OperationsOverview
   events: ExternalEventItem[]
   alerts: AlertItem[]
   vulnerabilities: VulnerabilityItem[]
@@ -105,6 +122,15 @@ export const offlineShowcaseData: ShowcaseData = {
     { key: 'alert', title: '查看告警', businessSummary: '查看归一化证据如何触发告警和优先级判断。', status: '有告警', countLabel: '关联告警', count: 3, primaryAction: '查看最高优先级告警' },
     { key: 'ticket', title: '转为工单', businessSummary: '把需要跟进的告警转为处置任务，进入闭环。', status: '待处置', countLabel: '待关闭工单', count: 1, primaryAction: '进入工单处置' },
     { key: 'report', title: '生成报告', businessSummary: '输出本次安全验证报告，并保留通知 dry-run 记录。', status: '可生成', countLabel: '报告指标', count: 6, primaryAction: '生成安全验证报告' },
+  ],
+  storySteps: [
+    { key: 'evidence', title: '证据导入', status: '已准备', countLabel: '多源证据', count: 14, explanation: 'WAF、ZAP、Trivy、Wazuh、Suricata、Zeek 的离线样例进入统一证据池。', route: '/soc/external-events' },
+    { key: 'incident', title: '事件簇', status: '已聚合', countLabel: '事件簇', count: 1, explanation: '同一资产和批次的证据被解释性规则聚合为一条安全事件链。', route: '/soc/incidents' },
+    { key: 'risk', title: '风险评分', status: '高风险', countLabel: '风险分', count: 88, explanation: '资产画像把事件簇、告警、漏洞和待办转为可解释风险分。', route: '/soc/assets' },
+    { key: 'recommendation', title: '推荐动作', status: '待采纳', countLabel: '建议', count: 3, explanation: '系统给出网关阻断、依赖修复、本机检查等下一步建议。', route: '/soc/dashboard' },
+    { key: 'ticket', title: '工单处置', status: '处理中', countLabel: '工单', count: 1, explanation: '高优先级告警和事件簇进入工单时间线。', route: '/soc/tickets' },
+    { key: 'clientTask', title: '员工待办', status: '待确认', countLabel: '待办', count: 1, explanation: '需要员工配合的本机检查和说明进入安全管家。', route: '/soc/client-security' },
+    { key: 'report', title: '报告输出', status: '可生成', countLabel: '报告', count: 1, explanation: '输出包含运营指标和安全边界的 security_validation 报告。', route: '/soc/reports' },
   ],
   evidence: [
     {
@@ -194,6 +220,7 @@ export const offlineShowcaseData: ShowcaseData = {
     ticketStatus: '1 个待关闭',
     dryRunNotifications: 2,
   },
+  recommendations: [],
   events: [],
   alerts: [],
   vulnerabilities: [],
@@ -245,6 +272,12 @@ export async function loadLiveShowcaseData(batchId = DEFAULT_BATCH_ID): Promise<
   const topRiskProfile = await topRiskAssets(1)
     .then((response) => response.data.data[0])
     .catch(() => undefined)
+  const recommendations = await topRecommendations(3)
+    .then((response) => response.data.data)
+    .catch(() => [])
+  const operations = await operationsOverview()
+    .then((response) => response.data.data)
+    .catch(() => undefined)
   const topRiskText = topRiskProfile
     ? `${topRiskProfile.asset.hostname} 风险分 ${topRiskProfile.snapshot.score}：${topRiskProfile.statusReason || topRiskProfile.recommendationSummary}`
     : undefined
@@ -259,6 +292,7 @@ export async function loadLiveShowcaseData(batchId = DEFAULT_BATCH_ID): Promise<
     openTickets: tickets.filter((item) => !['closed', 'resolved'].includes(item.status)).length,
     playbookSummary: tickets.length ? '已匹配处置剧本，处置任务会进入工单详情和员工待办。' : '导入批次后可在告警详情应用推荐处置剧本。',
     steps: buildLiveSteps(chain.summary.eventCount, chain.summary.alertCount, tickets.length, reports.length),
+    storySteps: buildStorySteps(chain.summary, incidentClusters, recommendations, tickets, operations, reports.length),
     evidence: buildEvidenceSummary(events, vulnerabilities),
     closure: {
       title: topAlert?.ruleName || topAlert?.ruleDescription || '暂无告警',
@@ -278,6 +312,8 @@ export async function loadLiveShowcaseData(batchId = DEFAULT_BATCH_ID): Promise<
       ticketStatus: `${chain.summary.ticketCount} 个工单`,
       dryRunNotifications: chain.summary.notificationLogCount,
     },
+    recommendations,
+    operations,
     events,
     alerts,
     vulnerabilities,
@@ -304,6 +340,27 @@ function buildLiveSteps(eventCount: number, alertCount: number, ticketCount: num
     { key: 'alert', title: '查看告警', businessSummary: '展示证据如何生成或关联告警。', status: alertCount ? '有告警' : '待生成', countLabel: '告警', count: alertCount, primaryAction: '查看告警处置' },
     { key: 'ticket', title: '转为工单', businessSummary: '把优先级最高的告警纳入处置队列。', status: ticketCount ? '有工单' : '待转工单', countLabel: '工单', count: ticketCount, primaryAction: '进入工单中心' },
     { key: 'report', title: '生成报告', businessSummary: '汇总本批次验证结果和 dry-run 通知留痕。', status: reportCount ? '已有报告' : '可生成', countLabel: '报告', count: reportCount, primaryAction: '生成安全验证报告' },
+  ]
+}
+
+function buildStorySteps(
+  summary: { eventCount: number; alertCount: number; vulnerabilityCount: number; blockedCount: number; ticketCount: number; reportCount: number; notificationLogCount: number },
+  incidents: IncidentClusterItem[],
+  recommendations: RecommendationItem[],
+  tickets: TicketItem[],
+  operations?: OperationsOverview,
+  reportCount = 0,
+): ShowcaseStoryStep[] {
+  const topAsset = operations?.topRiskAssets?.[0]
+  const openTickets = tickets.filter((item) => !['closed', 'resolved', '已关闭', '已归档'].includes(item.status)).length
+  return [
+    { key: 'evidence', title: '证据导入', status: summary.eventCount ? '已导入' : '待导入', countLabel: '多源证据', count: summary.eventCount, explanation: `覆盖 ${summary.alertCount} 条告警、${summary.vulnerabilityCount} 条漏洞和 ${summary.blockedCount} 条阻断证据。`, route: '/soc/external-events' },
+    { key: 'incident', title: '事件簇', status: incidents.length ? '已聚合' : '待关联', countLabel: '事件簇', count: incidents.length, explanation: '把同一资产、批次和时间窗口内的多源证据聚合成可解释事件链。', route: '/soc/incidents' },
+    { key: 'risk', title: '风险评分', status: topAsset ? topAsset.riskLevel : '待计算', countLabel: '风险分', count: topAsset?.riskScore ?? 0, explanation: topAsset ? `${topAsset.hostname || topAsset.assetIp} 当前风险分 ${topAsset.riskScore}，可进入资产风险画像查看因子。` : '导入证据后可重新计算资产风险画像。', route: '/soc/assets' },
+    { key: 'recommendation', title: '推荐动作', status: recommendations.length ? '待采纳' : '待生成', countLabel: '建议', count: recommendations.length, explanation: recommendations[0]?.recommendedAction || '根据事件簇、漏洞、工单和员工待办生成下一步建议。', route: '/soc/dashboard' },
+    { key: 'ticket', title: '工单处置', status: openTickets ? '处理中' : '暂无待办', countLabel: '工单', count: summary.ticketCount || tickets.length, explanation: '高优先级风险进入工单时间线，支撑分析员闭环。', route: '/soc/tickets' },
+    { key: 'clientTask', title: '员工待办', status: operations?.clientTasks?.totalTasks ? '需员工配合' : '暂无待办', countLabel: '待办', count: operations?.clientTasks?.totalTasks ?? 0, explanation: `员工待办完成率 ${operations?.clientTasks?.completionRate ?? 0}%，体检覆盖率 ${operations?.clientTasks?.checkupCoverageRate ?? 0}%。`, route: '/soc/client-security' },
+    { key: 'report', title: '报告输出', status: reportCount || summary.reportCount ? '已有报告' : '可生成', countLabel: '报告', count: reportCount || summary.reportCount, explanation: `报告会记录 dry-run 通知 ${summary.notificationLogCount} 条，并说明未扫描公网、未真实发送通知。`, route: '/soc/reports' },
   ]
 }
 

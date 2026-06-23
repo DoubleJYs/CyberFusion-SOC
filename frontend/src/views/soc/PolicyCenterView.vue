@@ -358,6 +358,158 @@
         </section>
       </el-tab-pane>
 
+      <el-tab-pane label="算法治理" name="algorithm">
+        <el-alert
+          title="算法治理只做现有规则的状态展示和 dry-run 回放评估，不新增检测能力、不执行扫描、不写真实处置结果。"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="policy-alert"
+        />
+
+        <section v-if="algorithmError" class="soc-panel panel-pad recoverable-panel">
+          <div>
+            <h3>算法治理数据加载失败</h3>
+            <p>{{ algorithmError }}</p>
+          </div>
+          <div class="recoverable-actions">
+            <el-button type="primary" @click="loadAlgorithmGovernance">重试</el-button>
+            <el-button @click="activeTab = 'audit'">查看变更审计</el-button>
+          </div>
+        </section>
+
+        <section class="algorithm-card-grid">
+          <article v-for="card in algorithmOverviewRows" :key="card.algorithmType" class="soc-panel algorithm-card">
+            <div class="algorithm-card__head">
+              <span>{{ algorithmTypeLabel(card.algorithmType) }}</span>
+              <el-tag effect="plain">v{{ card.version || 1 }}</el-tag>
+            </div>
+            <h3>{{ card.displayName }}</h3>
+            <p>{{ card.summary }}</p>
+            <div class="algorithm-metrics">
+              <div><strong>{{ card.activePolicyCount }}</strong><span>active</span></div>
+              <div><strong>{{ card.draftPolicyCount }}</strong><span>draft</span></div>
+              <div><strong>{{ card.disabledPolicyCount }}</strong><span>disabled</span></div>
+              <div><strong>{{ card.recentHitCount }}</strong><span>近 7 天命中</span></div>
+            </div>
+            <div class="algorithm-card__meta">
+              <span>最近运行：{{ formatMaybe(card.lastRunAt) }}</span>
+              <span>误报/忽略/关闭：{{ card.falsePositiveCount }} / {{ card.ignoredCount }} / {{ card.closedCount }}</span>
+            </div>
+            <div class="source-chip-row">
+              <el-tag v-for="source in card.sourceCoverage.slice(0, 6)" :key="source" size="small" effect="plain">{{ source }}</el-tag>
+              <el-tag v-if="!card.sourceCoverage.length" size="small" type="info" effect="plain">暂无来源</el-tag>
+            </div>
+          </article>
+        </section>
+
+        <section class="soc-panel panel-pad algorithm-replay-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>回放评估</h3>
+              <p>选择批次或时间范围，预览事件簇、风险分、推荐动作和趋势异常的变化。回放不写真实事件簇、风险快照、工单、报表或通知。</p>
+            </div>
+            <el-button type="primary" :loading="algorithmReplayLoading" @click="runAlgorithmReplay">回放评估</el-button>
+          </div>
+          <el-form :model="algorithmReplayForm" label-width="110px" class="algorithm-form">
+            <el-form-item label="治理对象">
+              <el-select v-model="algorithmReplayForm.algorithmType">
+                <el-option label="全部算法" value="all" />
+                <el-option label="事件关联规则" value="correlation" />
+                <el-option label="风险评分策略" value="risk_scoring" />
+                <el-option label="推荐排序规则" value="recommendation" />
+                <el-option label="趋势异常规则" value="trend_anomaly" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="策略模式">
+              <el-segmented v-model="algorithmReplayForm.policyMode" :options="['active', 'draft']" />
+            </el-form-item>
+            <el-form-item label="demo batchId">
+              <el-input v-model="algorithmReplayForm.batchId" clearable placeholder="DEMO-RANGE-OFFLINE-V1" />
+            </el-form-item>
+            <el-form-item label="时间范围">
+              <el-date-picker
+                v-model="algorithmReplayRange"
+                type="datetimerange"
+                value-format="YYYY-MM-DDTHH:mm:ss"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+              />
+            </el-form-item>
+            <el-form-item label="保存记录">
+              <el-switch v-model="algorithmReplayForm.saveEvaluation" />
+              <span class="inline-hint">保存时只写评估记录，不写真实处置结果。</span>
+            </el-form-item>
+          </el-form>
+        </section>
+
+        <section v-if="algorithmReplayResult" class="soc-panel panel-pad">
+          <div class="panel-title-row">
+            <div>
+              <h3>回放结果对比</h3>
+              <p>{{ algorithmReplayResult.resultSummary }}</p>
+            </div>
+            <el-tag type="success" effect="plain">dry-run：{{ algorithmReplayResult.realWrites ? '异常写入' : '未写真实结果' }}</el-tag>
+          </div>
+          <div class="algorithm-metrics replay-metrics">
+            <div><strong>{{ algorithmReplayResult.inputCount }}</strong><span>输入信号</span></div>
+            <div><strong>{{ algorithmReplayResult.incidentPreview.length }}</strong><span>预计事件簇</span></div>
+            <div><strong>{{ algorithmReplayResult.riskPreview.length }}</strong><span>风险变化</span></div>
+            <div><strong>{{ algorithmReplayResult.recommendationPreview.length }}</strong><span>推荐动作</span></div>
+            <div><strong>{{ algorithmReplayResult.trendPreview.length }}</strong><span>趋势异常</span></div>
+          </div>
+          <el-table :data="algorithmReplayResult.allItems" empty-text="暂无回放预览">
+            <el-table-column label="类型" width="150">
+              <template #default="{ row }">{{ previewTypeLabel(row.itemType) }}</template>
+            </el-table-column>
+            <el-table-column prop="title" label="预览结果" min-width="220" />
+            <el-table-column prop="reason" label="解释 reason" min-width="360" show-overflow-tooltip />
+            <el-table-column label="关键字段" min-width="260">
+              <template #default="{ row }">{{ previewSummary(row.previewResult) }}</template>
+            </el-table-column>
+          </el-table>
+        </section>
+
+        <section class="table-panel">
+          <div class="table-panel__head">
+            <div>
+              <h3>策略版本与最近评估</h3>
+              <p>展示事件关联、风险评分、推荐排序和趋势异常的当前版本、状态和评估记录。</p>
+            </div>
+            <el-button @click="activeTab = 'audit'">变更审计入口</el-button>
+          </div>
+          <el-table v-loading="algorithmLoading" :data="algorithmPolicyVersions" empty-text="暂无策略版本">
+            <el-table-column label="治理对象" width="150">
+              <template #default="{ row }">{{ algorithmTypeLabel(row.algorithmType) }}</template>
+            </el-table-column>
+            <el-table-column prop="policyName" label="策略名称" min-width="190" />
+            <el-table-column prop="policyCode" label="策略编码" min-width="190" show-overflow-tooltip />
+            <el-table-column label="状态" width="112">
+              <template #default="{ row }">
+                <el-tag :type="statusTag(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="version" label="版本" width="80" />
+            <el-table-column prop="sourceCoverage" label="覆盖来源" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="updatedBy" label="最近变更人" width="120" />
+            <el-table-column prop="updatedAt" label="最近变更" min-width="172" />
+          </el-table>
+
+          <el-divider />
+          <el-table v-loading="algorithmLoading" :data="algorithmEvaluations" empty-text="暂无评估记录">
+            <el-table-column prop="evaluationNo" label="评估编号" min-width="210" show-overflow-tooltip />
+            <el-table-column label="对象" width="140">
+              <template #default="{ row }">{{ algorithmTypeLabel(row.algorithmType) }}</template>
+            </el-table-column>
+            <el-table-column prop="batchId" label="batchId" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="inputCount" label="输入" width="80" />
+            <el-table-column prop="outputCount" label="输出" width="80" />
+            <el-table-column prop="resultSummary" label="摘要" min-width="320" show-overflow-tooltip />
+            <el-table-column prop="createdAt" label="创建时间" min-width="172" />
+          </el-table>
+        </section>
+      </el-tab-pane>
+
       <el-tab-pane label="变更审计" name="audit">
         <section class="table-panel">
           <el-table v-loading="auditLoading" :data="auditRows" empty-text="暂无策略变更记录">
@@ -667,6 +819,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
+  algorithmOverview,
   changeLocalCheckPolicyEnabled,
   createCorrelationRule,
   createLocalCheckPolicy,
@@ -685,6 +838,7 @@ import {
   listEventAdapters,
   listRiskScoringPolicies,
   localCheckPolicyAudits,
+  listAlgorithmEvaluations,
   previewEventAdapter,
   precheckLocalCheckPolicy,
   publishLocalCheckPolicy,
@@ -700,11 +854,16 @@ import {
   updateLocalCheckPolicy,
   updateResponsePlaybook,
   updateRiskScoringPolicy,
+  replayAlgorithm,
   validateEventAdapter,
   validateCorrelationRule,
   validateResponsePlaybook,
   validateLocalCheckPolicy,
   validateRiskScoringPolicy,
+  type AlgorithmEvaluation,
+  type AlgorithmPolicyVersion,
+  type AlgorithmReplayResult,
+  type AlgorithmStatusCard,
   type EventAdapterMappingsPayload,
   type EventAdapterPreviewResult,
   type EventAdapterProfileItem,
@@ -778,6 +937,20 @@ const correlationTotal = ref(0)
 const correlationQuery = reactive({ pageNum: 1, pageSize: 10, keyword: '', type: '', status: '' })
 const correlationDialogVisible = ref(false)
 const editingCorrelationId = ref<number>()
+const algorithmLoading = ref(false)
+const algorithmReplayLoading = ref(false)
+const algorithmError = ref('')
+const algorithmOverviewRows = ref<AlgorithmStatusCard[]>([])
+const algorithmPolicyVersions = ref<AlgorithmPolicyVersion[]>([])
+const algorithmEvaluations = ref<AlgorithmEvaluation[]>([])
+const algorithmReplayResult = ref<AlgorithmReplayResult>()
+const algorithmReplayRange = ref<string[]>([])
+const algorithmReplayForm = reactive({
+  algorithmType: 'all',
+  policyMode: 'active',
+  batchId: 'DEMO-RANGE-OFFLINE-V1',
+  saveEvaluation: true,
+})
 const playbookDialogVisible = ref(false)
 const editingPlaybookId = ref<number>()
 const playbookForm = reactive({
@@ -849,6 +1022,7 @@ watch(activeTab, (tab) => {
   if (tab === 'playbook') void loadPlaybooks()
   if (tab === 'correlation') void loadCorrelationRules()
   if (tab === 'risk-scoring') void loadRiskPolicies()
+  if (tab === 'algorithm') void loadAlgorithmGovernance()
 })
 
 const formattedPreview = computed(() => {
@@ -1087,6 +1261,90 @@ async function loadRiskPolicies() {
   } finally {
     riskLoading.value = false
   }
+}
+
+async function loadAlgorithmGovernance() {
+  algorithmLoading.value = true
+  algorithmError.value = ''
+  try {
+    const [overviewRes, evaluationsRes] = await Promise.all([
+      algorithmOverview(),
+      listAlgorithmEvaluations({ pageNum: 1, pageSize: 8 }),
+    ])
+    algorithmOverviewRows.value = overviewRes.data.data.cards || []
+    algorithmPolicyVersions.value = overviewRes.data.data.policyVersions || []
+    algorithmEvaluations.value = evaluationsRes.data.data.records || overviewRes.data.data.recentEvaluations || []
+  } catch {
+    algorithmOverviewRows.value = []
+    algorithmPolicyVersions.value = []
+    algorithmEvaluations.value = []
+    algorithmError.value = '可能是后端未启动、数据库未初始化，或当前账号没有算法治理权限。'
+  } finally {
+    algorithmLoading.value = false
+  }
+}
+
+async function runAlgorithmReplay() {
+  algorithmReplayLoading.value = true
+  algorithmError.value = ''
+  try {
+    const [timeRangeStart, timeRangeEnd] = algorithmReplayRange.value || []
+    const res = await replayAlgorithm({
+      algorithmType: algorithmReplayForm.algorithmType,
+      policyMode: algorithmReplayForm.policyMode,
+      batchId: algorithmReplayForm.batchId || undefined,
+      timeRangeStart: timeRangeStart || undefined,
+      timeRangeEnd: timeRangeEnd || undefined,
+      saveEvaluation: algorithmReplayForm.saveEvaluation,
+    })
+    algorithmReplayResult.value = res.data.data
+    if (res.data.data.realWrites) {
+      ElMessage.warning('回放完成，但后端返回存在真实写入标记，请复核。')
+    } else {
+      ElMessage.success('回放评估完成，未写入真实事件簇、工单、报表或通知')
+    }
+    await loadAlgorithmGovernance()
+  } catch {
+    algorithmReplayResult.value = undefined
+    algorithmError.value = '回放评估失败。请确认后端已启动、算法评估表已初始化，且当前账号具备回放权限。'
+  } finally {
+    algorithmReplayLoading.value = false
+  }
+}
+
+function algorithmTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    all: '全部算法',
+    correlation: '事件关联',
+    risk_scoring: '风险评分',
+    recommendation: '推荐排序',
+    trend_anomaly: '趋势异常',
+  }
+  return labels[type] || type || '-'
+}
+
+function previewTypeLabel(type: string) {
+  const labels: Record<string, string> = {
+    incident_cluster: '事件簇预览',
+    risk_change: '风险变化',
+    recommendation: '推荐动作',
+    trend_anomaly: '趋势异常',
+  }
+  return labels[type] || type || '-'
+}
+
+function formatMaybe(value?: string) {
+  return value || '暂无记录'
+}
+
+function previewSummary(record: Record<string, unknown>) {
+  const entries = Object.entries(record || {}).slice(0, 5)
+  if (!entries.length) return '-'
+  return entries.map(([key, value]) => {
+    if (Array.isArray(value)) return `${key}: ${value.join('+') || '-'}`
+    if (value === null || value === undefined || value === '') return `${key}: -`
+    return `${key}: ${String(value)}`
+  }).join('；')
 }
 
 function resetRiskFilters() {
@@ -1692,6 +1950,126 @@ function statusTag(status: string) {
   gap: 10px;
 }
 
+.recoverable-panel {
+  border-color: rgba(232, 142, 54, 0.36);
+  background: rgba(255, 248, 238, 0.86);
+}
+
+.recoverable-panel h3 {
+  margin: 0 0 8px;
+  color: var(--soc-text);
+  font-size: 17px;
+}
+
+.recoverable-panel p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  line-height: 1.7;
+}
+
+.recoverable-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.algorithm-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.algorithm-card {
+  padding: 16px;
+}
+
+.algorithm-card__head,
+.table-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.algorithm-card__head h3,
+.table-panel__head h3 {
+  margin: 4px 0 6px;
+  color: var(--soc-text);
+  font-size: 18px;
+}
+
+.algorithm-card__head p,
+.table-panel__head p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  line-height: 1.6;
+}
+
+.algorithm-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.algorithm-metrics div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(179, 173, 163, 0.42);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.algorithm-metrics strong {
+  display: block;
+  color: var(--soc-text);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.algorithm-metrics span {
+  display: block;
+  margin-top: 4px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+
+.algorithm-card__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin-top: 14px;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+}
+
+.source-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.algorithm-replay-panel {
+  margin-top: 14px;
+}
+
+.algorithm-form {
+  margin-top: 14px;
+}
+
+.inline-hint {
+  margin-left: 8px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+
+.replay-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .risk-weight-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
@@ -1788,6 +2166,13 @@ function statusTag(status: string) {
   }
 
   .risk-weight-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .algorithm-card-grid,
+  .algorithm-metrics,
+  .algorithm-card__meta,
+  .replay-metrics {
     grid-template-columns: 1fr;
   }
 }

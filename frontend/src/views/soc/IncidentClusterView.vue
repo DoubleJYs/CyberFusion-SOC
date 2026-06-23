@@ -20,7 +20,7 @@
           <el-button size="small" @click="diagnosticsVisible = !diagnosticsVisible">查看诊断</el-button>
           <el-button size="small" @click="resetFilters">返回列表</el-button>
         </div>
-        <pre v-if="diagnosticsVisible" class="diagnostic-box">{{ diagnosticText }}</pre>
+        <pre v-if="diagnosticsVisible || appStore.showDiagnostics" class="diagnostic-box">{{ diagnosticText }}</pre>
       </template>
     </el-alert>
 
@@ -112,12 +112,16 @@
           <span>关联分</span><strong>{{ current.score }}</strong>
           <span>资产</span><strong>{{ assetLabel(current) }}</strong>
           <span>来源</span><strong>{{ sourceLabel(current) }}</strong>
-          <span>Batch</span><strong>{{ current.batchId || '-' }}</strong>
-          <span>Demo Case</span><strong>{{ current.demoCaseId || '-' }}</strong>
+          <template v-if="appStore.showAdvanced">
+            <span>Batch</span><strong>{{ current.batchId || '-' }}</strong>
+            <span>Demo Case</span><strong>{{ current.demoCaseId || '-' }}</strong>
+          </template>
           <span>首次出现</span><strong>{{ formatTime(current.firstSeenAt) }}</strong>
           <span>最近出现</span><strong>{{ formatTime(current.lastSeenAt) }}</strong>
-          <span>关联规则</span><strong>{{ current.ruleKey || '-' }}</strong>
-          <span>Correlation Key</span><strong>{{ current.correlationKey || '-' }}</strong>
+          <template v-if="appStore.showRawEvidence">
+            <span>关联规则</span><strong>{{ current.ruleKey || '-' }}</strong>
+            <span>Correlation Key</span><strong>{{ current.correlationKey || '-' }}</strong>
+          </template>
           <span>推荐动作</span><strong>{{ current.recommendation || actionLabel(current) }}</strong>
           <span>摘要</span><strong>{{ current.summary || '-' }}</strong>
         </div>
@@ -138,7 +142,7 @@
                 <div>
                   <strong>{{ evidenceTypeLabel(item.evidenceType) }} #{{ item.evidenceId }}</strong>
                   <span>{{ item.sourceType || '-' }} / {{ item.eventType || '-' }} / {{ item.ruleId || '-' }}</span>
-                  <p>{{ item.relationReason || '命中关联规则' }}</p>
+                  <p>{{ relationReasonText(item) }}</p>
                 </div>
                 <el-tag effect="plain">{{ item.relationScore }}</el-tag>
               </article>
@@ -156,7 +160,7 @@
             <div>
               <strong>{{ item.sourceType || 'external_event' }} / {{ item.eventType || '-' }}</strong>
               <span>{{ item.assetIp || item.hostname || '-' }} · {{ item.targetUrl || item.batchId || '-' }}</span>
-              <p>{{ item.relationReason }}</p>
+              <p>{{ relationReasonText(item) }}</p>
             </div>
             <el-button text @click="goEvidence(item)">查看证据</el-button>
           </article>
@@ -173,7 +177,7 @@
               <SeverityBadge :severity="item.severity || current.severity" />
               <div>
                 <strong>{{ item.ruleId || `告警 #${item.evidenceId}` }}</strong>
-                <span>{{ item.relationReason }}</span>
+                <span>{{ relationReasonText(item) }}</span>
               </div>
               <el-button text @click="goEvidence(item)">查看</el-button>
             </article>
@@ -189,7 +193,7 @@
               <SeverityBadge :severity="item.severity || current.severity" />
               <div>
                 <strong>{{ item.ruleId || `漏洞 #${item.evidenceId}` }}</strong>
-                <span>{{ item.relationReason }}</span>
+                <span>{{ relationReasonText(item) }}</span>
               </div>
               <el-button text @click="goEvidence(item)">查看</el-button>
             </article>
@@ -209,6 +213,14 @@
             </div>
             <el-button v-if="current.ticketId" type="primary" @click="goTicket(current)">查看工单</el-button>
           </article>
+        </section>
+
+        <section v-if="appStore.showRawEvidence" class="detail-section">
+          <div class="section-title">
+            <strong>专家诊断</strong>
+            <el-tag effect="plain">raw</el-tag>
+          </div>
+          <pre class="diagnostic-box">{{ diagnosticText }}</pre>
         </section>
 
         <div class="drawer-actions">
@@ -237,9 +249,11 @@ import {
   type IncidentClusterItem,
   type IncidentEvidenceItem,
 } from '@/api/soc'
+import { useAppStore } from '@/stores/app'
 
 const route = useRoute()
 const router = useRouter()
+const appStore = useAppStore()
 
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', severity: '', status: '' })
 const rows = ref<IncidentClusterItem[]>([])
@@ -388,6 +402,12 @@ function actionLabel(row: IncidentClusterItem) {
   if (row.status === 'closed') return '已关闭，保留证据链'
   if (['critical', 'high'].includes(String(row.severity || '').toLowerCase())) return '建议转为处置工单'
   return '继续观察或关闭事件簇'
+}
+
+function relationReasonText(item: IncidentEvidenceItem) {
+  const reason = item.relationReason || '命中关联规则'
+  if (appStore.viewMode !== 'simple' || reason.length <= 72) return reason
+  return `${reason.slice(0, 72)}...`
 }
 
 function evidenceTypeLabel(type: IncidentEvidenceItem['evidenceType']) {

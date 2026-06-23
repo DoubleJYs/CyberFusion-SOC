@@ -1,6 +1,8 @@
 import type { Component } from 'vue'
 import type { Router, RouteRecordName } from 'vue-router'
 import type { AppRouteRecord, MenuItem } from '@/types/system'
+import type { UserInfo } from '@/types/user'
+import { defaultRouteForExperience } from '@/utils/roleExperience'
 
 type ComponentLoader = () => Promise<Component>
 type DynamicRouteName = NonNullable<RouteRecordName>
@@ -110,9 +112,8 @@ export function resetMenuRoutes(router: Router) {
   dynamicRouteNames.clear()
 }
 
-export function firstRoutePathFromMenus(menus: MenuItem[]) {
-  void menus
-  return '/showcase'
+export function firstRoutePathFromMenus(menus: MenuItem[], roles: string[] = [], userInfo?: UserInfo | null) {
+  return defaultRouteForExperience(roles, userInfo, menus)
 }
 
 function flattenMenus(menus: MenuItem[]): MenuItem[] {

@@ -6,6 +6,7 @@ import com.zhangjiyan.template.common.result.ResultCode;
 import com.zhangjiyan.template.common.security.AuthConstants;
 import com.zhangjiyan.template.common.security.JwtUtils;
 import com.zhangjiyan.template.common.security.LoginUser;
+import com.zhangjiyan.template.common.security.RolePermissionBoundary;
 import com.zhangjiyan.template.common.security.SecurityUtils;
 import com.zhangjiyan.template.system.auth.dto.LoginRequest;
 import com.zhangjiyan.template.system.auth.dto.LoginResponse;
@@ -123,11 +124,15 @@ public class AuthService {
                 .eq(SysMenu::getStatus, 1)
                 .orderByAsc(SysMenu::getSort));
         List<String> roleCodes = roles.stream().map(SysRole::getRoleCode).toList();
-        List<String> permissions = menus.stream()
+        List<String> rawPermissions = menus.stream()
                 .map(SysMenu::getPermission)
                 .filter(Objects::nonNull)
                 .filter(permission -> !permission.isBlank())
                 .distinct()
+                .toList();
+        List<String> permissions = RolePermissionBoundary.filterPermissions(roleCodes, rawPermissions);
+        List<SysMenu> effectiveMenus = menus.stream()
+                .filter(menu -> RolePermissionBoundary.menuAllowed(roleCodes, menu.getPermission(), menu.getPath(), permissions))
                 .toList();
         LoginUser loginUser = new LoginUser(user.getId(), user.getUsername(), user.getNickname(), roleCodes, permissions);
         return new LoginResponse(
@@ -137,7 +142,7 @@ public class AuthService {
                 new UserInfoResponse(user.getId(), user.getUsername(), user.getNickname(), user.getEmail(), user.getMobile(), user.getStatus()),
                 roleCodes,
                 permissions,
-                buildMenuTree(menus.stream().filter(menu -> !"button".equals(menu.getType())).toList())
+                buildMenuTree(effectiveMenus.stream().filter(menu -> !"button".equals(menu.getType())).toList())
         );
     }
 

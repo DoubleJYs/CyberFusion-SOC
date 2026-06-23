@@ -54,14 +54,15 @@ router.beforeEach(async (to) => {
   if (to.path === '/login') {
     if (!authStore.isAuthenticated) return true
     if (!authStore.initialized) {
-    try {
-      await authStore.fetchCurrentUser()
-      ensureMenuRoutes(router, authStore.menus)
-    } catch {
-      return true
+      try {
+        await authStore.fetchCurrentUser()
+        appStore.applyRoleExperience(authStore.roles, authStore.userInfo)
+        ensureMenuRoutes(router, authStore.menus)
+      } catch {
+        return true
+      }
     }
-    }
-    return firstRoutePathFromMenus(authStore.menus)
+    return firstRoutePathFromMenus(authStore.menus, authStore.roles, authStore.userInfo)
   }
   if (to.matched.some((record) => record.meta.public)) return true
 
@@ -72,10 +73,13 @@ router.beforeEach(async (to) => {
   if (!authStore.initialized) {
     try {
       await authStore.fetchCurrentUser()
+      appStore.applyRoleExperience(authStore.roles, authStore.userInfo)
     } catch {
       resetMenuRoutes(router)
       return { path: '/login', query: { redirect: to.fullPath }, replace: true }
     }
+  } else {
+    appStore.applyRoleExperience(authStore.roles, authStore.userInfo)
   }
   const addedRoutes = ensureMenuRoutes(router, authStore.menus)
   if (addedRoutes && to.matched.length === 0) {

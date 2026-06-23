@@ -77,6 +77,34 @@
           </aside>
         </section>
 
+        <section class="showcase-section storyline-section">
+          <div class="showcase-section-head">
+            <div>
+              <span class="showcase-kicker">SECURITY OPERATIONS STORY</span>
+              <h2>本次安全验证故事线</h2>
+              <p>从证据导入到报告输出，把技术信号翻译成客户能理解的运营闭环。</p>
+            </div>
+            <el-button @click="goReports">查看报告入口</el-button>
+          </div>
+          <div class="storyline-grid">
+            <article v-for="(step, index) in showcaseData.storySteps" :key="step.key" class="storyline-card">
+              <span class="storyline-index">{{ index + 1 }}</span>
+              <div class="storyline-copy">
+                <div>
+                  <strong>{{ step.title }}</strong>
+                  <el-tag effect="plain">{{ step.status }}</el-tag>
+                </div>
+                <p>{{ step.explanation }}</p>
+              </div>
+              <div class="storyline-metric">
+                <strong>{{ step.count }}</strong>
+                <span>{{ step.countLabel }}</span>
+              </div>
+              <el-button text @click="goStoryStep(step.route)">跳转查看</el-button>
+            </article>
+          </div>
+        </section>
+
         <section ref="flowSectionRef" class="showcase-section" v-loading="loading || actionLoading">
           <div class="showcase-section-head">
             <div>
@@ -460,6 +488,14 @@ function goReports() {
   router.push({ path: '/soc/reports', query: { reportType: 'security_validation', keyword: showcaseData.value?.batchId } })
 }
 
+function goStoryStep(route: string) {
+  if (route === '/soc/reports') {
+    goReports()
+    return
+  }
+  router.push({ path: route, query: { keyword: showcaseData.value?.batchId } })
+}
+
 function goIncidentChain(keyword?: string) {
   router.push({ path: '/soc/incidents', query: { keyword: typeof keyword === 'string' ? keyword : showcaseData.value?.batchId } })
 }
@@ -528,5 +564,82 @@ function incidentEvidenceCount(incident: IncidentClusterItem) {
 .playbook-summary strong {
   color: var(--soc-text);
   line-height: 1.6;
+}
+
+.storyline-section {
+  position: relative;
+}
+
+.storyline-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.storyline-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 84px auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(179, 173, 163, 0.34);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.storyline-index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  color: #9a4f12;
+  background: rgba(224, 133, 48, 0.14);
+  font-weight: 800;
+}
+
+.storyline-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.storyline-copy > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.storyline-copy strong {
+  color: var(--soc-text);
+  font-size: 16px;
+}
+
+.storyline-copy p,
+.storyline-metric span {
+  margin: 0;
+  color: var(--soc-text-muted);
+}
+
+.storyline-metric {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+
+.storyline-metric strong {
+  color: var(--soc-text);
+  font-size: 22px;
+}
+
+@media (max-width: 760px) {
+  .storyline-card {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .storyline-metric {
+    justify-items: start;
+    grid-column: 2;
+  }
 }
 </style>

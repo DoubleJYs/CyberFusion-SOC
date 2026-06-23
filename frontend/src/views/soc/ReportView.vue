@@ -49,6 +49,19 @@
         <el-table-column prop="reportNo" label="报表编号" width="190" />
         <el-table-column prop="title" label="标题" min-width="240" />
         <el-table-column prop="reportType" label="类型" width="90" />
+        <el-table-column prop="status" label="状态" width="90" />
+        <el-table-column label="批次" width="180">
+          <template #default="{ row }">{{ reportBatch(row) }}</template>
+        </el-table-column>
+        <el-table-column label="风险摘要" min-width="220" show-overflow-tooltip>
+          <template #default="{ row }">{{ reportRiskSummary(row) }}</template>
+        </el-table-column>
+        <el-table-column label="事件簇" width="86">
+          <template #default="{ row }">{{ reportIncidentCount(row) }}</template>
+        </el-table-column>
+        <el-table-column label="推荐动作" width="96">
+          <template #default="{ row }">{{ reportRecommendationCount(row) }}</template>
+        </el-table-column>
         <el-table-column label="周期" width="210"><template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template></el-table-column>
         <el-table-column prop="summary" label="摘要" min-width="260" show-overflow-tooltip />
         <el-table-column label="导出" width="160">
@@ -62,7 +75,7 @@
         <el-pagination v-model:current-page="query.pageNum" v-model:page-size="query.pageSize" layout="total, sizes, prev, pager, next" :total="total" @change="load" />
       </div>
     </section>
-    <el-drawer v-model="drawer" title="报表详情" size="560px">
+    <el-drawer v-model="drawer" title="报表详情" size="680px">
       <div v-if="currentReport" class="drawer-stack">
         <div class="soc-drawer-grid">
           <span>报表编号</span><strong>{{ currentReport.reportNo }}</strong>
@@ -72,7 +85,13 @@
           <span>生成时间</span><strong>{{ currentReport.generatedAt || '-' }}</strong>
           <span>状态</span><strong>{{ currentReport.status }}</strong>
         </div>
-        <section class="report-section">
+        <template v-if="currentReport.reportType === 'security_validation'">
+          <section v-for="section in securityValidationSections(currentReport)" :key="section.title" class="report-section">
+            <h3>{{ section.title }}</h3>
+            <p>{{ section.body }}</p>
+          </section>
+        </template>
+        <section v-else class="report-section">
           <h3>摘要</h3>
           <p>{{ currentReport.summary }}</p>
         </section>
@@ -160,6 +179,52 @@ function batchOpenExport(format: 'xlsx' | 'pdf') {
 }
 function reportTypeLabel(type: string) {
   return ({ daily: '日报', weekly: '周报', monthly: '月报', security_validation: '安全验证报告' } as Record<string, string>)[type] || type
+}
+
+function reportBatch(report: ReportItem) {
+  if (report.reportType !== 'security_validation') return '-'
+  return matchFirst(report.summary, /验证批次[：\\s]*([^，；。]+)/) || matchFirst(report.title, /（([^）]+)）/) || '-'
+}
+
+function reportRiskSummary(report: ReportItem) {
+  if (report.reportType !== 'security_validation') return '-'
+  const management = sectionBody(report.summary, '管理摘要')
+  return management || matchFirst(report.summary, /Top 高风险资产 ([^；]+)/) || '-'
+}
+
+function reportIncidentCount(report: ReportItem) {
+  if (report.reportType !== 'security_validation') return '-'
+  return matchFirst(report.summary, /事件簇\\s*(\\d+)\\s*个/) || '0'
+}
+
+function reportRecommendationCount(report: ReportItem) {
+  if (report.reportType !== 'security_validation') return '-'
+  return matchFirst(report.summary, /推荐动作\\s*(\\d+)\\s*个/) || '0'
+}
+
+function securityValidationSections(report: ReportItem) {
+  const rawSections = [
+    { title: '管理摘要', body: sectionBody(report.summary, '管理摘要') },
+    { title: '技术证据', body: sectionBody(report.summary, '技术证据') },
+    { title: '处置进度', body: sectionBody(report.summary, '处置进度') || sectionBody(report.summary, '事件簇与风险') },
+    { title: '员工配合', body: sectionBody(report.summary, '员工配合') },
+    { title: '安全边界', body: sectionBody(report.summary, '安全边界') },
+  ]
+  return rawSections.map((item) => ({ ...item, body: item.body || '当前报告未提供该区块，建议重新生成 security_validation 报告。' }))
+}
+
+function sectionBody(summary: string, title: string) {
+  const parts = summary
+    .split(/(?=【[^】]+】)/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const match = parts.find((item) => item.startsWith(`【${title}】`))
+  return match ? match.replace(`【${title}】`, '').trim() : ''
+}
+
+function matchFirst(value: string, pattern: RegExp) {
+  const match = value.match(pattern)
+  return match?.[1]?.trim()
 }
 </script>
 

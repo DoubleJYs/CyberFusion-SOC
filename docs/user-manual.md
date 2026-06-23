@@ -29,6 +29,108 @@ This manual is for customer demos, internal acceptance, and operator handoff of 
 | 系统管理 | `/system/*` and system settings | Administrators | Manage users, roles, menus, dictionaries, logs, and platform parameters. | Visible from navigation only for admin users. |
 | 员工端 | `/client/workbench` | Regular employees | Let employees understand current computer status and submit logs or tasks. | Default employee navigation is 我的电脑 / 我的待办 / 提交日志. |
 
+## Role Navigation And View Density
+
+B1 keeps every compatible route, but changes the default navigation density by role.
+
+| Role | Default entry | Navigation density | Default viewMode |
+| --- | --- | --- | --- |
+| `super_admin` / local `admin` | `/soc/dashboard` | Full groups: 工作区, 安全运营, 处置闭环, 策略治理, 平台管理. | `expert` |
+| `admin` / platform administrator | `/soc/dashboard` | SOC expert backend plus system management. | `detail` |
+| `security_engineer` / `security_admin` | `/soc/policies` | Policy governance, event adapter, playbook, risk scoring, correlation, algorithm governance. | `detail` |
+| `analyst` / `security_analyst` | `/soc/dashboard` | Operations workbench, incident clusters, alerts, tickets, asset risk, reports. | `detail` |
+| `employee` / `ops` / `user` | `/client/workbench` | Security Keeper only: 我的电脑, 我的待办, 提交日志, 安全工具, 安全日志. | `simple` |
+| `customer` / `demo` | `/showcase` | Customer demo shell only by default. | `simple` |
+
+`expert` mode shows diagnostics, raw evidence, relation reasons, adapter mapping entries, policy version, and audit entry points. `simple` mode keeps conclusion, next action, and key metrics on the first screen, with technical details kept in drawers.
+
+Backend permissions remain authoritative. Employee and customer-class roles do not receive effective `soc:*`, `system:*`, or `dashboard:view` permissions even if an old local database still contains stale menu rows.
+
+## Project Structure And Function Architecture
+
+CyberFusion SOC is organized into five frontend experiences and one backend data-control layer.
+
+### Frontend Structure
+
+| Area | Route family | Main users | Purpose |
+| --- | --- | --- | --- |
+| Public and error pages | `/login`, `/401`, `/403`, `/500`, `/:pathMatch(.*)*` | All users | Authentication, recoverable failure states, and access-denied explanations. |
+| Customer demo shell | `/showcase` | Customers, sales engineers, acceptance reviewers | Presents the complete SOC value chain as a guided story instead of a dense backend console. |
+| SOC expert backend | `/soc/*` | SOC analysts, security engineers, admins | Evidence, alerts, incident clusters, assets, vulnerabilities, reports, policies, integrations, and governance. |
+| Employee security assistant | `/client/*` | Regular employees | Shows current computer status, pending tasks, safe local checks, log submission, and personal security history. |
+| System administration | `/dashboard`, `/system/*` | Administrators | User, role, menu, dictionary, audit, file, workflow, notice, and platform configuration management. |
+
+### Backend And Data Structure
+
+| Domain | Core tables | Data flow |
+| --- | --- | --- |
+| Multi-source evidence | `soc_external_event`, `soc_vulnerability` | Offline WAF/ZAP/Wazuh/Suricata/Zeek logs are normalized into external events; Trivy-style findings write vulnerability records. |
+| Alert handling | `soc_alert`, `soc_ticket`, `soc_ticket_timeline`, `soc_ticket_task` | Import with `linkAlerts=true` creates or links alerts; alerts can become tickets; playbooks create manual task checklists. |
+| Correlation engine | `soc_correlation_rule`, `soc_incident_cluster`, `soc_incident_evidence` | Existing evidence, alerts, vulnerabilities, and tickets are grouped into explainable incident clusters. |
+| Risk and recommendations | `soc_asset`, `soc_asset_risk_snapshot`, `soc_risk_scoring_policy` | Asset risk uses existing SOC data, policy weights, ticket status, employee tasks, and closed-loop reductions. |
+| Algorithm governance | `soc_algorithm_evaluation`, `soc_algorithm_evaluation_item` | A7 dry-run replay previews incident, risk, recommendation, and trend outcomes without writing production results. |
+| Employee security assistant | `soc_client_checkup`, `soc_client_checkup_item`, employee task and local-check evidence records | Employee pages aggregate current-computer data into safe, plain-language status, actions, and logs. |
+| Policy center | `soc_local_check_command`, adapter policy tables, playbook tables, risk and correlation rule tables | Security engineers maintain allowlisted commands, field mappings, defensive playbooks, scoring weights, and rule lifecycle. |
+| System governance | `sys_user`, `sys_role`, `sys_menu`, `sys_role_menu`, `sys_operation_log`, `sys_login_log` | RBAC menus and backend permissions enforce admin, analyst, security engineer, and employee boundaries. |
+
+### Core Demo Data Flow
+
+1. `/showcase` or `/soc/demo-range` imports an offline Demo Range batch.
+2. WAF/ZAP/Wazuh/Suricata/Zeek records write `soc_external_event`; Trivy records write `soc_vulnerability`.
+3. `linkAlerts=true` creates or links `soc_alert` records.
+4. Correlation Engine groups related evidence into `soc_incident_cluster` and `soc_incident_evidence`.
+5. Risk scoring updates explainable asset risk from existing SOC records.
+6. Recommendation ranking prioritizes incident, vulnerability, ticket, and employee-task actions.
+7. Playbook application creates or reuses `soc_ticket` and manual `soc_ticket_task` records.
+8. Employee pages expose only current-computer tasks, checks, and logs.
+9. Report center generates `security_validation` reports and dry-run notification logs.
+10. Algorithm governance can replay the batch as dry-run to evaluate rules without changing production entities.
+
+### Page Function Reference
+
+| Route | Page | Main functions | Main data / APIs |
+| --- | --- | --- | --- |
+| `/login` | 登录 | Local demo login, clear failed-login hint, health diagnosis entry when backend is unavailable. | `/api/auth/login`, `/api/health`. |
+| `/showcase` | 安全运营演示台 | Customer-facing 5-step story: evidence import, incident cluster, alert, ticket, report, and expert-mode jumps. | Demo batch import, evidence chain, dashboard, incidents, reports, fallback offline demo data. |
+| `/soc/dashboard` | 安全总览 | SOC KPIs, alert trend, severity distribution, affected assets, risk analytics, Top incidents, Top risk assets, recommendations, trend anomalies. | `soc_alert`, `soc_external_event`, `soc_incident_cluster`, risk/recommendation/trend APIs. |
+| `/soc/capabilities` | 平台能力说明 | Defensive product capability map, integration boundary, dry-run safety explanation. | Static capability model plus SOC integration metadata. |
+| `/soc/demo-range` | 安全验证 | Offline demo batch import, batch status, topology, evidence chain, incident chain, ticket/report/notification entries. | Demo Range import API, evidence chain API, report API, notification dry-run log. |
+| `/soc/alerts` | 告警处置 | Alert list, filters, detail drawer, related incident clusters, playbook suggestions, convert to ticket, false-positive/close handling. | `soc_alert`, `soc_incident_cluster`, `soc_response_playbook`, `soc_ticket`. |
+| `/soc/incidents` | 安全事件簇 | Correlation execution, cluster list, evidence timeline, relation reasons, ticket conversion, close workflow. | `soc_incident_cluster`, `soc_incident_evidence`, `soc_correlation_rule`, ticket APIs. |
+| `/soc/rules` | 检测规则中心 | Rule inventory, recent hits, source adapter mapping explanation, jump to events or alerts. | Existing event/alert tables plus built-in rule catalog. |
+| `/soc/policies` | 策略与规则中心 | Maintains local check policies, event adapter mappings, response playbooks, risk scoring policies, correlation rules, algorithm governance, and audit views. | Policy tables, adapter tables, playbook tables, risk/correlation/algorithm APIs. |
+| `/soc/alert-noise` | 告警降噪 | Noise suppression, whitelist-style review, false-positive tracking, close/ignore support. | `soc_alert` status and review fields. |
+| `/soc/assets` | 资产视图 | Asset inventory, risk level, risk profile drawer, single-asset recalculation, linked incidents and recommendations. | `soc_asset`, `soc_asset_risk_snapshot`, alert/vulnerability/ticket factors. |
+| `/soc/client-security` | 员工终端安全态势 | Employee Security Keeper coverage, high-risk computers, pending tasks, local-check submissions. | Client checkups, tasks, assets, risk profile, ticket/task APIs. |
+| `/soc/vulnerabilities` | 漏洞中心 | Vulnerability list, severity filters, Trivy demo evidence, asset linkage. | `soc_vulnerability`. |
+| `/soc/baselines` | 基线核查 | Baseline failure and pass records, asset baseline posture. | Baseline records from existing SOC data. |
+| `/soc/fim` | 文件完整性 | File-change evidence and review state. | FIM-style external evidence and normalized fields. |
+| `/soc/external-events` | 证据中心 | Multi-source evidence list, structured fields, raw JSON drawer, batch/demo case filtering, alert/event drilldown. | `soc_external_event`, adapter normalized fields. |
+| `/soc/tickets` | 工单中心 | Ticket list, ticket timeline, playbook tasks, employee task state, report linkage. | `soc_ticket`, `soc_ticket_timeline`, `soc_ticket_task`. |
+| `/soc/reports` | 报告中心 | Security validation report generation, readable report detail sections, dry-run notification boundary display. | `soc_report`, report generation API, notification dry-run logs. |
+| `/soc/settings` | 系统配置 | Data source and notification settings, integration catalog, dry-run sender state. | Integration settings, notification logs, config APIs. |
+| `/dashboard` | 仪表盘 | Generic admin dashboard and platform overview. | System dashboard APIs. |
+| `/system/user` | 用户管理 | Account CRUD, enable/disable, role assignment, reset password. | `sys_user`, `sys_user_role`. |
+| `/system/dept` | 部门管理 | Department tree, data-scope basis, organization maintenance. | `sys_dept`. |
+| `/system/post` | 岗位管理 | Post dictionary and user-position support. | `sys_post`. |
+| `/system/role` | 角色管理 | Role CRUD, menu permissions, data-scope configuration. | `sys_role`, `sys_role_menu`. |
+| `/system/menu` | 菜单管理 | Route menu, button permission, icon, visibility, and sort management. | `sys_menu`. |
+| `/system/dict` | 字典管理 | Dictionary type and dictionary data management. | `sys_dict_type`, `sys_dict_data`. |
+| `/system/log` | 系统日志 | Login audit and operation audit review. | `sys_login_log`, `sys_operation_log`. |
+| `/system/file` | 文件管理 | Uploaded file metadata and controlled file viewing. | `sys_file`. |
+| `/system/excel/logs` | 导入导出日志 | Import/export task history and result tracking. | `sys_import_export_log`. |
+| `/system/workflow/biz-sequence` | 编号规则 | Business number prefix/date/current-value rules for tickets and workflows. | `sys_biz_sequence`. |
+| `/system/workflow/biz-flow-log` | 流程日志 | Business flow transition records and traceability. | `sys_biz_flow_log`. |
+| `/system/notice` | 通知公告 | Internal notices and publication state. | `sys_notice`. |
+| `/system/config` | 参数配置 | Platform key-value parameters and built-in config guardrails. | `sys_config`. |
+| `/client/workbench` | CyberFusion 安全管家 | Current safety status, score, main risk reasons, pending tasks, one-click checkup entry, repair/log/tool shortcuts. | Security Keeper APIs, risk profile, tasks, local check history. |
+| `/client/device-admin` | 设备信息 | Current-device context and details. | Current user asset and runtime context. |
+| `/client/data-report` | 提交日志 | Employee log submission, local context redaction, safe evidence upload path. | Client data report API and external-event linkage. |
+| `/client/tasks` | 我的待办 | Employee-visible tasks, repair suggestions, evidence submission, confirmation actions. | `soc_ticket_task`, client task APIs. |
+| `/client/operations` | 我的待办兼容路由 | Backward-compatible route to the same employee task experience. | Same as `/client/tasks`. |
+| `/client/local-range` | 安全工具箱 | Read-only local checks from active backend policy, no free shell input, technical output drawer. | `/api/client/local-terminal/commands`, `/api/client/local-terminal/run`. |
+| `/client/security-logs` | 安全日志 | Checkup, local check, log submission, task, risk-state, and employee confirmation history. | Security Keeper logs API. |
+
 ## Employee Self-Service
 
 The employee-side client is organized as **我的电脑安全助手**. Default navigation keeps only three core entries:
@@ -104,14 +206,14 @@ Default customer demo entry is `/showcase`. Expert pages are opened only from th
 | --- | --- | --- | --- |
 | 0:00 | Login | `/login` | CyberFusion SOC shell loads after authentication. |
 | 1:00 | Open customer demo mode | `/showcase` | First screen shows the product value in plain language: current status, highest risk, pending alerts, open tickets, and `batchId`. |
-| 2:00 | Choose scenario | `/showcase` | Step 1 explains the business scenario without attack wording or raw technical fields. |
-| 3:00 | Import evidence | `/showcase` | Step 2 imports the offline batch when backend is available, or clearly switches to marked offline demo data when the backend is unavailable. |
-| 4:00 | Review evidence summary | `/showcase` | Web gateway block, Web risk scan, component vulnerability, host file change, and network detection summaries are visible. |
-| 5:00 | Open technical evidence | `/showcase` | The evidence drawer shows `sourceType`, `eventType`, `ruleId`, `requestId`, `demoCaseId`, and normalized/raw sample fields only on demand. |
-| 6:00 | Review alert | `/showcase` to `/soc/alerts` | Step 3 opens the linked alert or alert center with the current `batchId` context. |
-| 7:00 | Review event cluster | `/soc/incidents` | The `安全事件簇` page shows which WAF/ZAP/Trivy/Wazuh/Suricata/Zeek evidence belongs to the same case and why each item is related. |
-| 8:00 | Apply playbook and convert to ticket | `/soc/incidents` or `/soc/alerts` then `/soc/tickets` | Step 4 applies the recommended response playbook or converts the incident cluster to a ticket, then shows the task checklist plus Demo Range timeline source. |
-| 9:00 | Generate report and confirm dry-run boundary | `/showcase` to `/soc/reports` | Step 5 generates or opens the `security_validation` report for this batch. Confirm no email, webhook, Feishu, WeCom, DingTalk, or Slack sender is used. |
+| 2:00 | Read the story line | `/showcase` | The story line shows: 证据导入 -> 事件簇 -> 风险评分 -> 推荐动作 -> 工单处置 -> 员工待办 -> 报告输出. Each card has status, count, explanation, and a jump entry. |
+| 3:00 | Import evidence | `/showcase` or `/soc/demo-range` | Import the offline batch when backend is available, or use clearly marked offline demo data when the backend is unavailable. |
+| 4:00 | Review event cluster and evidence | `/showcase` to `/soc/incidents` | The `安全事件簇` page shows which WAF/ZAP/Trivy/Wazuh/Suricata/Zeek evidence belongs to the same case and why each item is related. |
+| 5:00 | Review risk and recommendations | `/soc/assets` and `/soc/dashboard` | Risk profile explains why the asset is high risk; Top recommendations show the next actions without automatic repair. |
+| 6:00 | Apply playbook and convert to ticket | `/soc/incidents` or `/soc/alerts` then `/soc/tickets` | Apply the recommended defensive playbook or convert the incident cluster to a ticket, then show the task checklist plus Demo Range timeline source. |
+| 7:00 | Show employee collaboration | `/client/workbench` and `/client/tasks` | Employee Security Keeper shows current computer status, pending tasks, and safe read-only local-check entry points. |
+| 8:00 | Generate report | `/showcase` to `/soc/reports` | Generate or open the `security_validation` report for this batch. The detail drawer shows 管理摘要 / 技术证据 / 处置进度 / 员工配合 / 安全边界. |
+| 9:00 | Confirm dry-run boundary | `/soc/reports` and notification logs | Confirm the report says no public scanning, no real notification sender, and no attack execution. |
 
 ## Release Candidate Smoke
 
@@ -129,7 +231,7 @@ Optional screenshot smoke:
 pnpm --dir frontend exec playwright test tests/e2e/release-pages.spec.ts
 ```
 
-Screenshots are written to `docs/screenshots/acceptance-*.png`; the expected list is recorded in `docs/screenshots/manifest.json`.
+The current full manual screenshot set is stored under `docs/screenshots/*.png` and indexed in `docs/screenshots/manifest.json`. The older `acceptance-*.png` smoke set is no longer the complete manual inventory.
 
 ## Change Visibility Troubleshooting
 
@@ -163,41 +265,77 @@ The user menu in the admin and employee shells shows a lightweight version/build
 
 ## Screenshot Checklist
 
-Capture these pages for customer acceptance. Screenshots should avoid real customer identifiers and should use demo data only.
+Screenshots are regenerated from the local delivery runtime and stored under `docs/screenshots`. The authoritative inventory is `docs/screenshots/manifest.json`, generated with a `1440x1000` viewport against `http://127.0.0.1:5174`.
 
-| Screenshot | Page / state | Acceptance note |
-| --- | --- | --- |
-| 1 | Login page | Shows CyberFusion SOC branding. |
-| 2 | Showcase hero | Shows customer demo mode, current status, highest risk, pending alerts, open tickets, `batchId`, and the primary CTA. |
-| 3 | Showcase 5-step flow | Shows the guided stepper and the right-side next action panel. |
-| 4 | Showcase recoverable error | Shows `演示数据加载失败`, retry, offline demo data, and diagnostics actions. |
-| 5 | Showcase evidence drawer | Shows business summary on the main page and technical fields only after clicking `查看技术证据`. |
-| 6 | Showcase closure loop and report preview | Shows priority alert, ticket/report entry points, evidence counts, block count, vulnerabilities, and notification dry-run count. |
-| 7 | Security incident cluster | Shows `/soc/incidents`, evidence counts, relation reasons, status, and ticket/close actions. |
-| 8 | Employee self-service entry and local check | Shows 我的电脑安全助手 with current status, tasks, the three employee actions, and the 本机检查 4-step read-only wizard. |
+Core customer acceptance screenshots:
 
-Current screenshot inventory under `docs/screenshots/manifest.json` includes images from the prior release smoke. Any screenshot generated before the 2026-06-20 P4.5 visibility pass is marked stale until regenerated with `pnpm --dir frontend exec playwright test tests/e2e/release-pages.spec.ts`.
+| Screenshot | File | Page / state | Acceptance note |
+| --- | --- | --- | --- |
+| 1 | `06-showcase.png` | `/showcase` | Customer-facing demo shell, current risk, story line, and guided actions. |
+| 2 | `12-soc-demo-range.png` | `/soc/demo-range` | Offline batch import, evidence chain, alert, ticket, report, and dry-run notification entry. |
+| 3 | `14-soc-incidents.png` | `/soc/incidents` | Correlation Engine event clusters, evidence counts, reasons, status, and ticket/close actions. |
+| 4 | `24-soc-assets.png` | `/soc/assets` | Asset risk score, risk explanation, and single-asset recalculation entry. |
+| 5 | `21-soc-policies-algorithm.png` | `/soc/policies` -> `算法治理` | A7 algorithm governance cards and dry-run replay form. |
+| 6 | `30-soc-tickets.png` | `/soc/tickets` | Ticket handling, timeline, and playbook task checklist. |
+| 7 | `31-soc-reports.png` | `/soc/reports` | `security_validation` report list and readable report sections. |
+| 8 | `60-client-workbench.png` | `/client/workbench` | Employee Security Keeper status, next actions, and safe tool entry. |
 
-### Expert Appendix Screenshot Inventory
+Full screenshot inventory:
 
-Use these as appendix screenshots only when the customer or acceptance reviewer asks for implementation detail.
-
-| Appendix | Page / state | Acceptance note |
-| --- | --- | --- |
-| A1 | SOC expert overview | Shows KPI cards and SOC dashboard charts. |
-| A2 | Security validation expert page | Shows expert batch import and evidence chain sections. |
-| A3 | Evidence center | Shows WAF/ZAP/Trivy/Wazuh/Suricata/Zeek-style evidence rows. |
-| A4 | Alert detail | Shows rule ID, rule name, source type, event type, action, target URL, demo case ID, and batch ID. |
-| A5 | Ticket timeline | Shows Demo Range creation source, state transitions, and playbook task checklist. |
-| A6 | Playbook tasks | Shows recommended playbook and at least one employee cooperation task when applicable. |
-| A7 | Report center | Shows generated security validation report summary. |
-| A8 | Policy and rule center | Shows local check policy list, adapter mappings, response playbooks, safe precheck, publish/disable controls, and change audit. |
-| A9 | Correlation rule center | Shows `/soc/policies` -> `事件关联规则`, rule lifecycle, validation, and publish/disable controls. |
-| A10 | System management | Shows administrator-only user, role, menu, log, or platform configuration handoff pages. |
+| Area | File | Route or state | Description |
+| --- | --- | --- | --- |
+| Public | `01-login.png` | `/login` | Login page and local demo account hint. |
+| Public | `02-error-401.png` | `/401` | Unauthorized state. |
+| Public | `03-error-403.png` | `/403` | Permission denied state. |
+| Public | `04-error-500.png` | `/500` | Recoverable server error state. |
+| Public | `05-error-404.png` | unknown route | Not-found state. |
+| Demo | `06-showcase.png` | `/showcase` | Security operations demo console. |
+| SOC | `10-soc-dashboard.png` | `/soc/dashboard` | Security overview and operational KPIs. |
+| SOC | `11-soc-capabilities.png` | `/soc/capabilities` | Platform capability and integration boundaries. |
+| SOC | `12-soc-demo-range.png` | `/soc/demo-range` | Security validation batch workflow. |
+| SOC | `13-soc-alerts.png` | `/soc/alerts` | Alert handling center. |
+| SOC | `14-soc-incidents.png` | `/soc/incidents` | Security incident clusters. |
+| SOC | `15-soc-rules.png` | `/soc/rules` | Detection rule center. |
+| SOC | `16-soc-policies-local-check.png` | `/soc/policies` | Local check policy tab. |
+| SOC | `17-soc-policies-adapters.png` | `/soc/policies` -> `事件适配映射` | Event adapter mapping tab. |
+| SOC | `18-soc-policies-playbooks.png` | `/soc/policies` -> `处置剧本` | Response playbook tab. |
+| SOC | `19-soc-policies-risk.png` | `/soc/policies` -> `风险评分策略` | Risk scoring policy tab. |
+| SOC | `20-soc-policies-correlation.png` | `/soc/policies` -> `事件关联规则` | Correlation rule tab. |
+| SOC | `21-soc-policies-algorithm.png` | `/soc/policies` -> `算法治理` | Algorithm governance and replay tab. |
+| SOC | `22-soc-policies-audit.png` | `/soc/policies` -> `变更审计` | Policy change audit tab. |
+| SOC | `23-soc-alert-noise.png` | `/soc/alert-noise` | Alert noise reduction. |
+| SOC | `24-soc-assets.png` | `/soc/assets` | Asset risk view. |
+| SOC | `25-soc-client-security.png` | `/soc/client-security` | Employee endpoint security posture. |
+| SOC | `26-soc-vulnerabilities.png` | `/soc/vulnerabilities` | Vulnerability center. |
+| SOC | `27-soc-baselines.png` | `/soc/baselines` | Baseline checks. |
+| SOC | `28-soc-fim.png` | `/soc/fim` | File integrity monitoring. |
+| SOC | `29-soc-external-events.png` | `/soc/external-events` | Evidence center. |
+| SOC | `30-soc-tickets.png` | `/soc/tickets` | Ticket center. |
+| SOC | `31-soc-reports.png` | `/soc/reports` | Report center. |
+| SOC | `32-soc-settings.png` | `/soc/settings` | Data source and notification settings. |
+| System | `40-dashboard.png` | `/dashboard` | Generic management dashboard. |
+| System | `41-system-user.png` | `/system/user` | User account management. |
+| System | `42-system-dept.png` | `/system/dept` | Department management. |
+| System | `43-system-post.png` | `/system/post` | Post management. |
+| System | `44-system-role.png` | `/system/role` | Role and data-scope management. |
+| System | `45-system-menu.png` | `/system/menu` | Menu and permission management. |
+| System | `46-system-dict.png` | `/system/dict` | Dictionary management. |
+| System | `47-system-log.png` | `/system/log` | Login and operation logs. |
+| System | `48-system-file.png` | `/system/file` | File metadata management. |
+| System | `49-system-excel-logs.png` | `/system/excel/logs` | Import/export logs. |
+| System | `50-system-biz-sequence.png` | `/system/workflow/biz-sequence` | Business sequence rules. |
+| System | `51-system-biz-flow-log.png` | `/system/workflow/biz-flow-log` | Business flow logs. |
+| System | `52-system-notice.png` | `/system/notice` | Notices. |
+| System | `53-system-config.png` | `/system/config` | System parameters. |
+| Client | `60-client-workbench.png` | `/client/workbench` | CyberFusion Security Keeper. |
+| Client | `61-client-device-admin.png` | `/client/device-admin` | Device information. |
+| Client | `62-client-data-report.png` | `/client/data-report` | Log submission. |
+| Client | `63-client-tasks.png` | `/client/tasks` | My tasks. |
+| Client | `64-client-operations.png` | `/client/operations` | Compatibility route for my tasks. |
+| Client | `65-client-local-range.png` | `/client/local-range` | Security toolbox and read-only local check. |
+| Client | `66-client-security-logs.png` | `/client/security-logs` | Employee security logs. |
 
 ## Screenshot Gallery Appendix
-
-The following screenshots were captured from the local delivery runtime at `http://127.0.0.1:5174` with a `1440x1000` viewport. The full screenshot inventory is also recorded in `docs/screenshots/manifest.json`.
 
 ### Public Pages
 
@@ -205,21 +343,27 @@ The following screenshots were captured from the local delivery runtime at `http
 
 ![登录页](screenshots/01-login.png)
 
-#### 401 未授权页
+#### 401 未授权
 
-![401 未授权页](screenshots/02-error-401.png)
+![401 未授权](screenshots/02-error-401.png)
 
-#### 403 无权限页
+#### 403 无权限
 
-![403 无权限页](screenshots/03-error-403.png)
+![403 无权限](screenshots/03-error-403.png)
 
-#### 500 服务错误页
+#### 500 服务错误
 
-![500 服务错误页](screenshots/04-error-500.png)
+![500 服务错误](screenshots/04-error-500.png)
 
-#### 404 未找到页
+#### 404 未找到
 
-![404 未找到页](screenshots/05-error-404.png)
+![404 未找到](screenshots/05-error-404.png)
+
+### Customer Demo
+
+#### 安全运营演示台
+
+![安全运营演示台](screenshots/06-showcase.png)
 
 ### SOC Expert Pages
 
@@ -239,109 +383,171 @@ The following screenshots were captured from the local delivery runtime at `http
 
 ![告警处置](screenshots/13-soc-alerts.png)
 
+#### 安全事件簇
+
+![安全事件簇](screenshots/14-soc-incidents.png)
+
 #### 检测规则中心
 
-![检测规则中心](screenshots/14-soc-rules.png)
+![检测规则中心](screenshots/15-soc-rules.png)
 
-#### 策略与规则中心
+#### 策略与规则中心：本机检查策略
 
-`/soc/policies` 由管理员或安全工程师维护。本阶段支持本机检查策略、事件适配映射、处置剧本和风险评分策略：新增/编辑、启用/停用、发布草稿、安全预检、归一化预览、评分权重维护和变更审计。事件适配映射不会下发到生产 WAF/IDS，也不发送真实外部通知；风险评分只基于已有 SOC 数据计算展示分值，不执行扫描或自动修复。
+![策略与规则中心：本机检查策略](screenshots/16-soc-policies-local-check.png)
+
+#### 策略与规则中心：事件适配映射
+
+![策略与规则中心：事件适配映射](screenshots/17-soc-policies-adapters.png)
+
+#### 策略与规则中心：处置剧本
+
+![策略与规则中心：处置剧本](screenshots/18-soc-policies-playbooks.png)
+
+#### 策略与规则中心：风险评分策略
+
+![策略与规则中心：风险评分策略](screenshots/19-soc-policies-risk.png)
+
+#### 策略与规则中心：事件关联规则
+
+![策略与规则中心：事件关联规则](screenshots/20-soc-policies-correlation.png)
+
+#### 策略与规则中心：算法治理
+
+![策略与规则中心：算法治理](screenshots/21-soc-policies-algorithm.png)
+
+#### 策略与规则中心：变更审计
+
+![策略与规则中心：变更审计](screenshots/22-soc-policies-audit.png)
+
+### 算法治理与回放评估
+
+`/soc/policies` -> `算法治理` 用于解释和评估现有确定性算法，而不是新增检测能力。页面覆盖四类对象：
+
+- 事件关联规则。
+- 风险评分策略。
+- 推荐排序规则。
+- 趋势异常规则。
+
+管理员或安全工程师可以查看每类对象的 active、draft、disabled 数量、最近运行时间、最近命中数量、误报/忽略/关闭统计、数据来源覆盖、最近变更人和版本。
+
+回放评估流程：
+
+1. 打开 `/soc/policies`。
+2. 选择 `算法治理`。
+3. 输入演示批次，例如 `DEMO-RANGE-OFFLINE-V1`，或选择时间范围。
+4. 选择 `active` 或 `draft` 策略模式。
+5. 点击 `回放评估`。
+6. 查看 dry-run 预览：预计事件簇、风险分变化、推荐动作、趋势异常，以及和当前 active 结果的差异。
+7. 展开预览表，查看每一条 `reason`。例如同一资产在窗口内出现 WAF、ZAP、Wazuh 证据，因此会被关联为事件簇。
+
+安全边界：
+
+- 回放不会创建真实事件簇。
+- 回放不会更新资产风险快照。
+- 回放不会创建工单、报告或通知。
+- 如果开启 `保存评估记录`，只写入 `soc_algorithm_evaluation` 和 `soc_algorithm_evaluation_item`，用于后续复盘。
+- 分析员只能查看评估结果，不能执行回放。
+- 员工端账号不能访问算法治理接口。
 
 #### 告警降噪
 
-![告警降噪](screenshots/15-soc-alert-noise.png)
+![告警降噪](screenshots/23-soc-alert-noise.png)
 
 #### 资产视图
 
-![资产视图](screenshots/16-soc-assets.png)
+![资产视图](screenshots/24-soc-assets.png)
 
 资产视图显示统一 `风险分`，资产详情抽屉显示可解释风险画像、主要风险因子、建议动作和单资产重新计算入口。重新计算只读取已有告警、漏洞、基线、FIM、多源事件、工单和剧本任务数据。
 
+#### 员工终端安全态势
+
+![员工终端安全态势](screenshots/25-soc-client-security.png)
+
 #### 漏洞中心
 
-![漏洞中心](screenshots/17-soc-vulnerabilities.png)
+![漏洞中心](screenshots/26-soc-vulnerabilities.png)
 
 #### 基线核查
 
-![基线核查](screenshots/18-soc-baselines.png)
+![基线核查](screenshots/27-soc-baselines.png)
 
 #### 文件完整性
 
-![文件完整性](screenshots/19-soc-fim.png)
+![文件完整性](screenshots/28-soc-fim.png)
 
 #### 证据中心
 
-![证据中心](screenshots/20-soc-external-events.png)
+![证据中心](screenshots/29-soc-external-events.png)
 
 #### 工单中心
 
-![工单中心](screenshots/21-soc-tickets.png)
+![工单中心](screenshots/30-soc-tickets.png)
 
 #### 报告中心
 
-![报告中心](screenshots/22-soc-reports.png)
+![报告中心](screenshots/31-soc-reports.png)
 
 #### 系统配置
 
-![系统配置](screenshots/23-soc-settings.png)
+![系统配置](screenshots/32-soc-settings.png)
 
 ### System Pages
 
 #### 仪表盘
 
-![仪表盘](screenshots/30-dashboard.png)
+![仪表盘](screenshots/40-dashboard.png)
 
 #### 用户管理
 
-![用户管理](screenshots/31-system-user.png)
+![用户管理](screenshots/41-system-user.png)
 
 #### 部门管理
 
-![部门管理](screenshots/32-system-dept.png)
+![部门管理](screenshots/42-system-dept.png)
 
 #### 岗位管理
 
-![岗位管理](screenshots/33-system-post.png)
+![岗位管理](screenshots/43-system-post.png)
 
 #### 角色管理
 
-![角色管理](screenshots/34-system-role.png)
+![角色管理](screenshots/44-system-role.png)
 
 #### 菜单管理
 
-![菜单管理](screenshots/35-system-menu.png)
+![菜单管理](screenshots/45-system-menu.png)
 
 #### 字典管理
 
-![字典管理](screenshots/36-system-dict.png)
+![字典管理](screenshots/46-system-dict.png)
 
 #### 系统日志
 
-![系统日志](screenshots/37-system-log.png)
+![系统日志](screenshots/47-system-log.png)
 
 #### 文件管理
 
-![文件管理](screenshots/38-system-file.png)
+![文件管理](screenshots/48-system-file.png)
 
 #### 导入导出日志
 
-![导入导出日志](screenshots/39-system-excel-logs.png)
+![导入导出日志](screenshots/49-system-excel-logs.png)
 
 #### 编号规则
 
-![编号规则](screenshots/40-system-biz-sequence.png)
+![编号规则](screenshots/50-system-biz-sequence.png)
 
 #### 流程日志
 
-![流程日志](screenshots/41-system-biz-flow-log.png)
+![流程日志](screenshots/51-system-biz-flow-log.png)
 
 #### 通知公告
 
-![通知公告](screenshots/42-system-notice.png)
+![通知公告](screenshots/52-system-notice.png)
 
 #### 参数配置
 
-![参数配置](screenshots/43-system-config.png)
+![参数配置](screenshots/53-system-config.png)
 
 ### Client Pages
 
@@ -349,25 +555,33 @@ The following screenshots were captured from the local delivery runtime at `http
 
 `/client/workbench` 是普通员工默认入口。第一屏只回答三个问题：当前电脑是否安全、员工需要做什么、下一步应该点哪个按钮。主按钮是 `查看我的待办`，辅助入口是 `提交日志` 和 `开始本机检查`。
 
-![我的电脑](screenshots/50-client-workbench.png)
+![我的电脑](screenshots/60-client-workbench.png)
 
 #### 设备信息
 
-![设备信息](screenshots/51-client-device-admin.png)
+![设备信息](screenshots/61-client-device-admin.png)
 
 #### 提交日志
 
-![提交日志](screenshots/52-client-data-report.png)
+![提交日志](screenshots/62-client-data-report.png)
 
 #### 我的待办
 
-![我的待办](screenshots/53-client-operations.png)
+![我的待办](screenshots/63-client-tasks.png)
+
+#### 处置操作兼容入口
+
+![处置操作兼容入口](screenshots/64-client-operations.png)
 
 #### 本机检查
 
 `/client/local-range` 是二级任务页，不作为默认一级导航。页面按 `确认设备 -> 选择检查项 -> 运行检查 -> 提交记录` 组织，只展示当前电脑上下文。员工只能运行安全团队预设的只读检查项；技术命令、诊断信息和原始输出默认收起到抽屉中。
 
-![本机检查](screenshots/54-client-local-range.png)
+![本机检查](screenshots/65-client-local-range.png)
+
+#### 安全日志
+
+![安全日志](screenshots/66-client-security-logs.png)
 
 ## Acceptance Cases
 
@@ -388,6 +602,9 @@ The following screenshots were captured from the local delivery runtime at `http
 | AC-13 | Convert an incident cluster to ticket | A SOC ticket and timeline entry are created without running commands or external integrations. |
 | AC-14 | Open `/showcase` or `/soc/demo-range` after correlation | `本次验证事件链` shows the current batch incident clusters and links to `/soc/incidents`. |
 | AC-15 | Open `/soc/policies` -> `事件关联规则` | Security engineers can create, edit, validate, publish, and disable structured correlation rules without scripts or external queries. |
+| AC-16 | Open `/soc/policies` -> `算法治理` | Admin and security engineers can see correlation, risk scoring, recommendation, and trend anomaly governance cards. |
+| AC-17 | Run algorithm replay for a demo batch | Dry-run preview returns explainable reasons and does not create real incident clusters, tickets, reports, risk snapshots, or notifications. |
+| AC-18 | Access algorithm governance as employee | Backend returns `403`; employee cannot view or execute algorithm governance. |
 
 ## Security Incident Cluster
 
@@ -433,6 +650,9 @@ The Correlation Engine only reads existing SOC records and writes cluster/eviden
 | Employee receives 403 on incident APIs | Expected permission boundary. Employees cannot access expert incident-cluster management. | Confirm the same request succeeds as admin or analyst; do not grant employee incident permissions. |
 | Duplicate clusters appear after repeated runs | Correlation key, batch fields, or close status are inconsistent. | Check `SELECT cluster_no,correlation_key,status,evidence_count FROM soc_incident_cluster ORDER BY updated_at DESC LIMIT 20;` |
 | Alert detail has no related incident | Correlation has not run after alert creation or the alert lacks structured batch/correlation fields. | Run `POST /api/soc/incidents/correlate`; query `GET /api/soc/alerts/{id}/related-incidents`. |
+| Algorithm governance page is empty | Evaluation tables or policy seed are missing, or current user lacks `soc:algorithm:view`. | Apply `sql/schema.sql`/`sql/data.sql`, restart backend, run `GET /api/soc/algorithm-center/overview` as admin. |
+| Algorithm replay appears to change real results | Replay should only save optional evaluation records; incident/ticket/report counts must not change. | Compare `GET /api/soc/incidents`, `/soc/tickets`, and `/soc/reports` totals before and after `POST /api/soc/algorithm-center/replay`. |
+| Analyst cannot run replay | Expected permission boundary. Analysts can view evaluation results but need security-engineer permission for replay. | Confirm `GET /api/soc/algorithm-center/evaluations` succeeds and `POST /api/soc/algorithm-center/replay` returns 403. |
 | Docker Demo Range compose fails | Environment variables or Docker daemon are missing. | `docker compose -f deploy/demo-range/docker-compose.yml config` |
 | ZAP/Trivy containers try to use network images | Image not present locally and network is restricted. | Use compose `config` for validation; pull images only in authorized environments. |
 

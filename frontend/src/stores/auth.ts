@@ -60,7 +60,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     hasPermission(permission?: string) {
-      return !permission || this.roles.includes('admin') || this.permissions.includes(permission)
+      return !permission || this.roles.includes('admin') || this.roles.includes('super_admin') || this.permissions.includes(permission)
     },
     hasRole(role?: string) {
       return !role || this.roles.includes(role)

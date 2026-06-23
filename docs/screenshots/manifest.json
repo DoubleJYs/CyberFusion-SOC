@@ -1,406 +1,767 @@
 {
-  "generatedAt": "2026-06-18T12:30:57.631Z",
-  "baseUrl": "http://127.0.0.1:5174",
-  "viewport": "1440x1000",
-  "count": 38,
-  "staleNotice": "Screenshots generated before the 2026-06-20 P4.5 visibility pass are inventory only. Regenerate release-pages.spec.ts before using them as latest UI proof.",
-  "releaseCandidateSmoke": {
-    "command": "pnpm --dir frontend exec playwright test tests/e2e/release-pages.spec.ts",
-    "outputDir": "docs/screenshots",
-    "lastRunAt": "2026-06-19T01:22:00Z",
-    "result": "pending rerun after Correlation Engine v1 closure update",
-    "pages": [
-      { "title": "登录页", "path": "/login", "file": "acceptance-01-login.png" },
-      { "title": "安全运营演示台", "path": "/showcase", "file": "acceptance-02-showcase.png" },
-      { "title": "安全验证", "path": "/soc/demo-range", "file": "acceptance-03-demo-range.png" },
-      { "title": "告警处置", "path": "/soc/alerts", "file": "acceptance-04-alerts.png" },
-      { "title": "策略与规则中心", "path": "/soc/policies", "file": "acceptance-05-policies.png" },
-      { "title": "报告中心", "path": "/soc/reports", "file": "acceptance-06-reports.png" },
-      { "title": "我的电脑", "path": "/client/workbench", "file": "acceptance-07-client-workbench.png" },
-      { "title": "本机检查", "path": "/client/local-range?ip=10.20.1.15&host=prod-app-01&os=Linux", "file": "acceptance-08-client-local-range.png" },
-      { "title": "安全事件簇", "path": "/soc/incidents", "file": "acceptance-09-incidents.png" }
-    ]
+  "generatedAt": "2026-06-23T04:11:42.724Z",
+  "baseURL": "http://127.0.0.1:5174",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
   },
-  "pages": [
+  "count": 50,
+  "screenshots": [
     {
-      "section": "Public",
+      "section": "public",
       "title": "登录页",
       "path": "/login",
       "file": "01-login.png",
-      "auth": false,
+      "note": "本地演示登录入口。",
       "url": "http://127.0.0.1:5174/login",
-      "screenshot": "screenshots/01-login.png",
-      "browserTitle": "登录 - CyberFusion SOC"
+      "pageTitle": "登录 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:21.665Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CYBERFUSION SECURITY OPERATIONS CyberFusion SOC 统一融合 Wazuh、Zeek、Suricata、MISP、Trivy、ZAP、CyberChef 与 Shuffle 的安全运营主系统。 本地演示账号：admin，密码以当前本地环境配置为准，仅用于授权测试环境 账号 密码 记住我 后端校验菜单、按钮、接口和数据"
     },
     {
-      "section": "Public",
-      "title": "401 未授权页",
+      "section": "public",
+      "title": "401 未授权",
       "path": "/401",
       "file": "02-error-401.png",
-      "auth": false,
+      "note": "未认证或登录失效提示页。",
       "url": "http://127.0.0.1:5174/401",
-      "screenshot": "screenshots/02-error-401.png",
-      "browserTitle": "401 - CyberFusion SOC"
+      "pageTitle": "401 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:23.021Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "SESSION REQUIRED 401 登录状态不可用，请重新登录后进入 CyberFusion SOC。 返回登录"
     },
     {
-      "section": "Public",
-      "title": "403 无权限页",
+      "section": "public",
+      "title": "403 无权限",
       "path": "/403",
       "file": "03-error-403.png",
-      "auth": false,
+      "note": "权限不足提示页。",
       "url": "http://127.0.0.1:5174/403",
-      "screenshot": "screenshots/03-error-403.png",
-      "browserTitle": "403 - CyberFusion SOC"
+      "pageTitle": "403 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:24.372Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "ACCESS CONTROL 403 当前账号无权限访问该 CyberFusion 页面，请切换具备对应 SOC 或系统治理权限的角色。 返回安全总览"
     },
     {
-      "section": "Public",
-      "title": "500 服务错误页",
+      "section": "public",
+      "title": "500 服务错误",
       "path": "/500",
       "file": "04-error-500.png",
-      "auth": false,
+      "note": "服务异常提示页。",
       "url": "http://127.0.0.1:5174/500",
-      "screenshot": "screenshots/04-error-500.png",
-      "browserTitle": "500 - CyberFusion SOC"
+      "pageTitle": "500 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:25.730Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "SERVICE HEALTH 500 CyberFusion 服务暂时不可用，请检查后端健康状态、数据源任务或稍后重试。 返回安全总览"
     },
     {
-      "section": "Public",
-      "title": "404 未找到页",
+      "section": "public",
+      "title": "404 未找到",
       "path": "/not-found-demo",
       "file": "05-error-404.png",
-      "auth": false,
+      "note": "未知路由提示页。",
       "url": "http://127.0.0.1:5174/not-found-demo",
-      "screenshot": "screenshots/05-error-404.png",
-      "browserTitle": "404 - CyberFusion SOC"
+      "pageTitle": "404 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:27.058Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "ROUTE NOT FOUND 404 页面不存在或已移动，请回到 CyberFusion SOC 主线继续操作。 回到安全总览"
     },
     {
-      "section": "SOC",
+      "section": "demo",
+      "title": "安全运营演示台",
+      "path": "/showcase",
+      "file": "06-showcase.png",
+      "note": "客户演示主入口。",
+      "url": "http://127.0.0.1:5174/showcase",
+      "pageTitle": "安全运营演示台 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:30.813Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CyberFusion SOC 安全运营演示台 接口实时数据 查看专家模式 CUSTOMER DEMO MODE CyberFusion 安全运营演示台 用一条演示链路展示风险识别、证据归一化、告警处置和报告输出。 开始安全验证 查看专家模式 当前状态注意 接口实时数据 最高优先级风险 prod-app-01 风险分 100：存在未关闭高危告警。 数量：4，"
+    },
+    {
+      "section": "soc",
       "title": "安全总览",
       "path": "/soc/dashboard",
       "file": "10-soc-dashboard.png",
+      "note": "SOC 专家模式总览。",
       "url": "http://127.0.0.1:5174/soc/dashboard",
-      "screenshot": "screenshots/10-soc-dashboard.png",
-      "browserTitle": "安全总览 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 统一总览 产品能力 告警队列 降噪规则 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页"
+      "pageTitle": "安全总览 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:32.721Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 管理员 工作"
     },
     {
-      "section": "SOC",
-      "title": "产品能力",
+      "section": "soc",
+      "title": "平台能力说明",
       "path": "/soc/capabilities",
       "file": "11-soc-capabilities.png",
+      "note": "平台能力与集成边界说明。",
       "url": "http://127.0.0.1:5174/soc/capabilities",
-      "screenshot": "screenshots/11-soc-capabilities.png",
-      "browserTitle": "产品能力 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 统一总览 产品能力 告警队列 降噪规则 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页"
+      "pageTitle": "平台能力说明 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:34.168Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 安全验证 平台能力说明 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 平台能力说明 平台运行中 安全运营演示台 更多入口"
     },
     {
-      "section": "SOC",
-      "title": "安全验证中心",
+      "section": "soc",
+      "title": "安全验证",
       "path": "/soc/demo-range",
       "file": "12-soc-demo-range.png",
+      "note": "Demo Range 批次导入和验证闭环。",
       "url": "http://127.0.0.1:5174/soc/demo-range",
-      "screenshot": "screenshots/12-soc-demo-range.png",
-      "browserTitle": "安全验证中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 安全验证中心 平台运行中 用户端"
+      "pageTitle": "安全验证 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:35.864Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 安全验证 平台能力说明 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 安全验证 平台运行中 安全运营演示台 更多入口 柔"
     },
     {
-      "section": "SOC",
-      "title": "告警中心",
+      "section": "soc",
+      "title": "告警处置",
       "path": "/soc/alerts",
       "file": "13-soc-alerts.png",
+      "note": "告警列表、详情、剧本和转工单入口。",
       "url": "http://127.0.0.1:5174/soc/alerts",
-      "screenshot": "screenshots/13-soc-alerts.png",
-      "browserTitle": "告警中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 统一总览 产品能力 告警队列 降噪规则 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页"
+      "pageTitle": "告警处置 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:37.427Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 告警处置 降噪规则 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 告警处置 平台运行中 安全运营演示台 更多入口 柔光 "
     },
     {
-      "section": "SOC",
+      "section": "soc",
+      "title": "安全事件簇",
+      "path": "/soc/incidents",
+      "file": "14-soc-incidents.png",
+      "note": "事件关联结果和证据链。",
+      "url": "http://127.0.0.1:5174/soc/incidents",
+      "pageTitle": "安全事件簇 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:38.916Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 管理员 工作台 这个页"
+    },
+    {
+      "section": "soc",
       "title": "检测规则中心",
       "path": "/soc/rules",
-      "file": "14-soc-rules.png",
+      "file": "15-soc-rules.png",
+      "note": "规则来源、命中预览和字段映射说明。",
       "url": "http://127.0.0.1:5174/soc/rules",
-      "screenshot": "screenshots/14-soc-rules.png",
-      "browserTitle": "检测规则中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 检测规则中心 平台运行中 用户端"
+      "pageTitle": "检测规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:40.463Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 检测规则 平台运行中 安全运营演示台 更多入口 柔光"
     },
     {
-      "section": "SOC",
+      "section": "soc",
+      "title": "策略与规则中心",
+      "path": "/soc/policies",
+      "file": "16-soc-policies-local-check.png",
+      "note": "本机检查策略 Tab。",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:42.096Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "事件适配映射",
+      "path": "/soc/policies",
+      "file": "17-soc-policies-adapters.png",
+      "note": "WAF/ZAP/Trivy/Wazuh/Suricata/Zeek 字段映射。",
+      "tab": "事件适配映射",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:44.404Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "处置剧本",
+      "path": "/soc/policies",
+      "file": "18-soc-policies-playbooks.png",
+      "note": "防御性处置剧本和任务模板。",
+      "tab": "处置剧本",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:46.685Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "风险评分策略",
+      "path": "/soc/policies",
+      "file": "19-soc-policies-risk.png",
+      "note": "资产风险评分权重策略。",
+      "tab": "风险评分策略",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:48.950Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "事件关联规则",
+      "path": "/soc/policies",
+      "file": "20-soc-policies-correlation.png",
+      "note": "事件关联规则生命周期。",
+      "tab": "事件关联规则",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:51.266Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "算法治理",
+      "path": "/soc/policies",
+      "file": "21-soc-policies-algorithm.png",
+      "note": "A7 算法治理和回放评估。",
+      "tab": "算法治理",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:53.498Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc-policy-tab",
+      "title": "变更审计",
+      "path": "/soc/policies",
+      "file": "22-soc-policies-audit.png",
+      "note": "策略与规则变更审计入口。",
+      "tab": "变更审计",
+      "url": "http://127.0.0.1:5174/soc/policies",
+      "pageTitle": "策略与规则中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:55.820Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 检测规则 策略与规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 "
+    },
+    {
+      "section": "soc",
       "title": "告警降噪",
       "path": "/soc/alert-noise",
-      "file": "15-soc-alert-noise.png",
+      "file": "23-soc-alert-noise.png",
+      "note": "告警降噪、白名单和误报处理。",
       "url": "http://127.0.0.1:5174/soc/alert-noise",
-      "screenshot": "screenshots/15-soc-alert-noise.png",
-      "browserTitle": "告警降噪 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 统一总览 产品能力 告警队列 降噪规则 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页"
+      "pageTitle": "告警降噪 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:57.385Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 告警处置 降噪规则 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 降噪规则 平台运行中 安全运营演示台 更多入口 柔光 "
     },
     {
-      "section": "SOC",
+      "section": "soc",
       "title": "资产视图",
       "path": "/soc/assets",
-      "file": "16-soc-assets.png",
+      "file": "24-soc-assets.png",
+      "note": "资产清单和可解释风险画像。",
       "url": "http://127.0.0.1:5174/soc/assets",
-      "screenshot": "screenshots/16-soc-assets.png",
-      "browserTitle": "资产视图 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 资产中心 漏洞中心 基线核查 文件完整性 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首"
+      "pageTitle": "资产视图 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:10:58.902Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 资产风险 漏洞风险 配置检查 文件变更 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 资产风险 平台运行中 安全运营演示"
     },
     {
-      "section": "SOC",
+      "section": "soc",
+      "title": "员工终端安全态势",
+      "path": "/soc/client-security",
+      "file": "25-soc-client-security.png",
+      "note": "员工安全管家覆盖率和待办状态。",
+      "url": "http://127.0.0.1:5174/soc/client-security",
+      "pageTitle": "员工终端安全态势 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:00.388Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工作台 平台运行中 安全运营演示台 更多入口 柔光 管理员 工作台 这个页"
+    },
+    {
+      "section": "soc",
       "title": "漏洞中心",
       "path": "/soc/vulnerabilities",
-      "file": "17-soc-vulnerabilities.png",
+      "file": "26-soc-vulnerabilities.png",
+      "note": "Trivy 等漏洞导入和风险视图。",
       "url": "http://127.0.0.1:5174/soc/vulnerabilities",
-      "screenshot": "screenshots/17-soc-vulnerabilities.png",
-      "browserTitle": "漏洞中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 资产中心 漏洞中心 基线核查 文件完整性 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首"
+      "pageTitle": "漏洞中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:01.888Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 资产风险 漏洞风险 配置检查 文件变更 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 漏洞风险 平台运行中 安全运营演示"
     },
     {
-      "section": "SOC",
+      "section": "soc",
       "title": "基线核查",
       "path": "/soc/baselines",
-      "file": "18-soc-baselines.png",
+      "file": "27-soc-baselines.png",
+      "note": "基线检查结果。",
       "url": "http://127.0.0.1:5174/soc/baselines",
-      "screenshot": "screenshots/18-soc-baselines.png",
-      "browserTitle": "基线核查 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 资产中心 漏洞中心 基线核查 文件完整性 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首"
+      "pageTitle": "基线核查 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:03.393Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 资产风险 漏洞风险 配置检查 文件变更 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 配置检查 平台运行中 安全运营演示"
     },
     {
-      "section": "SOC",
+      "section": "soc",
       "title": "文件完整性",
       "path": "/soc/fim",
-      "file": "19-soc-fim.png",
+      "file": "28-soc-fim.png",
+      "note": "主机文件变更证据。",
       "url": "http://127.0.0.1:5174/soc/fim",
-      "screenshot": "screenshots/19-soc-fim.png",
-      "browserTitle": "文件完整性 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 资产中心 漏洞中心 基线核查 文件完整性 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首"
+      "pageTitle": "文件完整性 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:04.903Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 资产风险 漏洞风险 配置检查 文件变更 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 文件变更 平台运行中 安全运营演示"
     },
     {
-      "section": "SOC",
-      "title": "多源事件中心",
+      "section": "soc",
+      "title": "证据中心",
       "path": "/soc/external-events",
-      "file": "20-soc-external-events.png",
+      "file": "29-soc-external-events.png",
+      "note": "多源外部事件和归一化证据。",
       "url": "http://127.0.0.1:5174/soc/external-events",
-      "screenshot": "screenshots/20-soc-external-events.png",
-      "browserTitle": "多源事件 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 多源事件 工单案件 报表中心 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 多源"
+      "pageTitle": "证据中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:06.487Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 证据中心 平台运行中 安全运营演示台 更多入口 柔光 管理员 证"
     },
     {
-      "section": "SOC",
+      "section": "soc",
       "title": "工单中心",
       "path": "/soc/tickets",
-      "file": "21-soc-tickets.png",
+      "file": "30-soc-tickets.png",
+      "note": "工单闭环和时间线。",
       "url": "http://127.0.0.1:5174/soc/tickets",
-      "screenshot": "screenshots/21-soc-tickets.png",
-      "browserTitle": "工单中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 多源事件 工单案件 报表中心 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 工单"
+      "pageTitle": "工单中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:07.976Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 工单中心 平台运行中 安全运营演示台 更多入口 柔光 管理员 工"
     },
     {
-      "section": "SOC",
-      "title": "报表中心",
+      "section": "soc",
+      "title": "报告中心",
       "path": "/soc/reports",
-      "file": "22-soc-reports.png",
+      "file": "31-soc-reports.png",
+      "note": "安全验证报告和报告详情。",
       "url": "http://127.0.0.1:5174/soc/reports",
-      "screenshot": "screenshots/22-soc-reports.png",
-      "browserTitle": "报表中心 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 多源事件 工单案件 报表中心 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 报表"
+      "pageTitle": "报告中心 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:09.512Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 报告中心 平台运行中 安全运营演示台 更多入口 柔光 管理员 报"
     },
     {
-      "section": "SOC",
+      "section": "soc",
       "title": "系统配置",
       "path": "/soc/settings",
-      "file": "23-soc-settings.png",
+      "file": "32-soc-settings.png",
+      "note": "SOC 数据源和通知 dry-run 配置。",
       "url": "http://127.0.0.1:5174/soc/settings",
-      "screenshot": "screenshots/23-soc-settings.png",
-      "browserTitle": "系统配置 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 数据源配置 平台治理 身份与权限 组织基础 平台配置 审计与文件 首页 / 系统配置 平台运行中"
+      "pageTitle": "系统配置 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:11.122Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 员工端 我的电脑安全助手 首页 / 系统管理 平台运行"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "仪表盘",
       "path": "/dashboard",
-      "file": "30-dashboard.png",
+      "file": "40-dashboard.png",
+      "note": "通用后台仪表盘。",
       "url": "http://127.0.0.1:5174/dashboard",
-      "screenshot": "screenshots/30-dashboard.png",
-      "browserTitle": "仪表盘 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "仪表盘 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:12.629Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "用户管理",
       "path": "/system/user",
-      "file": "31-system-user.png",
+      "file": "41-system-user.png",
+      "note": "账号、角色分配和密码重置。",
       "url": "http://127.0.0.1:5174/system/user",
-      "screenshot": "screenshots/31-system-user.png",
-      "browserTitle": "用户管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 用户管理 角色管理 组织基础 平台配置 审计与文件 首页 / 用户管理 平台"
+      "pageTitle": "用户管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:14.164Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 用户账号 角色权限 组织基础 平台配置 审计与文件 员工端 我的电脑安全助手 首页 /"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "部门管理",
       "path": "/system/dept",
-      "file": "32-system-dept.png",
+      "file": "42-system-dept.png",
+      "note": "组织部门管理。",
       "url": "http://127.0.0.1:5174/system/dept",
-      "screenshot": "screenshots/32-system-dept.png",
-      "browserTitle": "部门管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 部门管理 岗位管理 平台配置 审计与文件 首页 / 部门管理 平台"
+      "pageTitle": "部门管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:15.659Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 部门 岗位 平台配置 审计与文件 员工端 我的电脑安全助手 首页 / 组织基"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "岗位管理",
       "path": "/system/post",
-      "file": "33-system-post.png",
+      "file": "43-system-post.png",
+      "note": "岗位字典管理。",
       "url": "http://127.0.0.1:5174/system/post",
-      "screenshot": "screenshots/33-system-post.png",
-      "browserTitle": "岗位管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 部门管理 岗位管理 平台配置 审计与文件 首页 / 岗位管理 平台"
+      "pageTitle": "岗位管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:17.146Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 部门 岗位 平台配置 审计与文件 员工端 我的电脑安全助手 首页 / 组织基"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "角色管理",
       "path": "/system/role",
-      "file": "34-system-role.png",
+      "file": "44-system-role.png",
+      "note": "角色、数据范围和菜单权限。",
       "url": "http://127.0.0.1:5174/system/role",
-      "screenshot": "screenshots/34-system-role.png",
-      "browserTitle": "角色管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 用户管理 角色管理 组织基础 平台配置 审计与文件 首页 / 角色管理 平台"
+      "pageTitle": "角色管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:18.673Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 用户账号 角色权限 组织基础 平台配置 审计与文件 员工端 我的电脑安全助手 首页 /"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "菜单管理",
       "path": "/system/menu",
-      "file": "35-system-menu.png",
+      "file": "45-system-menu.png",
+      "note": "路由菜单和按钮权限维护。",
       "url": "http://127.0.0.1:5174/system/menu",
-      "screenshot": "screenshots/35-system-menu.png",
-      "browserTitle": "菜单管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 菜单管理 字典管理 通知公告 参数配置 审计与文件 首页"
+      "pageTitle": "菜单管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:20.208Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 菜单配置 字典配置 参数配置 通知公告 审计与文件 员工端 我的电"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "字典管理",
       "path": "/system/dict",
-      "file": "36-system-dict.png",
+      "file": "46-system-dict.png",
+      "note": "系统字典类型和数据。",
       "url": "http://127.0.0.1:5174/system/dict",
-      "screenshot": "screenshots/36-system-dict.png",
-      "browserTitle": "字典管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 菜单管理 字典管理 通知公告 参数配置 审计与文件 首页"
+      "pageTitle": "字典管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:21.671Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 菜单配置 字典配置 参数配置 通知公告 审计与文件 员工端 我的电"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "系统日志",
       "path": "/system/log",
-      "file": "37-system-log.png",
+      "file": "47-system-log.png",
+      "note": "登录和操作审计。",
       "url": "http://127.0.0.1:5174/system/log",
-      "screenshot": "screenshots/37-system-log.png",
-      "browserTitle": "系统日志 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "系统日志 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:23.152Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "文件管理",
       "path": "/system/file",
-      "file": "38-system-file.png",
+      "file": "48-system-file.png",
+      "note": "平台文件元数据。",
       "url": "http://127.0.0.1:5174/system/file",
-      "screenshot": "screenshots/38-system-file.png",
-      "browserTitle": "文件管理 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "文件管理 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:24.643Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "导入导出日志",
       "path": "/system/excel/logs",
-      "file": "39-system-excel-logs.png",
+      "file": "49-system-excel-logs.png",
+      "note": "Excel 导入导出记录。",
       "url": "http://127.0.0.1:5174/system/excel/logs",
-      "screenshot": "screenshots/39-system-excel-logs.png",
-      "browserTitle": "导入导出日志 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "导入导出日志 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:26.133Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "编号规则",
       "path": "/system/workflow/biz-sequence",
-      "file": "40-system-biz-sequence.png",
+      "file": "50-system-biz-sequence.png",
+      "note": "工单、案件和流程编号规则。",
       "url": "http://127.0.0.1:5174/system/workflow/biz-sequence",
-      "screenshot": "screenshots/40-system-biz-sequence.png",
-      "browserTitle": "编号规则 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "编号规则 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:27.624Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "流程日志",
       "path": "/system/workflow/biz-flow-log",
-      "file": "41-system-biz-flow-log.png",
+      "file": "51-system-biz-flow-log.png",
+      "note": "业务流程追踪记录。",
       "url": "http://127.0.0.1:5174/system/workflow/biz-flow-log",
-      "screenshot": "screenshots/41-system-biz-flow-log.png",
-      "browserTitle": "流程日志 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 审计与文件 系统日志 文件管理 导入导出日志 编号规则"
+      "pageTitle": "流程日志 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:29.126Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 审计与文件 平台仪表盘 审计日志 文件管理 导入导出记录 编号规则"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "通知公告",
       "path": "/system/notice",
-      "file": "42-system-notice.png",
+      "file": "52-system-notice.png",
+      "note": "平台公告管理。",
       "url": "http://127.0.0.1:5174/system/notice",
-      "screenshot": "screenshots/42-system-notice.png",
-      "browserTitle": "通知公告 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 菜单管理 字典管理 通知公告 参数配置 审计与文件 首页"
+      "pageTitle": "通知公告 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:30.626Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 菜单配置 字典配置 参数配置 通知公告 审计与文件 员工端 我的电"
     },
     {
-      "section": "System",
+      "section": "system",
       "title": "参数配置",
       "path": "/system/config",
-      "file": "43-system-config.png",
+      "file": "53-system-config.png",
+      "note": "系统参数配置。",
       "url": "http://127.0.0.1:5174/system/config",
-      "screenshot": "screenshots/43-system-config.png",
-      "browserTitle": "参数配置 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion SOC 统一安全运营平台 CyberFusion 能力域 主机威胁 · 网络检测 · 漏洞暴露 · 情报 · 规则 · 自动化 安全运营工作流 态势与处置 资产与风险 融合与闭环 配置与审计 平台治理 身份与权限 组织基础 平台配置 菜单管理 字典管理 通知公告 参数配置 审计与文件 首页"
+      "pageTitle": "参数配置 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:32.182Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 数据源与通知 身份权限 组织基础 平台配置 菜单配置 字典配置 参数配置 通知公告 审计与文件 员工端 我的电"
     },
     {
-      "section": "Client",
-      "title": "用户端总览",
+      "section": "client",
+      "title": "我的电脑",
       "path": "/client/workbench?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "file": "50-client-workbench.png",
+      "file": "60-client-workbench.png",
+      "note": "员工安全管家首页。",
       "url": "http://127.0.0.1:5174/client/workbench?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "screenshot": "screenshots/50-client-workbench.png",
-      "browserTitle": "用户端总览 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion Client 终端用户安全工作台 安全总览 电脑后台 数据上报 处置操作 本地现场 管理后台 管理员 PERSONAL ENDPOINT SECURITY 我的电脑安全工作台 从用户视角聚合当前这台电脑的告警、漏洞、基线、文件完整性和网络事件，支持查看证据、推进处置和提交受控日志数据。"
+      "pageTitle": "CyberFusion 安全管家 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:33.880Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 电脑安全助手 CyberFusion 安全管家 这个页面帮你判断当前电脑是否安全、为什么有风险，以及下一步应该点哪里。 prod-app-01 10.20.1.15 Linux 当前状态 严重风险 严重风险 当前电脑存在严重风险，需要优先处理。 存在未关闭高危"
     },
     {
-      "section": "Client",
-      "title": "电脑后台",
+      "section": "client",
+      "title": "设备信息",
       "path": "/client/device-admin?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "file": "51-client-device-admin.png",
+      "file": "61-client-device-admin.png",
+      "note": "当前设备上下文和详情。",
       "url": "http://127.0.0.1:5174/client/device-admin?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "screenshot": "screenshots/51-client-device-admin.png",
-      "browserTitle": "电脑后台 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion Client 终端用户安全工作台 安全总览 电脑后台 数据上报 处置操作 本地现场 管理后台 管理员 CORPORATE ENDPOINT ADMIN 个人电脑后台管理 把员工自己的办公电脑抽象成独立用户端微模块：身份纳管、防御状态、后台联动和员工操作分开查看，避免一页重复展示。 pr"
+      "pageTitle": "设备信息 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:35.380Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 COMPUTER DETAILS 设备信息 这个页面帮你查看当前电脑归属、安全状态、允许操作和需要联系安全团队处理的事项。 prod-app-01 / 10.20.1.15 刷新 回到我的电脑 prod-app-01 10.20.1.15 · Linux 运维"
     },
     {
-      "section": "Client",
-      "title": "数据上报",
+      "section": "client",
+      "title": "提交日志",
       "path": "/client/data-report?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "file": "52-client-data-report.png",
+      "file": "62-client-data-report.png",
+      "note": "员工提交安全日志。",
       "url": "http://127.0.0.1:5174/client/data-report?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "screenshot": "screenshots/52-client-data-report.png",
-      "browserTitle": "数据上报 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion Client 终端用户安全工作台 安全总览 电脑后台 数据上报 处置操作 本地现场 管理后台 管理员 CONTROLLED DATA REPORTING 数据上报中心 员工端只负责提交本机或授权范围内的日志样本，后台统一归一化入湖、关联告警和审计记录。 prod-app-01 / 10"
+      "pageTitle": "提交日志 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:36.767Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 SUBMIT LOGS 提交日志 这个页面帮你提交已授权的本机日志，并在提交前检查敏感内容。 prod-app-01 / 10.20.1.15 刷新 回到我的电脑 prod-app-01 10.20.1.15 · Linux 运维人员 · 基础设施运维组 授权"
     },
     {
-      "section": "Client",
-      "title": "处置操作",
+      "section": "client",
+      "title": "我的待办",
+      "path": "/client/tasks?ip=10.20.1.15&host=prod-app-01&os=Linux",
+      "file": "63-client-tasks.png",
+      "note": "员工待办和风险修复建议。",
+      "url": "http://127.0.0.1:5174/client/tasks?ip=10.20.1.15&host=prod-app-01&os=Linux",
+      "pageTitle": "我的待办 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:38.290Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 MY TASKS 我的待办 这个页面帮你处理当前电脑需要确认的问题，并把处理结果同步给安全团队。 prod-app-01 / 10.20.1.15 刷新 回到我的电脑 prod-app-01 10.20.1.15 · Linux 运维人员 · 基础设施运维组 "
+    },
+    {
+      "section": "client",
+      "title": "处置操作兼容入口",
       "path": "/client/operations?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "file": "53-client-operations.png",
+      "file": "64-client-operations.png",
+      "note": "兼容旧路径，展示我的待办。",
       "url": "http://127.0.0.1:5174/client/operations?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "screenshot": "screenshots/53-client-operations.png",
-      "browserTitle": "处置操作 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion Client 终端用户安全工作台 安全总览 电脑后台 数据上报 处置操作 本地现场 管理后台 管理员 ENDPOINT RESPONSE OPERATIONS 处置操作中心 员工端只处理当前电脑相关的确认、转工单、误报和关闭动作，所有结果同步到总后台告警与工单闭环。 prod-app-"
+      "pageTitle": "我的待办 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:39.743Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 MY TASKS 我的待办 这个页面帮你处理当前电脑需要确认的问题，并把处理结果同步给安全团队。 prod-app-01 / 10.20.1.15 刷新 回到我的电脑 prod-app-01 10.20.1.15 · Linux 运维人员 · 基础设施运维组 "
     },
     {
-      "section": "Client",
-      "title": "本地现场",
+      "section": "client",
+      "title": "安全工具箱",
       "path": "/client/local-range?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "file": "54-client-local-range.png",
+      "file": "65-client-local-range.png",
+      "note": "只读本机检查向导。",
       "url": "http://127.0.0.1:5174/client/local-range?ip=10.20.1.15&host=prod-app-01&os=Linux",
-      "screenshot": "screenshots/54-client-local-range.png",
-      "browserTitle": "本地现场 - CyberFusion SOC",
-      "statusHint": "CF CyberFusion Client 终端用户安全工作台 安全总览 电脑后台 数据上报 处置操作 本地现场 管理后台 管理员 本地虚拟机现场 · prod-app-01 10.20.1.15 · Linux · 授权客户演示主机 · 本地会话 待登录 终端接口待检测 事实接口待检测 自动适配资产 macos ·"
+      "pageTitle": "安全工具箱 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:41.197Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 SECURITY TOOLBOX 安全工具箱 这里只展示安全团队发布的只读工具。工具结果会作为安全日志提交，不会修改你的电脑。 设备 prod-app-01 IP 10.20.1.15 OS Linux 已授权 已连接 返回我的电脑 1 确认授权 确认当前电脑"
+    },
+    {
+      "section": "client",
+      "title": "安全日志",
+      "path": "/client/security-logs?ip=10.20.1.15&host=prod-app-01&os=Linux",
+      "file": "66-client-security-logs.png",
+      "note": "体检、本机检查、日志提交和待办确认记录。",
+      "url": "http://127.0.0.1:5174/client/security-logs?ip=10.20.1.15&host=prod-app-01&os=Linux",
+      "pageTitle": "安全日志 - CyberFusion SOC",
+      "capturedAt": "2026-06-23T04:11:42.692Z",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "textSample": "CF 我的电脑安全助手 查看状态、处理待办、提交日志 我的电脑 我的待办 提交日志 管理端 管理员 SECURITY LOGS 安全日志 这个页面展示当前电脑最近发生过的安全事项，方便你和安全团队确认处理进展。 prod-app-01 / 10.20.1.15 刷新 回到我的电脑 全部记录 17 当前电脑最近安全事项 一键体检 1 安全管家体检记录 本机检查"
     }
   ]
 }

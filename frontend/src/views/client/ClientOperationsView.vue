@@ -303,15 +303,15 @@
               <strong>复制电脑安全摘要</strong>
               <span>给 IT 支持或安全分析工单使用。</span>
             </button>
-            <button type="button" @click="openBackend('/soc/alerts')">
+            <button type="button" :class="{ guarded: !canOpenBackendPath('/soc/alerts') }" @click="openBackend('/soc/alerts', backendQuery)">
               <strong>待处理告警</strong>
               <span>查看当前电脑提醒和处理时间线。</span>
             </button>
-            <button type="button" @click="openBackend('/soc/tickets')">
+            <button type="button" :class="{ guarded: !canOpenBackendPath('/soc/tickets') }" @click="openBackend('/soc/tickets', backendQuery)">
               <strong>处置工单</strong>
               <span>跟踪转工单后的 SLA 和闭环状态。</span>
             </button>
-            <button type="button" @click="openBackend('/soc/assets')">
+            <button type="button" :class="{ guarded: !canOpenBackendPath('/soc/assets') }" @click="openBackend('/soc/assets', backendQuery)">
               <strong>资产详情</strong>
               <span>查看当前电脑资产记录。</span>
             </button>
@@ -408,6 +408,7 @@ import {
   loadClientAssets,
   loadClientProfile,
 } from '@/composables/useClientDeviceContext'
+import { useClientBackendNavigation } from '@/composables/useClientBackendNavigation'
 
 type OperationModule = 'repair' | 'tasks' | 'alerts' | 'action' | 'history' | 'backend'
 type OperationAction = 'acknowledge' | 'false-positive' | 'close' | 'ticket'
@@ -428,6 +429,7 @@ type OperationHistoryItem = {
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { canOpenBackendPath, openBackend } = useClientBackendNavigation()
 const loading = ref(false)
 const repairLoading = ref(false)
 const submitting = ref(false)
@@ -865,10 +867,6 @@ async function runAction(action: OperationAction) {
   }
 }
 
-function openBackend(path: string) {
-  void router.push({ path, query: backendQuery.value })
-}
-
 function goAlertPage(page: number) {
   alertPage.value = Math.min(Math.max(1, page), alertPageCount.value)
   currentAlert.value = pagedAlerts.value[0] || profile.alerts[0]
@@ -1209,12 +1207,17 @@ function formatTime(value?: string) {
 .module-aside button:hover,
 .alert-stack button.active,
 .alert-stack button:hover,
-.support-grid button:hover,
+.support-grid button:hover:not(.guarded),
 .action-option-grid button.active,
 .action-option-grid button:hover {
   border-color: rgba(212, 147, 74, 0.56);
   background: rgba(255, 248, 238, 0.84);
   box-shadow: inset 3px 0 0 var(--soc-warm);
+}
+
+.support-grid button.guarded {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .device-chip strong,

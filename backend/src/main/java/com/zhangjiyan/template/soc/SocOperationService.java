@@ -19,6 +19,8 @@ import com.zhangjiyan.template.soc.baseline.SocBaselineCheckMapper;
 import com.zhangjiyan.template.soc.client.ClientLabEventRequest;
 import com.zhangjiyan.template.soc.client.ClientSnapshotRequest;
 import com.zhangjiyan.template.soc.client.ClientTerminalCommandRequest;
+import com.zhangjiyan.template.soc.correlation.SocIncidentCluster;
+import com.zhangjiyan.template.soc.correlation.SocIncidentClusterMapper;
 import com.zhangjiyan.template.soc.demo.DemoRangeBatchImportRequest;
 import com.zhangjiyan.template.soc.dto.SocPageRequest;
 import com.zhangjiyan.template.soc.dto.SocStatusRequest;
@@ -38,6 +40,7 @@ import com.zhangjiyan.template.soc.policy.LocalCheckPolicyService;
 import com.zhangjiyan.template.soc.policy.adapter.EventAdapterPolicyService;
 import com.zhangjiyan.template.soc.playbook.SocTicketTask;
 import com.zhangjiyan.template.soc.playbook.SocTicketTaskMapper;
+import com.zhangjiyan.template.soc.operations.SocOperationsService;
 import com.zhangjiyan.template.soc.report.ReportGenerateRequest;
 import com.zhangjiyan.template.soc.report.SocReport;
 import com.zhangjiyan.template.soc.report.SocReportMapper;
@@ -46,6 +49,7 @@ import com.zhangjiyan.template.soc.settings.SocSyncTaskMapper;
 import com.zhangjiyan.template.soc.settings.SocWazuhConfig;
 import com.zhangjiyan.template.soc.settings.SocWazuhConfigMapper;
 import com.zhangjiyan.template.soc.ticket.*;
+import com.zhangjiyan.template.soc.trend.TrendAnomalyService;
 import com.zhangjiyan.template.soc.vulnerability.SocVulnerability;
 import com.zhangjiyan.template.soc.vulnerability.SocVulnerabilityMapper;
 import lombok.RequiredArgsConstructor;
@@ -84,12 +88,15 @@ public class SocOperationService {
     private final SocFileIntegrityEventMapper fileIntegrityMapper;
     private final SocAlertWhitelistMapper whitelistMapper;
     private final SocExternalEventMapper externalEventMapper;
+    private final SocIncidentClusterMapper incidentClusterMapper;
     private final SocTicketTaskMapper ticketTaskMapper;
     private final TicketStateMachine ticketStateMachine;
     private final SocSecurityScope securityScope;
     private final SocNotificationService notificationService;
     private final LocalCheckPolicyService localCheckPolicyService;
     private final EventAdapterPolicyService eventAdapterPolicyService;
+    private final TrendAnomalyService trendAnomalyService;
+    private final SocOperationsService operationsService;
     private final ObjectMapper objectMapper;
 
     private static final String DEFAULT_DEMO_RANGE_BATCH_ID = "DEMO-RANGE-OFFLINE-V1";
@@ -760,23 +767,42 @@ public class SocOperationService {
         String batchId = normalizeDemoBatchId(request.batchId());
         DemoRangeEvidenceChain chain = demoRangeEvidenceChain(batchId);
         PlaybookTaskMetrics taskMetrics = playbookTaskMetrics(chain.tickets());
+        List<SocIncidentCluster> incidents = validationIncidents(batchId);
+        SocOperationsService.OperationsOverview operations = operationsOverview();
+        SocOperationsService.TopRiskAsset topRiskAsset = operations == null || operations.topRiskAssets().isEmpty()
+                ? null
+                : operations.topRiskAssets().get(0);
+        SocOperationsService.RecommendationAdoptionMetrics recommendationMetrics = operations == null ? null : operations.recommendationAdoption();
+        SocOperationsService.ClientTaskMetrics clientTaskMetrics = operations == null ? null : operations.clientTasks();
+        SocOperationsService.RiskTrendMetrics riskTrend = operations == null ? null : operations.riskTrend();
+        String trendSummary = operations == null || operations.topTrendSources().isEmpty()
+                ? trendAnomalySummary()
+                : operations.topTrendSources().stream()
+                .limit(3)
+                .map(item -> firstNotBlank(item.title(), item.sourceType(), "-") + "(" + item.currentCount() + "条, score " + item.anomalyScore() + ")")
+                .reduce((left, right) -> left + ", " + right)
+                .orElse("-");
         LocalDate end = request.periodEnd() == null ? LocalDate.now() : request.periodEnd();
         LocalDate start = request.periodStart() == null ? end : request.periodStart();
-        String summary = String.join("；",
-                "验证批次：" + batchId,
-                "多源事件 " + chain.summary().eventCount() + " 条，关联告警 " + chain.summary().alertCount() + " 条",
-                "漏洞记录 " + chain.summary().vulnerabilityCount() + " 条，拦截证据 " + chain.summary().blockedCount() + " 条",
-                "工单 " + chain.summary().ticketCount() + " 个，通知 dry-run " + chain.summary().notificationLogCount() + " 条",
-                "处置剧本任务 " + taskMetrics.totalTasks() + " 个，已完成 " + taskMetrics.completedTasks() + " 个，员工协同 " + taskMetrics.employeeTasks() + " 个",
-                "覆盖来源：" + chain.summary().sourceCoverage(),
-                "10 分钟演示路径：一键导入批次 -> 查看事件详情 -> 查看告警详情 -> 转工单 -> 工单时间线 -> 生成安全验证报告 -> 查看通知 dry-run 日志"
-        );
-        String recommendation = String.join("；",
-                "演示时先在安全验证中心确认 batchId 与证据摘要，再进入多源事件抽屉说明 sourceType/eventType/rule/action",
-                "从告警详情展示 demoCaseId、batchId、targetUrl 和 evidenceSummary，随后转工单",
-                "在工单时间线展示 Demo Range 来源记录和处置剧本任务进度，再推进到待复核或关闭",
-                "使用本报告作为验收截图，不启用真实邮件、Webhook 或外部通知"
-        );
+        String summary = limit(String.join("；",
+                "【管理摘要】本次验证批次 " + batchId + " 已形成客户演示主线：" + validationBusinessConclusion(chain, incidents, topRiskAsset, taskMetrics, clientTaskMetrics),
+                "【技术证据】多源证据 " + chain.summary().eventCount() + " 条，覆盖 " + chain.summary().sourceCoverage()
+                        + "；关联告警 " + chain.summary().alertCount() + " 条，漏洞 " + chain.summary().vulnerabilityCount() + " 条，拦截 " + chain.summary().blockedCount() + " 条",
+                "【事件簇与风险】事件簇 " + incidents.size() + " 个，证据关系 " + incidents.stream().mapToInt(item -> nz(item.getEvidenceCount())).sum()
+                        + " 条；Top 高风险资产 " + topRiskAssetSummary(topRiskAsset)
+                        + "；风险评分变化 24h " + signed(riskTrend == null ? 0 : riskTrend.change24h()) + " / 7d " + signed(riskTrend == null ? 0 : riskTrend.change7d()),
+                "【处置进度】工单 " + chain.summary().ticketCount() + " 个，处置剧本任务 " + taskMetrics.totalTasks()
+                        + " 个，已完成 " + taskMetrics.completedTasks() + " 个；推荐动作 " + recommendationSummary(recommendationMetrics),
+                "【员工配合】员工待办 " + taskMetrics.employeeTasks() + " 个，员工待办完成情况 " + clientTaskSummary(clientTaskMetrics),
+                "【趋势与运营】趋势异常 " + trendSummary + "；" + operationMetricsSummary(),
+                "【安全边界】本报告仅使用离线演示和授权导入数据，未扫描公网、未发送真实通知、未执行攻击；通知仅以 dry-run 写入 " + chain.summary().notificationLogCount() + " 条留痕"
+        ), 1000);
+        String recommendation = limit(String.join("；",
+                validationBusinessConclusion(chain, incidents, topRiskAsset, taskMetrics, clientTaskMetrics),
+                "建议优先查看 /showcase 的故事线，再进入事件簇说明证据为什么相关，随后从告警或事件簇转工单。",
+                "推荐动作应围绕 Web 网关阻断、依赖修复、本机检查和工单关闭推进；员工待办完成后再生成最终验收报告。",
+                "导出报告复用现有 Excel/PDF 能力；继续保持 dry-run 通知，不启用真实邮件、Webhook 或外部发送。"
+        ), 1000);
         SocReport report = new SocReport();
         report.setReportNo("RPT-VALIDATION-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
         report.setReportType("security_validation");
@@ -2848,11 +2874,13 @@ public class SocOperationService {
         String externalSources = externalEventSummary().stream().map(item -> item.sourceType() + "(" + item.total() + ")").reduce((left, right) -> left + ", " + right).orElse("-");
         String trend = alertTrend().stream().map(item -> item.date() + ":" + item.count()).reduce((left, right) -> left + ", " + right).orElse("-");
         String topAssets = affectedAssets().stream().map(item -> item.name() + "(" + item.value() + ")").reduce((left, right) -> left + ", " + right).orElse("-");
+        String trendAnomalies = trendAnomalySummary();
         long baselinePassRate = baselineChecks == 0 ? 100 : Math.round(((baselineChecks - failedBaselines) * 100.0) / baselineChecks);
         return new ReportMetrics(alerts, critical, high, medium, low, closedTickets, pendingTickets,
                 highRiskAssets, allAssets, trend, topAssets, criticalVulnerabilities, highVulnerabilities,
                 openVulnerabilities, baselineChecks, failedBaselines, baselinePassRate, fimEvents,
-                fimPendingReview, highFimEvents, externalEvents, highExternalEvents, externalSources);
+                fimPendingReview, highFimEvents, externalEvents, highExternalEvents, externalSources,
+                trendAnomalies);
     }
 
     private String reportSummary(ReportMetrics metrics) {
@@ -2864,7 +2892,9 @@ public class SocOperationService {
                 "漏洞态势：critical " + metrics.criticalVulnerabilities() + " 个，high " + metrics.highVulnerabilities() + " 个，待修复 " + metrics.openVulnerabilities() + " 个",
                 "基线核查：核查项 " + metrics.baselineChecks() + " 个，失败 " + metrics.failedBaselines() + " 个，通过率 " + metrics.baselinePassRate() + "%",
                 "文件完整性：本周期事件 " + metrics.fimEvents() + " 条，待复核 " + metrics.fimPendingReview() + " 条，高危事件 " + metrics.highFimEvents() + " 条",
-                "外部生态：本周期规范化事件 " + metrics.externalEvents() + " 条，高风险 " + metrics.highExternalEvents() + " 条；来源覆盖 " + metrics.externalSources()
+                "外部生态：本周期规范化事件 " + metrics.externalEvents() + " 条，高风险 " + metrics.highExternalEvents() + " 条；来源覆盖 " + metrics.externalSources(),
+                "趋势异常：" + metrics.trendAnomalies(),
+                operationMetricsSummary()
         );
     }
 
@@ -2891,8 +2921,114 @@ public class SocOperationService {
         if (metrics.highExternalEvents() > 0) {
             suggestions.add("对 Suricata 等外部来源的高风险事件执行统一告警关联、资产归属确认和处置闭环。");
         }
+        if (!"-".equals(metrics.trendAnomalies())) {
+            suggestions.add("复核趋势异常 Top 项，优先处理数量突增、跨源同时上升和严重级别占比升高的资产。");
+        }
         suggestions.add("持续复盘误报规则和白名单，降低重复告警噪声。");
         return String.join("；", suggestions);
+    }
+
+    private String trendAnomalySummary() {
+        try {
+            return trendAnomalyService.topAnomalies(5).stream()
+                    .map(item -> item.title() + "(" + item.currentCount() + "/" + item.baselineCount() + ", score " + item.anomalyScore() + ")")
+                    .reduce((left, right) -> left + ", " + right)
+                    .orElse("-");
+        } catch (Exception ignored) {
+            return "-";
+        }
+    }
+
+    private String operationMetricsSummary() {
+        try {
+            if (operationsService == null) {
+                return "运营指标：暂不可用";
+            }
+            return operationsService.reportSummaryLine();
+        } catch (Exception ignored) {
+            return "运营指标：暂不可用";
+        }
+    }
+
+    private SocOperationsService.OperationsOverview operationsOverview() {
+        try {
+            return operationsService == null ? null : operationsService.overview();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private List<SocIncidentCluster> validationIncidents(String batchId) {
+        if (incidentClusterMapper == null || batchId == null || batchId.isBlank()) {
+            return List.of();
+        }
+        LambdaQueryWrapper<SocIncidentCluster> wrapper = new LambdaQueryWrapper<SocIncidentCluster>()
+                .eq(SocIncidentCluster::getDeleted, 0)
+                .and(w -> w.eq(SocIncidentCluster::getBatchId, batchId)
+                        .or().like(SocIncidentCluster::getCorrelationKey, batchId)
+                        .or().like(SocIncidentCluster::getSummary, batchId)
+                        .or().like(SocIncidentCluster::getTitle, batchId))
+                .orderByDesc(SocIncidentCluster::getScore)
+                .orderByDesc(SocIncidentCluster::getUpdatedAt)
+                .last("LIMIT 20");
+        securityScope.applyDataScope(wrapper, SocIncidentCluster::getOwnerId, SocIncidentCluster::getDeptId);
+        return incidentClusterMapper.selectList(wrapper);
+    }
+
+    private String validationBusinessConclusion(DemoRangeEvidenceChain chain,
+                                                List<SocIncidentCluster> incidents,
+                                                SocOperationsService.TopRiskAsset topRiskAsset,
+                                                PlaybookTaskMetrics taskMetrics,
+                                                SocOperationsService.ClientTaskMetrics clientTaskMetrics) {
+        String assetName = topRiskAsset == null
+                ? firstNotBlank(
+                chain.events().stream().map(event -> firstNotBlank(event.getAssetName(), event.getAssetIp())).filter(Objects::nonNull).findFirst().orElse(null),
+                chain.alerts().stream().map(alert -> firstNotBlank(alert.getAssetName(), alert.getAssetIp())).filter(Objects::nonNull).findFirst().orElse(null),
+                chain.vulnerabilities().stream().map(item -> firstNotBlank(item.getAssetName(), item.getAssetIp())).filter(Objects::nonNull).findFirst().orElse(null),
+                "当前演示资产")
+                : firstNotBlank(topRiskAsset.hostname(), topRiskAsset.assetIp(), "当前演示资产");
+        String riskLevel = topRiskAsset == null ? "待评估" : firstNotBlank(topRiskAsset.riskLevel(), "高风险");
+        long pendingTickets = Math.max(0, chain.summary().ticketCount() - taskMetrics.completedTasks());
+        long pendingEmployeeTasks = clientTaskMetrics == null
+                ? taskMetrics.employeeTasks()
+                : Math.max(0, clientTaskMetrics.totalTasks() - clientTaskMetrics.completedTasks());
+        return assetName + " 当前为 " + riskLevel
+                + "，主要原因是 " + incidents.size() + " 个事件簇、" + pendingTickets + " 个待推进工单和 "
+                + pendingEmployeeTasks + " 个员工待办仍需闭环。建议优先应用 Web 网关阻断处置剧本并完成本机检查。";
+    }
+
+    private String topRiskAssetSummary(SocOperationsService.TopRiskAsset asset) {
+        if (asset == null) {
+            return "暂无高风险资产";
+        }
+        return firstNotBlank(asset.hostname(), asset.assetIp(), "未知资产")
+                + "(" + firstNotBlank(asset.assetIp(), "-") + ", score " + asset.riskScore() + ", " + firstNotBlank(asset.riskLevel(), "-") + ")";
+    }
+
+    private String recommendationSummary(SocOperationsService.RecommendationAdoptionMetrics metrics) {
+        if (metrics == null) {
+            return "暂不可用";
+        }
+        return metrics.totalRecommendations() + " 个，已采纳 " + metrics.adoptedRecommendations()
+                + " 个，采纳率 " + metrics.adoptionRate() + "%";
+    }
+
+    private String clientTaskSummary(SocOperationsService.ClientTaskMetrics metrics) {
+        if (metrics == null) {
+            return "暂不可用";
+        }
+        return metrics.completedTasks() + "/" + metrics.totalTasks()
+                + "，完成率 " + metrics.completionRate() + "%"
+                + "，体检覆盖率 " + metrics.checkupCoverageRate() + "%"
+                + "，逾期 " + metrics.overdueTasks() + " 个";
+    }
+
+    private int nz(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private String signed(long value) {
+        return value > 0 ? "+" + value : String.valueOf(value);
     }
 
     private List<List<String>> reportRows(SocReport report) {
@@ -3345,7 +3481,8 @@ public class SocOperationService {
                                  long criticalVulnerabilities, long highVulnerabilities, long openVulnerabilities,
                                  long baselineChecks, long failedBaselines, long baselinePassRate,
                                  long fimEvents, long fimPendingReview, long highFimEvents,
-                                 long externalEvents, long highExternalEvents, String externalSources) {
+                                 long externalEvents, long highExternalEvents, String externalSources,
+                                 String trendAnomalies) {
     }
 
     private record LabAction(String title, String eventType, String severity, String tactic, String ioc, boolean createAlert) {

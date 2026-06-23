@@ -31,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CorrelationServiceTest {
 
+    private static final LocalDateTime TEST_NOW = LocalDateTime.of(2026, 1, 1, 12, 0);
+
     @Test
     void correlatesCrossSourceEvidenceIdempotentlyAndCreatesTicketTimeline() {
         Fixture fixture = fixture();
@@ -398,7 +400,7 @@ class CorrelationServiceTest {
         event.setAssetName(assetName);
         event.setBatchId(batchId);
         event.setDemoCaseId(demoCaseId);
-        event.setEventTime(LocalDateTime.now().minusMinutes(minutesAgo));
+        event.setEventTime(TEST_NOW.minusMinutes(minutesAgo));
         event.setOwnerId(1L);
         event.setDeptId(12L);
         event.setDeleted(0);

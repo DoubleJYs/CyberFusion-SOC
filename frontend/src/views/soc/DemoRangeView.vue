@@ -37,6 +37,33 @@
       </el-steps>
     </section>
 
+    <section class="soc-panel demo-outcome-panel">
+      <div class="panel-title">
+        <div>
+          <strong>演示结果总览</strong>
+          <span>导入批次后，用一组业务指标说明“证据 -> 事件簇 -> 风险 -> 推荐 -> 工单 -> 员工待办 -> 报告”。</span>
+        </div>
+        <el-button @click="goReports">生成或查看报告</el-button>
+      </div>
+      <div class="demo-outcome-grid">
+        <article v-for="item in demoOutcomeCards" :key="item.label" class="demo-outcome-card">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <p>{{ item.description }}</p>
+        </article>
+      </div>
+      <div class="recommendation-strip">
+        <strong>推荐动作 Top 3</strong>
+        <div v-if="topRecommendationRows.length" class="recommendation-list">
+          <button v-for="item in topRecommendationRows" :key="item.key" type="button" @click="goRecommendations">
+            <span>{{ item.title }}</span>
+            <em>{{ item.recommendedAction }}</em>
+          </button>
+        </div>
+        <el-empty v-else description="暂无推荐动作，可先导入批次并重新计算风险" :image-size="64" />
+      </div>
+    </section>
+
     <section v-loading="loading" class="wizard-shell">
       <main class="wizard-main">
         <section v-if="activeStep === 0" class="soc-panel wizard-step-panel">
@@ -310,6 +337,8 @@ import {
   listReports,
   listTickets,
   listVulnerabilities,
+  operationsOverview,
+  topRecommendations,
   sendShuffleDemoNotification,
   type AlertItem,
   type DemoRangeBatchImportResult,
@@ -317,6 +346,8 @@ import {
   type ExternalEventItem,
   type ExternalSourceSummary,
   type IncidentClusterItem,
+  type OperationsOverview,
+  type RecommendationItem,
   type ReportItem,
   type TicketItem,
   type VulnerabilityItem,
@@ -383,6 +414,8 @@ const vulnerabilities = ref<VulnerabilityItem[]>([])
 const tickets = ref<TicketItem[]>([])
 const reports = ref<ReportItem[]>([])
 const incidents = ref<IncidentClusterItem[]>([])
+const operations = ref<OperationsOverview>()
+const topRecommendationRows = ref<RecommendationItem[]>([])
 const sourceSummary = ref<ExternalSourceSummary[]>([])
 const detailDrawer = ref<DetailDrawerState>({
   visible: false,
@@ -523,6 +556,19 @@ const alertPreview = computed(() => (evidenceChain.value?.alerts?.length ? evide
 const ticketPreview = computed(() => (evidenceChain.value?.tickets?.length ? evidenceChain.value.tickets : tickets.value).slice(0, 5))
 const reportPreview = computed(() => (evidenceChain.value?.reports?.length ? evidenceChain.value.reports : reports.value).slice(0, 5))
 const incidentPreview = computed(() => incidents.value.slice(0, 5))
+const demoOutcomeCards = computed(() => {
+  const topAsset = operations.value?.topRiskAssets?.[0]
+  const clientTasks = operations.value?.clientTasks
+  return [
+    { label: 'Batch ID', value: currentBatch.value.batchId, description: '本次安全验证的聚合键和报告上下文。' },
+    { label: '多源证据', value: evidenceChain.value?.summary.eventCount || currentBatch.value.eventCount, description: 'WAF/ZAP/Trivy/Wazuh/Suricata/Zeek 归一化记录。' },
+    { label: '事件簇', value: incidents.value.length, description: '解释性关联引擎生成的安全事件链。' },
+    { label: '最高风险资产', value: topAsset ? `${topAsset.hostname || topAsset.assetIp} / ${topAsset.riskScore}` : '待计算', description: topAsset ? `${topAsset.riskLevel} · ${topAsset.assetIp}` : '导入证据后可重新计算风险评分。' },
+    { label: '工单状态', value: `${evidenceChain.value?.summary.ticketCount || tickets.value.length} 个`, description: `当前待处理告警 ${unticketedAlertCount.value} 条。` },
+    { label: '员工待办', value: clientTasks ? `${clientTasks.completedTasks}/${clientTasks.totalTasks}` : '待同步', description: clientTasks ? `完成率 ${clientTasks.completionRate}% / 体检覆盖 ${clientTasks.checkupCoverageRate}%` : '来自处置剧本的员工协同任务。' },
+    { label: 'dry-run 通知', value: evidenceChain.value?.summary.notificationLogCount || 0, description: '只写 soc_notification_log，不真实发送外部通知。' },
+  ]
+})
 const highRiskAlertCount = computed(() => alertPreview.value.filter((item) => ['critical', 'high'].includes((item.severity || '').toLowerCase())).length)
 const ticketedAlertCount = computed(() => alertPreview.value.filter((item) => item.ticketId || item.status === 'ticketed').length)
 const unticketedAlertCount = computed(() => Math.max(0, alertPreview.value.length - ticketedAlertCount.value))
@@ -603,10 +649,24 @@ async function load() {
     reports.value = reportRes.data.data.records
     await loadEvidenceChain(currentBatch.value.batchId)
     await loadIncidentClusters(currentBatch.value.batchId)
+    await loadOutcomeMetrics()
   } catch {
     error.value = '安全验证数据加载失败，请检查登录状态、权限或后端服务。'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadOutcomeMetrics() {
+  try {
+    operations.value = (await operationsOverview()).data.data
+  } catch {
+    operations.value = undefined
+  }
+  try {
+    topRecommendationRows.value = (await topRecommendations(3)).data.data
+  } catch {
+    topRecommendationRows.value = []
   }
 }
 
@@ -664,6 +724,10 @@ function goTickets() {
 
 function goReports() {
   router.push({ path: '/soc/reports', query: { keyword: currentBatch.value.batchId, reportType: 'security_validation', batchId: currentBatch.value.batchId } })
+}
+
+function goRecommendations() {
+  router.push({ path: '/soc/dashboard', query: { section: 'recommendations' } })
 }
 
 function goBatchExternalEvents() {
@@ -1001,6 +1065,73 @@ function latestTime(values: Array<string | undefined>) {
 .wizard-next-panel {
   min-width: 0;
   padding: 16px;
+}
+
+.demo-outcome-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.demo-outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.demo-outcome-card {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(179, 173, 163, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.demo-outcome-card span,
+.demo-outcome-card p {
+  margin: 0;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+}
+
+.demo-outcome-card strong {
+  overflow-wrap: anywhere;
+  color: var(--soc-text);
+  font-size: 20px;
+}
+
+.recommendation-strip {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(224, 133, 48, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 248, 239, 0.62);
+}
+
+.recommendation-list {
+  display: grid;
+  gap: 8px;
+}
+
+.recommendation-list button {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid rgba(179, 173, 163, 0.32);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--soc-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.recommendation-list em {
+  color: var(--soc-text-muted);
+  font-style: normal;
+  line-height: 1.5;
 }
 
 .wizard-status-head {

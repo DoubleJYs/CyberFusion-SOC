@@ -192,8 +192,8 @@
             </div>
           </div>
           <div class="backend-actions">
-            <el-button @click="router.push({ path: '/soc/external-events', query: backendQuery })">查看安全记录</el-button>
-            <el-button @click="router.push({ path: '/soc/alerts', query: backendQuery })">查看关联提醒</el-button>
+            <el-button @click="openBackend('/soc/external-events', backendQuery)">查看安全记录</el-button>
+            <el-button @click="openBackend('/soc/alerts', backendQuery)">查看关联提醒</el-button>
           </div>
         </section>
       </main>
@@ -212,6 +212,7 @@ import {
 } from '@/api/soc'
 import { useAuthStore } from '@/stores/auth'
 import { buildClientDeviceRouteQuery, chooseClientAsset, loadClientAssets } from '@/composables/useClientDeviceContext'
+import { useClientBackendNavigation } from '@/composables/useClientBackendNavigation'
 
 type ReportModule = 'boundary' | 'submit' | 'review' | 'result'
 type ReviewState = 'ok' | 'warn' | 'risk'
@@ -228,6 +229,7 @@ type ReportHistoryItem = {
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { openBackend } = useClientBackendNavigation()
 const loading = ref(false)
 const importing = ref(false)
 const error = ref('')

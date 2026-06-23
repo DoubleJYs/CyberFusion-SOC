@@ -1,8 +1,8 @@
 <template>
   <div class="sidebar-shell" :class="{ collapsed }">
     <div v-if="!collapsed" class="sidebar-quick">
-      <span>客户演示模式</span>
-      <strong>从安全运营演示台开始，再进入专家后台查看细节</strong>
+      <span>{{ sidebarHint.title }}</span>
+      <strong>{{ sidebarHint.description }}</strong>
     </div>
     <el-menu
       ref="menuRef"
@@ -29,11 +29,13 @@ import { useRoute } from 'vue-router'
 import SidebarMenuNode from './SidebarMenuNode.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { MenuItem } from '@/types/system'
+import { roleExperience } from '@/utils/roleExperience'
 
 defineProps<{ collapsed: boolean }>()
 
 const authStore = useAuthStore()
 const route = useRoute()
+const experience = computed(() => roleExperience(authStore.roles, authStore.userInfo))
 const menuRef = ref()
 const SIDEBAR_SCROLL_KEY = 'cyberfusion:admin-sidebar-scroll-top'
 const fallbackMenus: MenuItem[] = [
@@ -77,6 +79,10 @@ const clientMenu: MenuItem = {
   icon: 'Monitor',
   children: [],
 }
+const clientTaskMenu: MenuItem = directMenu(-21, '我的待办', '/client/tasks', 'Tickets', 2)
+const clientReportMenu: MenuItem = directMenu(-22, '提交日志', '/client/data-report', 'DocumentChecked', 3)
+const clientToolMenu: MenuItem = directMenu(-23, '安全工具', '/client/local-range', 'Tools', 4)
+const clientLogMenu: MenuItem = directMenu(-24, '安全日志', '/client/security-logs', 'Document', 5)
 
 interface MenuGroup {
   key: string
@@ -91,13 +97,23 @@ const menuGroups = computed<MenuGroup[]>(() => {
     .filter((item): item is MenuItem => Boolean(item))
 
   const items = normalizeTaskMenus(source)
-  const groups: MenuGroup[] = [
-    { key: 'showcase', label: '客户演示', items: [showcaseMenu] },
-    ...(items.length ? [{ key: 'expert', label: 'SOC 专家模式', items }] : []),
-    { key: 'client', label: '员工端', items: [clientMenu] },
-  ]
+  return [{ key: experience.value.persona, label: experience.value.label, items: items.length ? items : source }]
+})
 
-  return groups.length ? groups : [{ key: 'all', label: '导航', items: source }]
+const sidebarHint = computed(() => {
+  if (experience.value.isSuperAdmin) {
+    return { title: '全量专家视图', description: '全部菜单、诊断、策略、审计和系统管理保持可见。' }
+  }
+  if (experience.value.isSecurityEngineer) {
+    return { title: '策略治理视图', description: '默认聚焦策略、适配、剧本、风险评分和事件关联。' }
+  }
+  if (experience.value.isAnalyst) {
+    return { title: '运营精简视图', description: '默认聚焦事件、告警、工单、资产风险和报告。' }
+  }
+  if (experience.value.isEmployee) {
+    return { title: '安全管家', description: '只保留我的电脑、我的待办、提交日志、安全工具和安全日志。' }
+  }
+  return { title: '客户演示模式', description: '默认只进入安全运营演示台，不展示复杂后台菜单。' }
 })
 
 const defaultOpeneds = computed(() => {
@@ -166,7 +182,6 @@ function cloneVisible(item: MenuItem): MenuItem | null {
 }
 
 function normalizeTaskMenus(source: MenuItem[]) {
-  const isAdmin = authStore.roles.includes('admin')
   const findPath = (path: string) => findMenuByPath(source, path)
   const leaf = (path: string, name: string, icon?: string) => {
     const item = findPath(path)
@@ -179,63 +194,143 @@ function normalizeTaskMenus(source: MenuItem[]) {
       : null
   }
 
-  return [
-    dir(-100, '安全总览', 'Odometer', [
-      leaf('/soc/dashboard', '安全总览', 'DataAnalysis'),
-    ]),
-    dir(-200, '安全验证', 'Operation', [
-      leaf('/soc/demo-range', '安全验证', 'Operation'),
-      leaf('/soc/capabilities', '平台能力说明', 'Grid'),
-    ]),
-    dir(-300, '告警处置', 'WarningFilled', [
-      leaf('/soc/alerts', '告警处置', 'WarningFilled'),
-      leaf('/soc/alert-noise', '降噪规则', 'Filter'),
-    ]),
-    dir(-350, '证据中心', 'Connection', [
-      leaf('/soc/external-events', '证据中心', 'Connection'),
-    ]),
-    dir(-400, '资产风险', 'Cpu', [
-      leaf('/soc/assets', '资产风险', 'Cpu'),
-      leaf('/soc/vulnerabilities', '漏洞风险', 'Aim'),
-      leaf('/soc/baselines', '配置检查', 'Checked'),
-      leaf('/soc/fim', '文件变更', 'Files'),
-    ]),
-    dir(-450, '检测规则', 'List', [
-      leaf('/soc/rules', '检测规则', 'List'),
-      leaf('/soc/policies', '策略与规则', 'SetUp'),
-    ]),
-    dir(-500, '工单中心', 'Tickets', [
-      leaf('/soc/tickets', '工单中心', 'Tickets'),
-    ]),
-    dir(-550, '报告中心', 'DocumentChecked', [
-      leaf('/soc/reports', '报告中心', 'DocumentChecked'),
-    ]),
-    isAdmin ? dir(-600, '系统管理', 'Setting', [
-      leaf('/soc/settings', '数据源与通知', 'Tools'),
-      dir(-610, '身份权限', 'UserFilled', [
-        leaf('/system/user', '用户账号'),
-        leaf('/system/role', '角色权限'),
+  if (experience.value.isSuperAdmin) {
+    return [
+      dir(-100, '工作区', 'Odometer', [
+        showcaseMenu,
+        leaf('/soc/dashboard', '安全运营工作台', 'DataAnalysis'),
+        leaf('/soc/capabilities', '平台能力说明', 'Grid'),
+        leaf('/soc/demo-range', '安全验证中心', 'Operation'),
       ]),
-      dir(-620, '组织基础', 'OfficeBuilding', [
-        leaf('/system/dept', '部门'),
-        leaf('/system/post', '岗位'),
+      dir(-200, '安全运营', 'Monitor', [
+        leaf('/soc/incidents', '安全事件簇', 'Share'),
+        leaf('/soc/alerts', '告警中心', 'WarningFilled'),
+        leaf('/soc/assets', '资产风险', 'Cpu'),
+        leaf('/soc/client-security', '员工终端态势', 'Monitor'),
+        leaf('/soc/vulnerabilities', '漏洞中心', 'Aim'),
+        leaf('/soc/baselines', '基线核查', 'Checked'),
+        leaf('/soc/fim', '文件完整性', 'Files'),
+        leaf('/soc/external-events', '外部事件', 'Connection'),
       ]),
-      dir(-630, '平台配置', 'Tools', [
-        leaf('/system/menu', '菜单配置'),
-        leaf('/system/dict', '字典配置'),
-        leaf('/system/config', '参数配置'),
-        leaf('/system/notice', '通知公告'),
+      dir(-300, '处置闭环', 'Tickets', [
+        leaf('/soc/tickets', '工单中心', 'Tickets'),
+        leaf('/soc/reports', '报表中心', 'DocumentChecked'),
+        clientMenu,
+        clientTaskMenu,
+        clientReportMenu,
+        clientToolMenu,
+        clientLogMenu,
       ]),
-      dir(-640, '审计与文件', 'DocumentChecked', [
-        leaf('/dashboard', '平台仪表盘'),
-        leaf('/system/log', '审计日志'),
-        leaf('/system/file', '文件管理'),
-        leaf('/system/excel/logs', '导入导出记录'),
-        leaf('/system/workflow/biz-sequence', '编号规则'),
-        leaf('/system/workflow/biz-flow-log', '流程日志'),
+      dir(-400, '策略治理', 'SetUp', [
+        leaf('/soc/policies', '策略与规则中心', 'SetUp'),
+        leaf('/soc/rules', '检测规则中心', 'List'),
+        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
+        leaf('/soc/settings', '接入与诊断设置', 'Tools'),
       ]),
-    ]) : leaf('/soc/settings', '系统设置', 'Tools'),
-  ].filter((item): item is MenuItem => Boolean(item))
+      dir(-500, '平台管理', 'Setting', [
+        leaf('/dashboard', '平台仪表盘', 'DataLine'),
+        dir(-510, '身份权限', 'UserFilled', [
+          leaf('/system/user', '用户管理'),
+          leaf('/system/role', '角色管理'),
+          leaf('/system/menu', '菜单管理'),
+        ]),
+        dir(-520, '组织基础', 'OfficeBuilding', [
+          leaf('/system/dept', '部门管理'),
+          leaf('/system/post', '岗位管理'),
+        ]),
+        dir(-530, '配置与审计', 'DocumentChecked', [
+          leaf('/system/dict', '字典管理'),
+          leaf('/system/config', '参数配置'),
+          leaf('/system/notice', '通知公告'),
+          leaf('/system/log', '系统日志'),
+          leaf('/system/file', '文件管理'),
+          leaf('/system/excel/logs', '导入导出日志'),
+          leaf('/system/workflow/biz-sequence', '编号规则'),
+          leaf('/system/workflow/biz-flow-log', '流程日志'),
+        ]),
+      ]),
+    ].filter((item): item is MenuItem => Boolean(item))
+  }
+
+  if (experience.value.isPlatformAdmin) {
+    return [
+      dir(-100, '工作区', 'Odometer', [showcaseMenu, leaf('/soc/dashboard', '安全运营工作台', 'DataAnalysis')]),
+      dir(-200, '安全运营', 'Monitor', [
+        leaf('/soc/incidents', '安全事件簇', 'Share'),
+        leaf('/soc/alerts', '告警中心', 'WarningFilled'),
+        leaf('/soc/assets', '资产风险', 'Cpu'),
+        leaf('/soc/external-events', '证据中心', 'Connection'),
+        leaf('/soc/tickets', '工单中心', 'Tickets'),
+        leaf('/soc/reports', '报表中心', 'DocumentChecked'),
+      ]),
+      dir(-300, '策略治理', 'SetUp', [
+        leaf('/soc/policies', '策略与规则中心', 'SetUp'),
+        leaf('/soc/rules', '检测规则中心', 'List'),
+        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
+      ]),
+      dir(-400, '平台管理', 'Setting', [
+        leaf('/dashboard', '平台仪表盘', 'DataLine'),
+        leaf('/system/user', '用户管理'),
+        leaf('/system/role', '角色管理'),
+        leaf('/system/menu', '菜单管理'),
+        leaf('/system/log', '系统日志'),
+      ]),
+    ].filter((item): item is MenuItem => Boolean(item))
+  }
+
+  if (experience.value.isSecurityEngineer) {
+    return [
+      dir(-100, '工作区', 'Odometer', [leaf('/soc/dashboard', '运营工作台', 'DataAnalysis')]),
+      dir(-200, '策略治理', 'SetUp', [
+        leaf('/soc/policies', '策略与规则中心', 'SetUp'),
+        leaf('/soc/rules', '检测规则中心', 'List'),
+        leaf('/soc/external-events', '事件适配', 'Connection'),
+        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
+      ]),
+      dir(-300, '风险与关联', 'Share', [
+        leaf('/soc/incidents', '事件关联', 'Share'),
+        leaf('/soc/assets', '资产风险评分', 'Cpu'),
+        leaf('/soc/tickets', '剧本处置', 'Tickets'),
+        leaf('/soc/reports', '治理报告', 'DocumentChecked'),
+      ]),
+    ].filter((item): item is MenuItem => Boolean(item))
+  }
+
+  if (experience.value.isAnalyst) {
+    return [
+      dir(-100, '运营工作台', 'Odometer', [leaf('/soc/dashboard', '运营工作台', 'DataAnalysis')]),
+      dir(-200, '安全运营', 'Monitor', [
+        leaf('/soc/incidents', '事件簇', 'Share'),
+        leaf('/soc/alerts', '告警', 'WarningFilled'),
+        leaf('/soc/assets', '资产风险', 'Cpu'),
+        leaf('/soc/tickets', '工单', 'Tickets'),
+        leaf('/soc/reports', '报告', 'DocumentChecked'),
+      ]),
+    ].filter((item): item is MenuItem => Boolean(item))
+  }
+
+  if (experience.value.isEmployee) {
+    return [
+      dir(-100, '安全管家', 'Monitor', [clientMenu, clientTaskMenu, clientReportMenu, clientToolMenu, clientLogMenu]),
+    ].filter((item): item is MenuItem => Boolean(item))
+  }
+
+  return [showcaseMenu]
+}
+
+function directMenu(id: number, name: string, path: string, icon: string, sort: number): MenuItem {
+  return {
+    id,
+    parentId: 0,
+    name,
+    path,
+    type: 'menu',
+    sort,
+    visible: 1,
+    status: 1,
+    icon,
+    children: [],
+  }
 }
 
 function findMenuByPath(items: MenuItem[], path: string): MenuItem | null {

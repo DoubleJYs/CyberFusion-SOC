@@ -4,6 +4,32 @@ Date: 2026-06-19
 
 Scope: `/Users/zhangjiyan/Programs/projects/cyberspace_Security_shot_time/00-cyberfusion-platform`
 
+## SOC Operations Metrics Center v1 2026-06-22
+
+Scope: A5 read-only operations metrics over existing SOC records. This phase does not add detection, Agent behavior, black-box ML, public scanning, automatic remediation, or real external notifications.
+
+Coverage added:
+
+- `GET /api/soc/operations/overview` returns a metric catalog with `metricCode`, `metricName`, `value`, `trend`, `explanation`, and `drilldownTarget`.
+- `GET /api/soc/operations/sla` returns ticket total, pending, overdue, close rate, MTTA, MTTR, playbook application count, and playbook task completion rate.
+- `GET /api/soc/operations/risk-trend` returns 7 risk trend points plus 24h and 7d score deltas.
+- `GET /api/soc/operations/recommendation-adoption` returns recommendation count, viewed count, adopted count, and adoption rate.
+- `GET /api/soc/operations/client-tasks` returns employee task total/completed/overdue counts, completion rate, and Security Keeper checkup coverage.
+- `/soc/dashboard` shows an `运营指标中心` panel with drilldown-ready operation cards, SLA/efficiency, risk trend, recommendation adoption, employee task completion, Top risk assets, Top incident clusters, and Top trend anomalies.
+- `security_validation` report summary now includes risk change, ticket efficiency, recommendation adoption, employee task completion, and dry-run notification count.
+- `scripts/smoke/run-acceptance.sh --dry-run` now validates the five operations endpoints and asserts risk, ticket, recommendation, client task, and trend metric coverage.
+
+Validation matrix:
+
+| Check | Expected |
+| --- | --- |
+| Backend compile/test | Operations controller/service compile and existing SOC tests still pass. |
+| Frontend build | Dashboard operation metric panel builds with typed API payloads. |
+| Smoke API | Admin can call `/soc/operations/*` and every metric has explanation plus drilldown target. |
+| Permission | Employee receives `403` for `/soc/operations/overview`. |
+| Report | Generated `security_validation` summary contains `运营指标`. |
+| Safety | No new command execution, scanner, external sender, token, key, or customer data path. |
+
 ## Docker MySQL Client Fallback 2026-06-22
 
 Scope: local runtime diagnostics and SQL refresh documentation for environments without a host `mysql` command.
@@ -206,6 +232,54 @@ Safety notes:
 - A3 does not add Agent behavior, ML models, scanner execution, public target access, shell execution, automatic remediation, or real notification sending.
 - Recommendations are generated from existing SOC records and are explainable through `reason` plus `recommendedAction`.
 - Employee endpoint remains scoped to the authenticated employee's visible asset.
+
+## Trend Anomaly Detection v1 2026-06-22
+
+Scope: A4 explainable statistical trend detection over existing `soc_external_event` and `soc_alert` data. The feature is read-only and does not add black-box ML, Agent behavior, external collectors, scans, attacks, automatic remediation, or real notification sending.
+
+Coverage added:
+
+- `GET /api/soc/trends/anomalies/top?limit=5` returns Top trend anomalies for Dashboard.
+- `GET /api/soc/trends/anomalies` returns filtered anomalies for asset and external-event contexts.
+- `GET /api/soc/trends/aggregations` returns time-window counts grouped by asset, source type, event type, rule id, severity, and hour/day bucket.
+- `/soc/dashboard` shows `趋势异常 Top 5`.
+- `/soc/assets` asset detail shows `近期异常趋势`.
+- `/soc/external-events` shows `趋势异常提示`.
+- `security_validation` report metrics can read the trend anomaly summary.
+- `scripts/smoke/run-acceptance.sh --dry-run` now checks trend anomalies, explainable reason/recommendation text, spike/cross-source detection, hourly aggregation, and employee 403 on SOC trend APIs.
+
+Detection rules:
+
+| Rule | Behavior |
+| --- | --- |
+| Volume spike | Compares the latest 24-hour window with the previous 7-day daily average. |
+| Severity ratio rise | Flags assets where high/critical share rises materially from baseline. |
+| Consecutive asset anomaly | Flags assets with signals across multiple hourly windows. |
+| Cross-source rise | Flags the same asset when WAF/ZAP/Wazuh/Suricata/Zeek-style sources rise together. |
+
+Runtime note:
+
+- Initial live smoke returned `500` for `/api/soc/trends/anomalies/top` because the Java backend on `18080` was an older process started before the A4 controller/service were loaded.
+- Stopping only the stale Java process and restarting `scripts/mac/backend-dev.sh` from the current checkout fixed the live endpoint without deleting database volumes or changing data.
+- After restart, `/api/soc/trends/anomalies/top?limit=5` returned 4 rows and `/api/soc/trends/aggregations?assetIp=10.20.1.15&granularity=hour&limit=20` returned 9 rows.
+
+Validation status:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| `mvn -pl backend test` | PASS | 52 tests run, 0 failures, 0 errors. Added `TrendAnomalyServiceTest` coverage for volume spike, cross-source rise, and aggregation behavior. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite build passed; existing `@vueuse/core` Rollup annotation warnings remain. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. Backend process started from current source at `2026-06-22 21:50:33`; health, Docker MySQL key tables, menus, permissions, and employee 403 checks passed. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 44 pass, 0 fail. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 70 pass, 0 fail. Covered trend anomaly spike/cross-source detection, explainable reason/recommendation, hourly aggregation, and employee trend API denial. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass, 0 fail. No shell/script execution boundary regressions, no real notification sender, no high-confidence secrets. |
+
+Safety notes:
+
+- A4 only reads existing SOC rows and returns calculated summaries.
+- No new SQL table was required; it reuses `soc_external_event` and `soc_alert`.
+- Employee users cannot access SOC trend anomaly APIs.
+- The algorithm is explainable statistics: rolling 7-day average, ratio spike, severity ratio, consecutive hourly windows, and cross-source coverage.
 
 ## Runtime Regression Closure 2026-06-21
 
@@ -574,3 +648,85 @@ Release closure notes:
 - Browser plugin navigation was unavailable in this tool session. Playwright fallback was used.
 - Playwright fallback: passed. `http://127.0.0.1:5174/` rendered `登录 - CyberFusion SOC`, contained `CyberFusion SOC`, and no longer contained the inherited `WAZUH SOC OPERATIONS` login hero text.
 - Generated directories from verification (`backend/target`, `frontend/dist`, `frontend/node_modules`) were removed after validation to preserve source hygiene.
+
+## Results From 2026-06-22 A6 Report and Demo Story Upgrade
+
+Scope:
+
+- `/showcase` now presents the customer story line: evidence import -> incident cluster -> risk scoring -> recommended action -> ticket handling -> employee task -> report output.
+- `/soc/demo-range` now includes a post-import outcome panel with batch ID, multi-source evidence count, incident cluster count, Top risk asset, Top 3 recommendations, ticket/employee-task status, and dry-run notification count.
+- `security_validation` report generation now writes business-readable summary sections for management summary, technical evidence, incident/risk, handling progress, employee collaboration, trend/operation metrics, and safety boundary.
+- `/soc/reports` now parses upgraded `security_validation` reports into five detail sections and shows report status, batch, risk summary, incident count, and recommendation count in the list.
+- `scripts/smoke/run-acceptance.sh --dry-run` now asserts that generated reports include incident, risk, recommendation, operation, client-task, dry-run, and safety-boundary language, and that employee users cannot access SOC report management APIs.
+
+Coverage matrix:
+
+| Area | A6 check |
+| --- | --- |
+| Customer demo | `/showcase` displays one-sentence value, current status, `batchId`, and seven-step security operations story. |
+| Demo Range result | `/soc/demo-range` shows batch, evidence, incident clusters, risk asset, recommendations, tickets, employee tasks, dry-run count, and report entry. |
+| Report generation | `security_validation` summary includes batch, multi-source evidence, incident clusters, Top risk asset, risk change, recommendations, tickets, employee tasks, trend anomalies, operations metrics, dry-run, and safety boundary. |
+| Report center | List and detail views make `security_validation` reports readable without opening raw text. |
+| Permission boundary | Employee account cannot access SOC report management APIs. |
+| Safety boundary | A6 does not add detection, Agent, scanning, attack execution, auto-fix, real notification, or external security-system integration. |
+
+Validation results for this A6 run:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `mvn -pl backend test` | PASS | 52 tests passed, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite production build completed. Rollup reported only existing third-party pure-annotation warnings from `@vueuse/core`. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. Confirmed current-source backend process on `18080`, frontend proxy, health, key tables, menu/permission seed, and employee 403 boundaries. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 46 pass, 0 fail. Confirmed `/showcase`, `/soc/demo-range`, `/soc/incidents`, `/soc/reports`, policy/correlation/operations APIs, and employee denial for SOC-only APIs. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 87 pass, 0 fail. Validated demo batch import, incident cluster, risk profile, recommendation, ticket/task, trend/operations metrics, upgraded `security_validation` report summary, dry-run notification boundary, and employee report-management denial. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass. No source `.env`, high-confidence secrets, runtime DB/log files, or unexpected large artifacts; local terminal uses argv `ProcessBuilder`; adapter/playbook validation and dry-run notification defaults remain in place. |
+
+Runtime note:
+
+- The live backend on `18080` was restarted from the current source checkout before the final live smoke so the generated `security_validation` report used the upgraded A6 summary sections.
+
+## Results From 2026-06-23 A7 Algorithm Governance and Replay Evaluation
+
+Scope:
+
+- `/soc/policies` now includes an `算法治理` tab for current event correlation, risk scoring, recommendation ranking, and trend anomaly governance.
+- Backend adds `/api/soc/algorithm-center/overview`, `/api/soc/algorithm-center/replay`, `/api/soc/algorithm-center/evaluations`, and `/api/soc/algorithm-center/evaluations/{id}`.
+- SQL adds the minimal evaluation persistence tables `soc_algorithm_evaluation` and `soc_algorithm_evaluation_item`.
+- Replay evaluation is dry-run only. It reads existing external events, alerts, incidents, risk snapshots, recommendations, and trend anomalies, then returns explainable preview results without creating real incident clusters, risk snapshots, tickets, reports, or notifications.
+- Optional saved evaluations write only the evaluation header and preview items for later review.
+
+Coverage matrix:
+
+| Area | A7 check |
+| --- | --- |
+| Algorithm overview | Admin can load four governance objects: event correlation, risk scoring, recommendation ranking, and trend anomaly. |
+| Policy status | Overview exposes active/draft/disabled counts, latest run time, recent hit count, false-positive/ignored/closed counts, source coverage, version, and updater metadata where available. |
+| Replay evaluation | Admin can run a demo-batch dry-run replay and receive incident-cluster, risk-change, recommendation, and trend-anomaly preview counts. |
+| Explainability | Every replay preview item includes a `reason` explaining why the result would be produced. |
+| No production writes | Acceptance smoke compares incident, ticket, and report counts before and after replay and confirms they are unchanged. |
+| Evaluation records | When `saveEvaluation=true`, only `soc_algorithm_evaluation` and `soc_algorithm_evaluation_item` are written, and saved items keep explainable reasons. |
+| Permission boundary | Admin can view and replay; analyst can view evaluation records but replay returns `403`; employee overview and replay both return `403`. |
+| Safety boundary | A7 does not add detection, Agent, external collection, scanning, attack execution, arbitrary shell, auto-fix, real notification, or external WAF/IDS/SIEM/EDR integration. |
+
+Validation results for this A7 run:
+
+| Command | Result | Notes |
+| --- | --- | --- |
+| `mvn -pl backend test` | PASS | 52 tests passed, 0 failures, 0 errors. |
+| `pnpm --dir frontend build` | PASS | Vue typecheck and Vite production build completed. Rollup reported only existing third-party pure-annotation warnings from `@vueuse/core`. |
+| `bash -n scripts/smoke/run-acceptance.sh && bash -n scripts/smoke/check-visibility.sh && bash -n scripts/smoke/dev-doctor.sh && bash -n scripts/smoke/check-release-safety.sh` | PASS | Smoke scripts parsed successfully. |
+| `scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 15 pass, 0 warn, 0 fail. Confirmed current-source backend process on `18080`, frontend proxy, health, key tables, policy/incident permissions, and employee 403 boundaries. |
+| `scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api` | PASS | 53 pass, 0 fail. Confirmed `/soc/policies` algorithm tab source, `/soc/algorithm-center` API source, admin overview 200, analyst evaluation read 200, analyst replay 403, employee overview/replay 403. |
+| `scripts/smoke/run-acceptance.sh --dry-run` | PASS | 98 pass, 0 fail. Confirmed algorithm overview, dry-run replay, explainable preview items, no incident/ticket/report production writes, saved evaluation item reasons, and employee denial. |
+| `scripts/smoke/check-release-safety.sh` | PASS | 10 pass. No source `.env`, high-confidence secrets, runtime DB/log files, unexpected large artifacts, shell/script execution in local check/adapter/playbook paths, or real notification defaults. |
+
+Replay dry-run result:
+
+- `dryRun=true` and `realWrites=false` were asserted by smoke.
+- The acceptance script compared current incident, ticket, and report counts before and after `/api/soc/algorithm-center/replay`; all three remained unchanged.
+- Saved evaluation detail loaded successfully and every saved item contained a non-empty explainability `reason`.
+
+Runtime note:
+
+- The A7 live validation ran against the local frontend on `127.0.0.1:5174` and backend API on `127.0.0.1:18080/api`.
+- The backend health endpoint reported `UP`; database, schema, seed, and Redis dependencies were healthy during validation.
