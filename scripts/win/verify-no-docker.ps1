@@ -1,6 +1,8 @@
 param(
     [string]$BaseUrl = $(if ($env:CYBERFUSION_FRONTEND_URL) { $env:CYBERFUSION_FRONTEND_URL } else { "http://127.0.0.1:5174" }),
     [string]$ApiBaseUrl = $(if ($env:CYBERFUSION_API_BASE) { $env:CYBERFUSION_API_BASE } else { "http://127.0.0.1:18080/api" }),
+    [switch]$PreStart,
+    [switch]$PostStart,
     [switch]$SkipBuild,
     [switch]$SkipDbInit,
     [switch]$SkipDoctor,
@@ -47,6 +49,15 @@ if ($env:CYBERFUSION_ENV_ROOT -match "^[A-Za-z]:") {
     }
 }
 
+if ($PreStart) {
+    $SkipDoctor = $true
+}
+
+if ($PostStart) {
+    $SkipBuild = $true
+    $SkipDbInit = $true
+}
+
 Invoke-Step "Environment check without Docker" {
     & (Join-Path $ScriptDir "check-env.ps1")
 }
@@ -76,7 +87,7 @@ if (-not $SkipDoctor) {
 } else {
     Write-Host ""
     Write-Host "Runtime doctor skipped. After run-dev.ps1 starts the app, run:"
-    Write-Host "  .\scripts\win\verify-no-docker.ps1 -SkipBuild -SkipDbInit"
+    Write-Host "  .\scripts\win\verify-no-docker.ps1 -PostStart"
 }
 
 Write-Host ""

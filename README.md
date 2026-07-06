@@ -145,7 +145,9 @@ Windows no-Docker:
 
 ```powershell
 git status --short
-.\scripts\win\verify-no-docker.ps1
+.\scripts\win\verify-no-docker.ps1 -PreStart
+.\scripts\win\run-dev.ps1
+.\scripts\win\verify-no-docker.ps1 -PostStart
 ```
 
 macOS/Linux Docker-backed local path:

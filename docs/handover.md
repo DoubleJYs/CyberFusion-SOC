@@ -70,7 +70,9 @@ scripts/smoke/run-acceptance.sh --dry-run
 Windows no-Docker verification replaces the Compose config checks with:
 
 ```powershell
-.\scripts\win\verify-no-docker.ps1
+.\scripts\win\verify-no-docker.ps1 -PreStart
+.\scripts\win\run-dev.ps1
+.\scripts\win\verify-no-docker.ps1 -PostStart
 ```
 
 If the source directory is not a Git repository, record the `git status` failure and list changed files manually.

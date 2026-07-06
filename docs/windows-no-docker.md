@@ -148,7 +148,13 @@ Run the full Windows no-Docker verifier after startup:
 For pre-start checks only, skip the runtime doctor:
 
 ```powershell
-.\scripts\win\verify-no-docker.ps1 -SkipDoctor
+.\scripts\win\verify-no-docker.ps1 -PreStart
+```
+
+After `run-dev.ps1` starts the backend and frontend, run the post-start runtime check:
+
+```powershell
+.\scripts\win\verify-no-docker.ps1 -PostStart
 ```
 
 The verifier checks the D drive project location, required local tools, local MySQL schema/seed, frontend/backend build, and runtime doctor. It does not call Docker.
