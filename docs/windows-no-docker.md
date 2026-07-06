@@ -44,7 +44,7 @@ Create and verify the D drive runtime folders before startup:
 .\scripts\win\prepare-d-drive.ps1
 ```
 
-The preparation script creates `uploads`, `logs\backend`, `backups\runtime`, `local-vm`, dependency caches, `tmp`, package output, and package staging under `D:\CyberFusion\Environment\cyberfusion-platform`, then verifies that MySQL and Redis ports are reachable. Use `-SkipServiceCheck` only when you want to create folders before starting those services.
+The preparation script creates `uploads`, `logs\backend`, `backups\runtime`, `local-vm`, dependency caches, `tmp`, package output, package staging, and validation evidence folders under `D:\CyberFusion\Environment\cyberfusion-platform`, then verifies that MySQL and Redis ports are reachable. Use `-SkipServiceCheck` only when you want to create folders before starting those services.
 
 ## Database
 
@@ -102,6 +102,7 @@ The startup script creates these folders when missing:
 - `tmp`
 - `packages`
 - `package-staging`
+- `validation`
 
 The Windows scripts pass Maven `-Dmaven.repo.local` and pnpm `--store-dir`, set npm cache, and set process `TEMP`/`TMP` plus Java `java.io.tmpdir` so dependency caches and temporary files stay under D drive instead of the default user profile on C drive.
 

@@ -6,7 +6,7 @@ param(
     [switch]$SkipStart,
     [switch]$SkipDbInit,
     [switch]$SkipBuild,
-    [switch]$SkipBrowserOpen
+    [switch]$OpenBrowser
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,6 +40,7 @@ function Invoke-EvidenceStep {
     Write-Host "== $Name =="
     $started = Get-Date
     try {
+        $global:LASTEXITCODE = 0
         & $Action
         if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) {
             throw "$Name exited with code $LASTEXITCODE"
@@ -76,6 +77,8 @@ function Get-CommandOutput {
 Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
 Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
+$env:CYBERFUSION_FRONTEND_URL = $BaseUrl
+$env:CYBERFUSION_API_BASE = $ApiBaseUrl
 
 if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
     $EvidenceRoot = Join-Path $EnvRoot "validation"
@@ -133,6 +136,11 @@ try {
             $StartArgs = @("-EnvRoot", $EnvRoot, "-SkipBrowserOpen")
             if ($SkipDbInit) { $StartArgs += "-SkipDbInit" }
             if ($SkipBuild) { $StartArgs += "-SkipBuild" }
+            if ($OpenBrowser) {
+                $StartArgs = @("-EnvRoot", $EnvRoot)
+                if ($SkipDbInit) { $StartArgs += "-SkipDbInit" }
+                if ($SkipBuild) { $StartArgs += "-SkipBuild" }
+            }
             & (Join-Path $ScriptDir "start-no-docker.ps1") @StartArgs
         }
     }

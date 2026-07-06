@@ -84,7 +84,8 @@ $RequiredDirs = @(
     (Join-Path $EnvRoot "caches\npm"),
     (Join-Path $EnvRoot "tmp"),
     (Join-Path $EnvRoot "packages"),
-    (Join-Path $EnvRoot "package-staging")
+    (Join-Path $EnvRoot "package-staging"),
+    (Join-Path $EnvRoot "validation")
 )
 
 foreach ($Dir in $RequiredDirs) {
