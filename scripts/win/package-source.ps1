@@ -25,6 +25,7 @@ $Required = @(
     "deploy\docker-compose.yml",
     "scripts\win\run-dev.ps1",
     "scripts\win\init-local-db.ps1",
+    "scripts\win\verify-no-docker.ps1",
     "docs\windows-no-docker.md",
     ".env.example",
     "README.md"

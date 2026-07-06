@@ -35,9 +35,13 @@ function Assert-ProjectOnDataDrive {
 function Assert-DriveRoot {
     param([string]$PathValue)
     if ($PathValue -match "^[A-Za-z]:") {
+        $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
+        if ($Drive -ne "D") {
+            throw "Windows no-Docker runtime data must stay on D: under D:\CyberFusion, not $PathValue."
+        }
         $DriveRoot = "$($PathValue.Substring(0, 2))\"
         if (-not (Test-Path $DriveRoot)) {
-            throw "Required Windows drive not found: $DriveRoot. Put CyberFusion on D: or pass -EnvRoot to another non-source runtime path."
+            throw "Required Windows drive not found: $DriveRoot. Put CyberFusion on D: before starting."
         }
     }
 }

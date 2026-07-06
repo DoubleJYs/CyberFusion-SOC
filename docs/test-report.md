@@ -4,6 +4,16 @@ Date: 2026-06-19
 
 Scope: `/Users/zhangjiyan/Programs/projects/cyberspace_Security_shot_time/00-cyberfusion-platform`
 
+## Current Windows No-Docker Status 2026-07-06
+
+The current Windows delivery path is no-Docker and D-drive based. Use `docs/windows-no-docker.md`, `README.md`, and `scripts/win/*.ps1` as the current startup source of truth:
+
+- Source path: `D:\CyberFusion\00-cyberfusion-platform`.
+- Runtime path: `D:\CyberFusion\Environment\cyberfusion-platform`.
+- MySQL and Redis must be local or reachable Windows services started before CyberFusion.
+- `scripts/win/run-dev.ps1`, `scripts/win/init-local-db.ps1`, `scripts/win/dev-doctor.ps1`, `scripts/win/backup-runtime.ps1`, and `scripts/win/restore-runtime.ps1` use local MySQL client tools, not Docker.
+- Older Docker fallback notes below are historical validation records for the macOS/Linux Docker-backed local path and should not be used as Windows startup instructions.
+
 ## SOC Operations Metrics Center v1 2026-06-22
 
 Scope: A5 read-only operations metrics over existing SOC records. This phase does not add detection, Agent behavior, black-box ML, public scanning, automatic remediation, or real external notifications.

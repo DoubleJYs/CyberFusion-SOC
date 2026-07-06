@@ -145,8 +145,7 @@ Windows no-Docker:
 
 ```powershell
 git status --short
-.\scripts\win\build-all.ps1
-.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
+.\scripts\win\verify-no-docker.ps1
 ```
 
 macOS/Linux Docker-backed local path:

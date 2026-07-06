@@ -4,7 +4,7 @@ Date: 2026-06-22
 
 Scope: CyberFusion SOC local development and demo runtime under `00-cyberfusion-platform`.
 
-This document records repeatable triage steps for startup, schema, seed, password, and smoke-test issues. The steps are read-only unless they explicitly say to apply SQL. Do not delete Docker volumes, do not run `docker compose down -v`, and do not write real secrets into source.
+This document records repeatable triage steps for startup, schema, seed, password, and smoke-test issues. The steps are read-only unless they explicitly say to apply SQL. For Windows delivery, use the no-Docker D drive path in `docs/windows-no-docker.md`: source under `D:\CyberFusion\00-cyberfusion-platform`, runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`, local MySQL 8, and local Redis. Do not delete Docker volumes, do not run `docker compose down -v`, and do not write real secrets into source.
 
 ## First Command
 
@@ -31,7 +31,7 @@ The doctor checks:
 - Admin `/auth/me` includes current SOC menus and permissions.
 - Employee account receives `403` for SOC-only policy, incident, and correlation-rule APIs.
 
-The local machine does not need a `mysql` command for these checks. The doctor uses a local MySQL client if it exists; otherwise it falls back to the MySQL client inside `cyberfusion-platform-mysql-1`. `DB_PASSWORD` is still required for SQL authentication and must come from the local environment, not from source files.
+Windows no-Docker diagnostics require local `mysql.exe` in `PATH`. macOS/Linux Docker-backed diagnostics can use the shell smoke scripts. In both modes, `DB_PASSWORD` is required for SQL authentication and must come from the local environment, not from source files.
 
 ## Backend Is Not Listening
 
@@ -64,7 +64,7 @@ scripts/mac/backend-dev.sh
 Windows:
 
 ```powershell
-$env:DB_PASSWORD = "your-local-container-password"
+$env:DB_PASSWORD = "your-local-mysql-password"
 $env:SERVER_PORT = "18080"
 .\scripts\win\backend-dev.ps1
 ```
@@ -117,7 +117,19 @@ Symptom:
 - `GET /api/health` reports `schema: DOWN` with missing tables.
 - Incident, policy, adapter, local-check, or risk APIs fail after a feature was added.
 
-Non-destructive repair for the local Docker database:
+Windows no-Docker non-destructive repair:
+
+```powershell
+cd D:\CyberFusion\00-cyberfusion-platform
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "your-local-mysql-password"
+.\scripts\win\init-local-db.ps1
+```
+
+macOS/Linux Docker-backed non-destructive repair:
 
 ```sh
 MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
@@ -154,7 +166,28 @@ scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-ur
 
 Use the system user-management page to reset local demo passwords when possible. Do not store the password in source files.
 
-## MySQL Root Password Rejected
+## Windows MySQL Password Rejected
+
+Symptom:
+
+- `.\scripts\win\init-local-db.ps1` or `.\scripts\win\dev-doctor.ps1` reports MySQL authentication failure.
+- `GET /api/health` reports `database: DOWN`.
+- Login returns `500` even though backend and frontend ports are listening.
+
+Triage:
+
+```powershell
+cd D:\CyberFusion\00-cyberfusion-platform
+$env:DB_PASSWORD = "your-local-mysql-password"
+mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SELECT 1;"
+.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
+```
+
+If the SQL probe fails, fix the Windows MySQL service user/password first. Do not write the password into source files. If the database is newly created or missing tables, rerun `.\scripts\win\init-local-db.ps1` after authentication works.
+
+## Docker MySQL Root Password Rejected
+
+This section applies to the macOS/Linux Docker-backed local path and older historical Docker troubleshooting. It does not apply to the current Windows no-Docker D drive path.
 
 Symptom:
 

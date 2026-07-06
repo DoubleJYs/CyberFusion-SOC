@@ -19,9 +19,25 @@ if ($ProjectRoot -match "^[A-Za-z]:") {
         throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $ProjectRoot. Move 00-cyberfusion-platform to D: before creating backups."
     }
 }
+
+function Assert-DataOnDDrive {
+    param(
+        [string]$Label,
+        [string]$PathValue
+    )
+    if ($PathValue -match "^[A-Za-z]:") {
+        $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
+        if ($Drive -ne "D") {
+            throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
+        }
+    }
+}
+
+Assert-DataOnDDrive -Label "Environment root" -PathValue $EnvRoot
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $BackupRoot = Join-Path $EnvRoot "backups\runtime"
 }
+Assert-DataOnDDrive -Label "Backup root" -PathValue $BackupRoot
 
 function Assert-Command {
     param([string]$Command)
@@ -49,7 +65,7 @@ $previousMysqlPwd = $env:MYSQL_PWD
 try {
     $env:MYSQL_PWD = $DbPassword
     $DumpPath = Join-Path $BackupDir "mysql-$DbName.sql"
-    & mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 "-h$DbHost" "-P$DbPort" "-u$DbUsername" $DbName | Set-Content -Path $DumpPath -Encoding UTF8
+    & mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 "--result-file=$DumpPath" "-h$DbHost" "-P$DbPort" "-u$DbUsername" $DbName
     if ($LASTEXITCODE -ne 0) {
         throw "mysqldump failed with exit code $LASTEXITCODE"
     }

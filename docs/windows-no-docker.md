@@ -139,7 +139,21 @@ $env:VITE_API_PROXY_TARGET = "http://127.0.0.1:18080"
 
 ## Diagnostics
 
-Run the read-only doctor after startup:
+Run the full Windows no-Docker verifier after startup:
+
+```powershell
+.\scripts\win\verify-no-docker.ps1
+```
+
+For pre-start checks only, skip the runtime doctor:
+
+```powershell
+.\scripts\win\verify-no-docker.ps1 -SkipDoctor
+```
+
+The verifier checks the D drive project location, required local tools, local MySQL schema/seed, frontend/backend build, and runtime doctor. It does not call Docker.
+
+You can also run the read-only doctor directly after startup:
 
 ```powershell
 .\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api

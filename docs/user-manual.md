@@ -251,7 +251,19 @@ Common causes:
 - A page route exists in frontend code but is not present in `sys_menu` or `sys_role_menu`.
 - The screenshot gallery is older than the current source checkout.
 
-For an already initialized local database, refresh schema and seed data idempotently instead of deleting data:
+For an already initialized Windows no-Docker database, refresh schema and seed data idempotently instead of deleting data:
+
+```powershell
+cd D:\CyberFusion\00-cyberfusion-platform
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\init-local-db.ps1
+```
+
+For the macOS/Linux Docker-backed local path:
 
 ```sh
 docker exec -i cyberfusion-platform-mysql-1 sh -c 'exec mysql -uroot -p"$MYSQL_ROOT_PASSWORD" cyberfusion_soc' < sql/schema.sql
@@ -637,7 +649,7 @@ The Correlation Engine only reads existing SOC records and writes cluster/eviden
 | Symptom | Likely cause | Commands |
 | --- | --- | --- |
 | Browser shows connection refused on `5174` | Frontend dev server is not running or used another port. | `lsof -iTCP:5174 -sTCP:LISTEN`; `pnpm --dir frontend dev --host 127.0.0.1 --port 5174` |
-| Frontend shows backend 500 | Backend cannot reach MySQL/Redis or schema is missing. | `lsof -iTCP:18080 -sTCP:LISTEN`; `docker compose -f deploy/docker-compose.yml ps`; `mysql -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SHOW TABLES;"` |
+| Frontend shows backend 500 | Backend cannot reach MySQL/Redis or schema is missing. | Windows: `.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api`; `mysql -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SHOW TABLES;"`. macOS/Linux: `lsof -iTCP:18080 -sTCP:LISTEN`; `docker compose -f deploy/docker-compose.yml ps`. |
 | Login fails | Seed data not applied or wrong database selected. | `mysql -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SELECT username,status FROM sys_user;"` |
 | Admin login fails but analyst/operator can login | Local admin password was changed after seed, or smoke uses the old demo password. | Set `CYBERFUSION_ADMIN_PASSWORD` for smoke, or use the documented local fallback `admin123` if that is the current local demo password. |
 | `/soc/rules` not in menu | Menu seed not applied in this database. | `mysql -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SELECT id,name,path,permission FROM sys_menu WHERE path='/soc/rules';"` |
