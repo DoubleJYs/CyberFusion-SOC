@@ -183,7 +183,7 @@ Assert-TcpPort -Name "MySQL" -HostName $DbHost -Port ([int]$DbPort)
 Assert-TcpPort -Name "Redis" -HostName $RedisHost -Port ([int]$RedisPort)
 
 if (-not $SkipDbInit) {
-    & (Join-Path $ScriptDir "init-local-db.ps1") -DbHost $DbHost -DbPort ([int]$DbPort) -DbName $DbName -DbUsername $DbUsername -DbPassword $DbPassword
+    & (Join-Path $ScriptDir "init-local-db.ps1") -DbHost $DbHost -DbPort ([int]$DbPort) -DbName $DbName -DbUsername $DbUsername
     if ($LASTEXITCODE -ne 0) { throw "Local database initialization failed." }
 }
 

@@ -80,7 +80,6 @@ $RunArgs = @(
     "-RedisPort", "$RedisPort",
     "-ServerPort", $ServerPort,
     "-FrontendPort", $FrontendPort,
-    "-DbPassword", $DbPassword,
     "-EnvRoot", $EnvRoot
 )
 if ($SkipDbInit) { $RunArgs += "-SkipDbInit" }
