@@ -81,6 +81,7 @@ try {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($RedisDumpPath)) {
+    Assert-DataOnDDrive -Label "Redis dump path" -PathValue $RedisDumpPath
     if (-not (Test-Path $RedisDumpPath -PathType Leaf)) {
         throw "REDIS_DUMP_PATH was set but does not point to a file: $RedisDumpPath"
     }

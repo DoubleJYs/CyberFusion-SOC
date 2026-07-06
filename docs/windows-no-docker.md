@@ -226,7 +226,7 @@ $env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
 ```
 
-For Redis restore, stop Redis first, then pass `-RestoreRedis` and set `REDIS_DUMP_PATH` or `-RedisTargetDumpPath`.
+For Redis backup or restore, keep `REDIS_DUMP_PATH` or `-RedisTargetDumpPath` on D drive. Stop Redis before restore, then pass `-RestoreRedis` and the D drive dump path.
 
 ## Common Failures
 
