@@ -13,6 +13,12 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+if ($ProjectRoot -match "^[A-Za-z]:") {
+    $ProjectDrive = $ProjectRoot.Substring(0, 1).ToUpperInvariant()
+    if ($ProjectDrive -ne "D") {
+        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $ProjectRoot. Move 00-cyberfusion-platform to D: before creating backups."
+    }
+}
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $BackupRoot = Join-Path $EnvRoot "backups\runtime"
 }

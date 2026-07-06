@@ -12,6 +12,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+if ($ProjectRoot.Path -match "^[A-Za-z]:") {
+  $ProjectDrive = $ProjectRoot.Path.Substring(0, 1).ToUpperInvariant()
+  if ($ProjectDrive -ne "D") {
+    throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $($ProjectRoot.Path). Move 00-cyberfusion-platform to D: before running diagnostics."
+  }
+}
+
 $DemoPassword = if ($env:CYBERFUSION_DEMO_PASSWORD) { $env:CYBERFUSION_DEMO_PASSWORD } else { "Admin@123456" }
 $AdminPassword = if ($env:CYBERFUSION_ADMIN_PASSWORD) { $env:CYBERFUSION_ADMIN_PASSWORD } else { $DemoPassword }
 $EmployeePassword = if ($env:CYBERFUSION_EMPLOYEE_PASSWORD) { $env:CYBERFUSION_EMPLOYEE_PASSWORD } else { $DemoPassword }

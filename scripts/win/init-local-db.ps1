@@ -16,6 +16,13 @@ $SchemaSql = Join-Path $ProjectRoot "sql\schema.sql"
 $DataSql = Join-Path $ProjectRoot "sql\data.sql"
 $LatestPatchSql = Join-Path $ProjectRoot "scripts\sql\apply-latest-menu-and-policy-seed.sql"
 
+if ($ProjectRoot.Path -match "^[A-Za-z]:") {
+    $ProjectDrive = $ProjectRoot.Path.Substring(0, 1).ToUpperInvariant()
+    if ($ProjectDrive -ne "D") {
+        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $($ProjectRoot.Path). Move 00-cyberfusion-platform to D: before initializing the database."
+    }
+}
+
 function Assert-Command {
     param([string]$Command)
     if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {

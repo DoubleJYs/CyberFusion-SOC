@@ -13,6 +13,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+if ($ProjectRoot -match "^[A-Za-z]:") {
+    $ProjectDrive = $ProjectRoot.Substring(0, 1).ToUpperInvariant()
+    if ($ProjectDrive -ne "D") {
+        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $ProjectRoot. Move 00-cyberfusion-platform to D: before restoring runtime data."
+    }
+}
+
 function Assert-Command {
     param([string]$Command)
     if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
