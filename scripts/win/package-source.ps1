@@ -72,6 +72,7 @@ $RobocopyArgs = @(
     "frontend\playwright-report",
     "coverage",
     "playwright-report",
+    "outputs",
     "logs",
     "tmp",
     "/XF",
@@ -108,6 +109,7 @@ $GeneratedDirs = @(
     "frontend\playwright-report",
     "coverage",
     "playwright-report",
+    "outputs",
     "logs",
     "tmp"
 )

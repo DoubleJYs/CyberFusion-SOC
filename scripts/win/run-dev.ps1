@@ -137,6 +137,9 @@ $env:DB_USERNAME = $DbUsername
 $env:REDIS_HOST = $RedisHost
 $env:REDIS_PORT = $RedisPort
 $env:DB_PASSWORD = $DbPassword
+$env:SERVER_PORT = $ServerPort
+$env:FRONTEND_PORT = $FrontendPort
+$env:VITE_API_PROXY_TARGET = "http://127.0.0.1:$ServerPort"
 
 Assert-TcpPort -Name "MySQL" -HostName $DbHost -Port ([int]$DbPort)
 Assert-TcpPort -Name "Redis" -HostName $RedisHost -Port ([int]$RedisPort)
@@ -147,23 +150,11 @@ if (-not $SkipDbInit) {
 }
 
 $BackendCommand = @"
-`$env:SERVER_PORT = '$ServerPort'
-`$env:DB_HOST = '$DbHost'
-`$env:DB_PORT = '$DbPort'
-`$env:DB_NAME = '$DbName'
-`$env:DB_USERNAME = '$DbUsername'
-`$env:REDIS_PORT = '$RedisPort'
-`$env:REDIS_HOST = '$RedisHost'
-`$env:DB_PASSWORD = '$DbPassword'
-`$env:CYBERFUSION_ENV_ROOT = '$EnvRoot'
-`$env:APP_UPLOAD_BASE_DIR = '$env:APP_UPLOAD_BASE_DIR'
-`$env:LOGGING_FILE_PATH = '$env:LOGGING_FILE_PATH'
 Set-Location '$BackendDir'
 mvn spring-boot:run
 "@
 
 $FrontendCommand = @"
-`$env:VITE_API_PROXY_TARGET = 'http://127.0.0.1:$ServerPort'
 Set-Location '$FrontendDir'
 pnpm install --frozen-lockfile
 pnpm dev --port $FrontendPort

@@ -29,6 +29,7 @@ remove_path() {
 remove_path "backend/target"
 remove_path "frontend/dist"
 remove_path "frontend/test-results"
+remove_path "outputs"
 remove_path "logs"
 remove_path "tmp"
 

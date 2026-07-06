@@ -47,6 +47,7 @@ check_absent "frontend/dist"
 check_absent "frontend/test-results"
 check_absent "coverage"
 check_absent "frontend/coverage"
+check_absent "outputs"
 check_absent ".env"
 check_absent ".DS_Store"
 check_absent "frontend/.DS_Store"
@@ -65,6 +66,7 @@ secret_hits="$(grep -RInE \
   --exclude-dir=dist \
   --exclude-dir=.git \
   --exclude-dir=test-results \
+  --exclude-dir=outputs \
   "${secret_pattern}" \
   "${PROJECT_ROOT}" 2>/dev/null || true)"
 if [ -n "${secret_hits}" ]; then
@@ -82,6 +84,7 @@ compliance_hits="$(grep -RInE \
   --exclude-dir=dist \
   --exclude-dir=.git \
   --exclude-dir=test-results \
+  --exclude-dir=outputs \
   "${bad_terms_pattern}" \
   "${PROJECT_ROOT}" 2>/dev/null || true)"
 if [ -n "${compliance_hits}" ]; then

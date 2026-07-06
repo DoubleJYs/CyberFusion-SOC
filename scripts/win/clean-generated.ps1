@@ -33,6 +33,7 @@ function Remove-GeneratedPath {
 Remove-GeneratedPath "backend\target"
 Remove-GeneratedPath "frontend\dist"
 Remove-GeneratedPath "frontend\test-results"
+Remove-GeneratedPath "outputs"
 Remove-GeneratedPath "logs"
 Remove-GeneratedPath "tmp"
 
