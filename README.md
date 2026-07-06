@@ -67,7 +67,7 @@ $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\run-dev.ps1 -DbPassword $env:DB_PASSWORD -FrontendPort 5174 -ServerPort 18080
 ```
 
-The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
+The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. The scripts fail fast when started from `C:`; use `D:\CyberFusion\00-cyberfusion-platform` for source and `D:\CyberFusion\Environment\cyberfusion-platform` for runtime data. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
 
 Default URLs:
 
@@ -94,7 +94,7 @@ Windows PowerShell:
 
 The doctor checks frontend/backend ports, the frontend `/api` proxy to the backend, backend Java process start time, `/api/health`, required SOC tables, key menu/permission seed rows, admin `/auth/me` menus/permissions, and employee 403 boundaries for SOC-only APIs. It does not delete volumes, reset passwords, import demo data, scan targets, execute local terminal commands, or send notifications.
 
-The Windows no-Docker startup requires local `mysql.exe` because it initializes the schema directly against the configured MySQL server. The read-only doctor can still use local `mysql` when available, or fall back to the MySQL client inside `cyberfusion-platform-mysql-1` for Docker-based macOS/Linux setups. In both modes `DB_PASSWORD` must come from the local environment and is not printed.
+The Windows no-Docker startup and doctor require local `mysql.exe` because they initialize and verify the schema directly against the configured MySQL server. Windows backup and restore are also no-Docker: `scripts\win\backup-runtime.ps1` uses local `mysqldump.exe`, and `scripts\win\restore-runtime.ps1` uses local `mysql.exe`. `DB_PASSWORD` must come from the local environment and is not printed.
 
 Safe backend startup sequence:
 
@@ -139,7 +139,17 @@ Then use the alert center to convert a generated alert to a ticket, use CyberChe
 
 ## One-Command Acceptance
 
-Run these commands from `00-cyberfusion-platform` before handing over a release candidate:
+Run these commands from `00-cyberfusion-platform` before handing over a release candidate.
+
+Windows no-Docker:
+
+```powershell
+git status --short
+.\scripts\win\build-all.ps1
+.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
+```
+
+macOS/Linux Docker-backed local path:
 
 ```sh
 git status --short
@@ -156,7 +166,7 @@ scripts/smoke/run-acceptance.sh --dry-run
 
 `scripts/smoke/run-acceptance.sh --dry-run` still calls the local API to prove the acceptance chain. It covers demo batch import, evidence, linked alerts, incident correlation, incident-cluster detail, alert-to-incident lookup, incident-to-ticket conversion, recommended response playbook application, ticket tasks, report generation, policy checks, adapter preview, and dry-run notifications. The dry-run boundary means it uses local demo data and dry-run notification logs only; it does not scan public targets and does not send real email, webhook, Feishu, WeCom, DingTalk, Slack, or SIEM/WAF/IDS traffic. Set `CYBERFUSION_API_BASE` if the backend is not on `http://localhost:18080/api`.
 
-Before running live acceptance, start the backend from the current source checkout with Environment-managed database variables. `DB_PASSWORD` must match the active local MySQL container; an incorrect value can allow the backend process to start but make `/api/auth/login` return `500`.
+Before running live acceptance, start the backend from the current source checkout with Environment-managed database variables. On Windows no-Docker, `DB_PASSWORD` must match the local MySQL service; an incorrect value can allow the backend process to start but make `/api/auth/login` return `500`.
 
 ## Demo Data Governance
 
@@ -190,7 +200,15 @@ scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-ur
 
 The visibility check includes the customer demo route, `/soc/incidents`, `/soc/policies`, the policy center `事件关联规则` tab/API, and employee 403 boundaries for incident and rule-management APIs.
 
-It logs in with local demo users, prints `/api/auth/me` menu paths, checks key frontend routes such as `/showcase`, `/soc/policies`, `/client/tasks`, checks policy/adapter/playbook APIs, and confirms employees receive `403` for policy APIs. Existing databases may need a schema and seed refresh because `sql/data.sql` is only applied automatically for newly initialized databases:
+It logs in with local demo users, prints `/api/auth/me` menu paths, checks key frontend routes such as `/showcase`, `/soc/policies`, `/client/tasks`, checks policy/adapter/playbook APIs, and confirms employees receive `403` for policy APIs. Existing databases may need a schema and seed refresh because `sql/data.sql` is only applied automatically for newly initialized databases.
+
+Windows no-Docker refresh:
+
+```powershell
+.\scripts\win\init-local-db.ps1
+```
+
+macOS/Linux Docker-backed refresh:
 
 ```sh
 MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \

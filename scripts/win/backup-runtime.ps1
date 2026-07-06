@@ -1,21 +1,38 @@
+param(
+    [string]$DbHost = $(if ($env:DB_HOST) { $env:DB_HOST } else { "127.0.0.1" }),
+    [int]$DbPort = $(if ($env:DB_PORT) { [int]$env:DB_PORT } else { 3306 }),
+    [string]$DbName = $(if ($env:DB_NAME) { $env:DB_NAME } else { "cyberfusion_soc" }),
+    [string]$DbUsername = $(if ($env:DB_USERNAME) { $env:DB_USERNAME } else { "root" }),
+    [string]$DbPassword = $env:DB_PASSWORD,
+    [string]$EnvRoot = $(if ($env:CYBERFUSION_ENV_ROOT) { $env:CYBERFUSION_ENV_ROOT } else { "D:\CyberFusion\Environment\cyberfusion-platform" }),
+    [string]$BackupRoot = $(if ($env:CYBERFUSION_BACKUP_ROOT) { $env:CYBERFUSION_BACKUP_ROOT } else { "" }),
+    [string]$RedisDumpPath = $env:REDIS_DUMP_PATH
+)
+
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-$ComposeFile = Join-Path $ProjectRoot "deploy\docker-compose.yml"
-$DefaultEnvRoot = "D:\CyberFusion\Environment\cyberfusion-platform"
-$EnvRoot = if ($env:CYBERFUSION_ENV_ROOT) { $env:CYBERFUSION_ENV_ROOT } else { $DefaultEnvRoot }
-$BackupRoot = if ($env:CYBERFUSION_BACKUP_ROOT) { $env:CYBERFUSION_BACKUP_ROOT } else { Join-Path $EnvRoot "backups/runtime" }
-$DbName = if ($env:DB_NAME) { $env:DB_NAME } else { "cyberfusion_soc" }
+if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
+    $BackupRoot = Join-Path $EnvRoot "backups\runtime"
+}
 
-if (-not $env:DB_PASSWORD) {
+function Assert-Command {
+    param([string]$Command)
+    if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) {
+        throw "Missing command: $Command. Install MySQL 8 client tools and add the bin directory to PATH."
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($DbPassword)) {
     throw "DB_PASSWORD is required and must come from your local environment."
 }
 
-$ProjectRootPattern = "$ProjectRoot*"
-if ($BackupRoot -like $ProjectRootPattern) {
+if ($BackupRoot -like "$ProjectRoot*") {
     throw "Backup root must not be under the source project: $BackupRoot"
 }
+
+Assert-Command "mysqldump"
 
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $BackupDir = Join-Path $BackupRoot $Timestamp
@@ -24,9 +41,9 @@ New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null
 Write-Host "Creating MySQL backup in $BackupDir"
 $previousMysqlPwd = $env:MYSQL_PWD
 try {
-    $env:MYSQL_PWD = $env:DB_PASSWORD
-    $DumpArgs = @("compose", "-f", $ComposeFile, "exec", "-T", "-e", "MYSQL_PWD", "mysql", "sh", "-c", 'mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 -uroot "$MYSQL_DATABASE"')
-    $DumpContent = & docker @DumpArgs
+    $env:MYSQL_PWD = $DbPassword
+    $DumpPath = Join-Path $BackupDir "mysql-$DbName.sql"
+    & mysqldump --single-transaction --routines --events --default-character-set=utf8mb4 "-h$DbHost" "-P$DbPort" "-u$DbUsername" $DbName | Set-Content -Path $DumpPath -Encoding UTF8
     if ($LASTEXITCODE -ne 0) {
         throw "mysqldump failed with exit code $LASTEXITCODE"
     }
@@ -37,25 +54,30 @@ try {
         $env:MYSQL_PWD = $previousMysqlPwd
     }
 }
-$DumpPath = Join-Path $BackupDir "mysql-$DbName.sql"
-$DumpContent | Set-Content -Path $DumpPath -Encoding UTF8
 
-Write-Host "Creating Redis snapshot in $BackupDir"
-& docker compose -f $ComposeFile exec -T redis redis-cli SAVE | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "redis SAVE failed with exit code $LASTEXITCODE"
+if (-not [string]::IsNullOrWhiteSpace($RedisDumpPath)) {
+    if (-not (Test-Path $RedisDumpPath -PathType Leaf)) {
+        throw "REDIS_DUMP_PATH was set but does not point to a file: $RedisDumpPath"
+    }
+    Copy-Item -Path $RedisDumpPath -Destination (Join-Path $BackupDir "redis-dump.rdb") -Force
+    Write-Host "Copied Redis dump from $RedisDumpPath"
+} else {
+    Write-Host "Redis dump skipped. Set REDIS_DUMP_PATH to the local Redis dump.rdb path if Redis persistence must be backed up."
 }
-& docker compose -f $ComposeFile cp redis:/data/dump.rdb (Join-Path $BackupDir "redis-dump.rdb") | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    throw "redis dump copy failed with exit code $LASTEXITCODE"
+
+$Contains = "mysql"
+if (-not [string]::IsNullOrWhiteSpace($RedisDumpPath)) {
+    $Contains = "mysql,redis"
 }
 
 $Manifest = @(
     "project=cyberfusion-platform",
     "created_at=$Timestamp",
-    "compose_file=$ComposeFile",
+    "mode=windows-no-docker",
     "database=$DbName",
-    "contains=mysql,redis",
+    "db_host=$DbHost",
+    "db_port=$DbPort",
+    "contains=$Contains",
     "notes=No source code, passwords, tokens, certificates, or private keys are stored in this manifest."
 )
 $Manifest | Set-Content -Path (Join-Path $BackupDir "manifest.txt") -Encoding UTF8

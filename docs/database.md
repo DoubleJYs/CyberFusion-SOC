@@ -8,6 +8,7 @@ Runtime database files must stay outside source, normally under:
 
 ```text
 /Users/zhangjiyan/Environment/cyberfusion-platform/mysql
+D:\CyberFusion\Environment\cyberfusion-platform\mysql
 ```
 
 Do not place MySQL data directories, backup dumps, customer exports, or Docker volumes under `00-cyberfusion-platform`.
@@ -26,11 +27,18 @@ mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$DB_PASSWO
 Windows PowerShell:
 
 ```powershell
-$env:DB_PASSWORD_VALUE = "replace-with-local-db-password"
+cd D:\CyberFusion\00-cyberfusion-platform
 
-mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$env:DB_PASSWORD_VALUE" < sql/schema.sql
-mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$env:DB_PASSWORD_VALUE" cyberfusion_soc < sql/data.sql
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+
+.\scripts\win\init-local-db.ps1
 ```
+
+The Windows initializer uses local `mysql.exe`, not Docker, and also applies `scripts/sql/apply-latest-menu-and-policy-seed.sql`.
 
 ## Table Groups
 
@@ -98,17 +106,21 @@ LIMIT 20;
 
 ## Backup And Restore
 
-Use the repository scripts, but keep backup output under Environment:
+Use the repository scripts, but keep backup output under Environment.
+
+macOS/Linux:
 
 ```sh
 scripts/mac/backup-runtime.sh
 scripts/mac/restore-runtime.sh
 ```
 
+Windows no-Docker:
+
 ```powershell
+$env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\backup-runtime.ps1
-.\scripts\win\restore-runtime.ps1
+.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
 ```
 
 Before handoff, verify that backups, dumps, generated reports, logs, and uploads are not inside source.
-

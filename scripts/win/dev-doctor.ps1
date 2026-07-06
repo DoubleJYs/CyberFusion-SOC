@@ -1,9 +1,6 @@
-$ErrorActionPreference = "Stop"
-
 param(
   [string]$BaseUrl = $(if ($env:CYBERFUSION_FRONTEND_URL) { $env:CYBERFUSION_FRONTEND_URL } else { "http://127.0.0.1:5174" }),
   [string]$ApiBaseUrl = $(if ($env:CYBERFUSION_API_BASE) { $env:CYBERFUSION_API_BASE } else { "http://127.0.0.1:18080/api" }),
-  [string]$MysqlContainer = $(if ($env:CYBERFUSION_MYSQL_CONTAINER) { $env:CYBERFUSION_MYSQL_CONTAINER } else { "cyberfusion-platform-mysql-1" }),
   [string]$DbHost = $(if ($env:DB_HOST) { $env:DB_HOST } else { "127.0.0.1" }),
   [string]$DbPort = $(if ($env:DB_PORT) { $env:DB_PORT } else { "3306" }),
   [string]$DbName = $(if ($env:DB_NAME) { $env:DB_NAME } else { "cyberfusion_soc" }),
@@ -12,6 +9,8 @@ param(
   [string]$AdminUser = $(if ($env:CYBERFUSION_ADMIN_USER) { $env:CYBERFUSION_ADMIN_USER } else { "admin" }),
   [string]$EmployeeUser = $(if ($env:CYBERFUSION_EMPLOYEE_USER) { $env:CYBERFUSION_EMPLOYEE_USER } else { "operator" })
 )
+
+$ErrorActionPreference = "Stop"
 
 $DemoPassword = if ($env:CYBERFUSION_DEMO_PASSWORD) { $env:CYBERFUSION_DEMO_PASSWORD } else { "Admin@123456" }
 $AdminPassword = if ($env:CYBERFUSION_ADMIN_PASSWORD) { $env:CYBERFUSION_ADMIN_PASSWORD } else { $DemoPassword }
@@ -236,8 +235,7 @@ function Check-RuntimePermissions() {
 
 function Invoke-MySqlQuery {
   param(
-    [string]$Query,
-    [string]$Container
+    [string]$Query
   )
 
   if ([string]::IsNullOrWhiteSpace($DbPassword)) {
@@ -252,16 +250,7 @@ function Invoke-MySqlQuery {
       return $Query | & mysql --default-character-set=utf8mb4 "-h$DbHost" "-P$DbPort" "-u$DbUsername" --batch --skip-column-names $DbName 2>&1
     }
 
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if (-not $docker) {
-      throw "Neither local mysql client nor docker CLI is available; cannot run SQL diagnostics."
-    }
-    $containers = docker ps --format "{{.Names}}" 2>$null
-    if ($LASTEXITCODE -ne 0 -or -not ($containers -contains $Container)) {
-      throw "MySQL container $Container is not reachable."
-    }
-
-    return $Query | docker exec -e MYSQL_PWD -i $Container mysql --default-character-set=utf8mb4 "-u$DbUsername" --batch --skip-column-names $DbName 2>&1
+    throw "Local mysql client is required for Windows no-Docker diagnostics. Install MySQL 8 client tools and add mysql.exe to PATH."
   } finally {
     if ($null -eq $previousMysqlPwd) {
       Remove-Item Env:MYSQL_PWD -ErrorAction SilentlyContinue
@@ -271,7 +260,7 @@ function Invoke-MySqlQuery {
   }
 }
 
-function Check-MysqlSeed($Container) {
+function Check-MysqlSeed {
   $query = @"
 SELECT 'tables', COUNT(*) FROM information_schema.tables
  WHERE table_schema = DATABASE()
@@ -281,13 +270,13 @@ SELECT 'permissions', COUNT(*) FROM sys_menu WHERE permission IN ('soc:policy:li
 SELECT 'admin', COUNT(*) FROM sys_user WHERE username = 'admin' AND status = 1;
 "@
   try {
-    $output = Invoke-MySqlQuery -Query $query -Container $Container
+    $output = Invoke-MySqlQuery -Query $query
   } catch {
-    Fail "MySQL SQL query failed; local mysql is optional and Docker client fallback is supported. Container health is not SQL authentication proof. Verify DB_PASSWORD with a real SELECT 1 before applying SQL or running live smoke. $($_.Exception.Message)"
+    Fail "MySQL SQL query failed. Verify mysql.exe is in PATH and DB_PASSWORD matches the configured Windows MySQL service. $($_.Exception.Message)"
     return
   }
   if ($LASTEXITCODE -ne 0) {
-    Fail "MySQL SQL query failed; local mysql is optional and Docker client fallback is supported. Container health is not SQL authentication proof. Verify DB_PASSWORD with a real SELECT 1 before applying SQL or running live smoke."
+    Fail "MySQL SQL query failed. Verify mysql.exe is in PATH and DB_PASSWORD matches the configured Windows MySQL service."
     return
   }
   $rows = @{}
@@ -299,16 +288,16 @@ SELECT 'admin', COUNT(*) FROM sys_user WHERE username = 'admin' AND status = 1;
     }
   }
   if (($rows["tables"] -ge 13) -and ($rows["menus"] -ge 3) -and ($rows["permissions"] -ge 3) -and ($rows["admin"] -ge 1)) {
-    Pass "Docker MySQL key tables and seed rows are present"
+    Pass "Windows MySQL key tables and seed rows are present"
   } else {
-    Fail "Docker MySQL key tables or seed rows are incomplete"
+    Fail "Windows MySQL key tables or seed rows are incomplete"
   }
 }
 
 Write-Host "CyberFusion dev doctor"
 Write-Host "Frontend URL: $BaseUrl"
 Write-Host "Backend API: $ApiBaseUrl"
-Write-Host "MySQL container: $MysqlContainer"
+Write-Host "MySQL: $DbUsername@$DbHost`:$DbPort/$DbName"
 Write-Host ""
 
 Check-Port "frontend" (Get-PortFromUrl $BaseUrl)
@@ -316,7 +305,7 @@ Check-Port "backend" (Get-PortFromUrl $ApiBaseUrl)
 Check-Http "frontend shell" $BaseUrl
 Check-FrontendProxy $BaseUrl $ApiBaseUrl
 Check-Health $ApiBaseUrl
-Check-MysqlSeed $MysqlContainer
+Check-MysqlSeed
 Check-RuntimePermissions
 
 Write-Host ""

@@ -26,6 +26,18 @@ D:\CyberFusion\Environment\cyberfusion-platform
 
 The first path is the source project. The second path is runtime data for uploads, logs, backups, and local VM evidence. Do not put runtime data under the source project.
 
+Recommended checkout or copy target:
+
+```powershell
+New-Item -ItemType Directory -Force D:\CyberFusion | Out-Null
+cd D:\CyberFusion
+# Copy this project folder here, or clone your project repository as:
+# git clone <your-repo-url> 00-cyberfusion-platform
+cd D:\CyberFusion\00-cyberfusion-platform
+```
+
+The Windows startup scripts intentionally fail fast when the project is started from `C:`. Move the project to `D:\CyberFusion\00-cyberfusion-platform` instead of running it from Desktop, Downloads, or `C:\Users\...`.
+
 ## Database
 
 Create or use a MySQL user that can create/update the `cyberfusion_soc` database. The seed SQL stores BCrypt hashes; the default local demo account is:
@@ -87,6 +99,7 @@ After MySQL and Redis are running:
 
 The script checks Java, Maven, Node.js, pnpm, and `mysql.exe`, verifies that MySQL and Redis ports are reachable, initializes the database unless `-SkipDbInit` is passed, then opens backend and frontend PowerShell windows.
 By default, `run-dev.ps1` uses `D:\CyberFusion\Environment\cyberfusion-platform` when `CYBERFUSION_ENV_ROOT` is not set.
+If the project itself is not under D drive, the script stops before creating files or starting services.
 
 Useful variants:
 
@@ -134,9 +147,42 @@ Run the read-only doctor after startup:
 
 The doctor checks frontend/backend connectivity, `/api/health`, required tables, seed rows, menu/permission visibility, and role boundaries. It does not reset data, delete volumes, execute terminal actions, or send notifications.
 
+## Backup And Restore
+
+Windows no-Docker backup uses local MySQL client tools and writes to D drive by default:
+
+```powershell
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\backup-runtime.ps1
+```
+
+Default backup target:
+
+```text
+D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS
+```
+
+If Redis persistence must be backed up too, set `REDIS_DUMP_PATH` to the local Redis `dump.rdb` file before running the backup:
+
+```powershell
+$env:REDIS_DUMP_PATH = "D:\CyberFusion\Redis\data\dump.rdb"
+.\scripts\win\backup-runtime.ps1
+```
+
+Restore is intentionally explicit because it overwrites runtime data:
+
+```powershell
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
+```
+
+For Redis restore, stop Redis first, then pass `-RestoreRedis` and set `REDIS_DUMP_PATH` or `-RedisTargetDumpPath`.
+
 ## Common Failures
 
 - `Missing command: mysql`: install MySQL client tools and add the MySQL `bin` directory to `PATH`.
+- `Missing command: mysqldump`: install MySQL client tools; backup requires `mysqldump.exe`.
+- `Windows no-Docker mode requires the project under D:\CyberFusion`: move the project folder to `D:\CyberFusion\00-cyberfusion-platform`.
 - `MySQL is not reachable`: start MySQL service or pass the correct `-DbHost` and `-DbPort`.
 - `Redis is not reachable`: start a Redis-compatible Windows service or pass the correct `-RedisHost` and `-RedisPort`.
 - Login returns `500`: check `DB_PASSWORD`, then open `http://127.0.0.1:18080/api/health`.

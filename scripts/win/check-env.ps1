@@ -35,6 +35,7 @@ Invoke-EnvCheck -Name "pnpm" -Command "pnpm" -Arguments @("-v")
 
 if (-not $SkipDatabaseClient) {
     Invoke-EnvCheck -Name "MySQL Client" -Command "mysql" -Arguments @("--version")
+    Invoke-EnvCheck -Name "MySQL Dump" -Command "mysqldump" -Arguments @("--version")
 }
 
 if ($IncludeDocker) {

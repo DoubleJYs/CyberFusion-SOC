@@ -40,6 +40,8 @@ CYBERFUSION_SKIP_COMPAT_CHECK=1 scripts/mac/run-dev.sh
 Windows no-Docker database initialization:
 
 ```powershell
+cd D:\CyberFusion\00-cyberfusion-platform
+$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
 $env:DB_NAME = "cyberfusion_soc"
@@ -50,6 +52,14 @@ $env:DB_PASSWORD = "replace-with-local-db-password"
 ```
 
 The initializer applies `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`. See `docs/windows-no-docker.md` for the complete Windows checklist.
+
+Windows no-Docker backup and restore also use local MySQL client tools, not Docker:
+
+```powershell
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\backup-runtime.ps1
+.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
+```
 
 macOS/Linux Docker local services:
 
