@@ -88,6 +88,19 @@ function Get-PortFromUrl {
     return "80"
 }
 
+function Test-DDrivePath {
+    param(
+        [string]$PathValue
+    )
+    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+        return $false
+    }
+    if ($PathValue -notmatch "^[A-Za-z]:") {
+        return $false
+    }
+    return $PathValue.Substring(0, 1).ToUpperInvariant() -eq "D"
+}
+
 Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
 Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
@@ -124,6 +137,18 @@ try {
         apiBaseUrl = $ApiBaseUrl
         frontendPort = $env:FRONTEND_PORT
         serverPort = $env:SERVER_PORT
+        noDockerMode = $true
+        dockerRequired = $false
+        projectOnDDrive = Test-DDrivePath -PathValue $ProjectRoot.Path
+        runtimeOnDDrive = Test-DDrivePath -PathValue $EnvRoot
+        evidenceOnDDrive = Test-DDrivePath -PathValue $EvidenceDir
+        uploadsPath = Join-Path $EnvRoot "uploads"
+        logsPath = Join-Path $EnvRoot "logs\backend"
+        tempPath = Join-Path $EnvRoot "tmp"
+        mavenCachePath = Join-Path $EnvRoot "caches\maven-repository"
+        pnpmStorePath = Join-Path $EnvRoot "caches\pnpm-store"
+        npmCachePath = Join-Path $EnvRoot "caches\npm"
+        validationPath = Join-Path $EnvRoot "validation"
         computerName = $env:COMPUTERNAME
         userName = $env:USERNAME
         powershellVersion = $PSVersionTable.PSVersion.ToString()

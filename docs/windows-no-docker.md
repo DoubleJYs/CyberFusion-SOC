@@ -204,6 +204,7 @@ If the backend and frontend are already running and you only need to collect pos
 ```
 
 The evidence script records tool versions, Git revision, preflight results, startup or post-start verification results, and a transcript. It does not accept a database password parameter and does not write passwords to the evidence JSON.
+In `summary.json`, the run is acceptable only when `status` is `PASS`, all step statuses are `PASS`, `noDockerMode` is `true`, `dockerRequired` is `false`, and `projectOnDDrive`, `runtimeOnDDrive`, and `evidenceOnDDrive` are all `true`.
 When passing non-default `-BaseUrl` or `-ApiBaseUrl`, the script derives `FRONTEND_PORT` and `SERVER_PORT` from those URLs so startup and verification stay aligned.
 
 You can also run the read-only doctor directly after startup:
