@@ -101,6 +101,9 @@ $RobocopyArgs = @(
     "outputs",
     "logs",
     "tmp",
+    "packages",
+    "package-staging",
+    "validation",
     "/XF",
     ".env",
     ".env.*",
@@ -137,7 +140,10 @@ $GeneratedDirs = @(
     "playwright-report",
     "outputs",
     "logs",
-    "tmp"
+    "tmp",
+    "packages",
+    "package-staging",
+    "validation"
 )
 
 foreach ($Dir in $GeneratedDirs) {

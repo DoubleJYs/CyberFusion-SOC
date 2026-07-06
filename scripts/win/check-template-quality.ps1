@@ -55,6 +55,11 @@ Test-AbsentPath "frontend\test-results"
 Test-AbsentPath "coverage"
 Test-AbsentPath "frontend\coverage"
 Test-AbsentPath "outputs"
+Test-AbsentPath "logs"
+Test-AbsentPath "tmp"
+Test-AbsentPath "packages"
+Test-AbsentPath "package-staging"
+Test-AbsentPath "validation"
 Test-AbsentPath ".env"
 Test-AbsentPath ".DS_Store"
 Test-AbsentPath "frontend\.DS_Store"
@@ -67,7 +72,7 @@ if ($DsStore) {
     Write-Host "OK no .DS_Store found under project"
 }
 
-$ExcludeDirs = "node_modules|target|dist|\.git|test-results|outputs"
+$ExcludeDirs = "\\(node_modules|target|dist|\.git|test-results|outputs|logs|tmp|packages|package-staging|validation)\\"
 $Files = Get-ChildItem -LiteralPath $ProjectRoot -Recurse -File -Force -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -notmatch $ExcludeDirs }
 

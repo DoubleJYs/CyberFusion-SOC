@@ -19,6 +19,11 @@ coverage/
 playwright-report/
 test-results/
 outputs/
+logs/
+tmp/
+packages/
+package-staging/
+validation/
 *.sqlite
 *.sqlite3
 *.db
