@@ -39,8 +39,8 @@ Windows laptop no-Docker path:
 3. Install Java 21, Maven, Node.js with pnpm, MySQL 8 server/client, and a Redis-compatible Windows service.
 4. Start MySQL and Redis as local or reachable services; do not start Docker for the Windows path.
 5. Set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, and `CYBERFUSION_ENV_ROOT` in the current PowerShell session.
-6. Run `.\scripts\win\run-dev.ps1` from the source root.
-7. Run `.\scripts\win\dev-doctor.ps1` after the app starts.
+6. Run `.\scripts\win\start-no-docker.ps1` from the source root.
+7. Use `.\scripts\win\run-dev.ps1` plus `.\scripts\win\verify-no-docker.ps1` only for phased troubleshooting.
 
 macOS/Linux Compose path:
 

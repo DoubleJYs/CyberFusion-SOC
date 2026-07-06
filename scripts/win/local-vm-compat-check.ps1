@@ -64,12 +64,20 @@ Test-ProjectFile -Name "Backend runtime compatibility test" -RelativePath "backe
 Test-ProjectFile -Name "Backend SOC service" -RelativePath "backend\src\main\java\com\zhangjiyan\template\soc\SocOperationService.java"
 Test-ProjectFile -Name "Environment template" -RelativePath ".env.example"
 Test-ProjectFile -Name "macOS one-click dev startup" -RelativePath "scripts\mac\run-dev.sh"
-Test-ProjectFile -Name "Windows one-click dev startup" -RelativePath "scripts\win\run-dev.ps1"
+Test-ProjectFile -Name "Windows one-command no-Docker startup" -RelativePath "scripts\win\start-no-docker.ps1"
+Test-ProjectFile -Name "Windows phased dev startup" -RelativePath "scripts\win\run-dev.ps1"
 
 Write-Host ""
 Write-Host "[Runtime boundary]"
 if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
-    Write-Host "Use an Environment runtime root outside the source tree, for example D:\CyberFusion\Environment\cyberfusion-platform"
+    Write-Host "MISSING: CYBERFUSION_ENV_ROOT. Use D:\CyberFusion\Environment\cyberfusion-platform"
+    $script:Failed = $true
+} elseif ($env:CYBERFUSION_ENV_ROOT -notmatch "^[A-Za-z]:") {
+    Write-Host "INVALID: CYBERFUSION_ENV_ROOT must be an absolute D: path, not $env:CYBERFUSION_ENV_ROOT"
+    $script:Failed = $true
+} elseif ($env:CYBERFUSION_ENV_ROOT.Substring(0, 1).ToUpperInvariant() -ne "D") {
+    Write-Host "INVALID: CYBERFUSION_ENV_ROOT must stay on D: under D:\CyberFusion, not $env:CYBERFUSION_ENV_ROOT"
+    $script:Failed = $true
 } else {
     Write-Host "CYBERFUSION_ENV_ROOT=$env:CYBERFUSION_ENV_ROOT"
 }
