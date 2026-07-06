@@ -74,11 +74,27 @@ function Get-CommandOutput {
     return ((& $Command @Arguments 2>&1) | Out-String).Trim()
 }
 
+function Get-PortFromUrl {
+    param(
+        [string]$Url
+    )
+    $Uri = [Uri]$Url
+    if ($Uri.Port -gt 0) {
+        return "$($Uri.Port)"
+    }
+    if ($Uri.Scheme -eq "https") {
+        return "443"
+    }
+    return "80"
+}
+
 Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
 Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 $env:CYBERFUSION_FRONTEND_URL = $BaseUrl
 $env:CYBERFUSION_API_BASE = $ApiBaseUrl
+$env:FRONTEND_PORT = Get-PortFromUrl -Url $BaseUrl
+$env:SERVER_PORT = Get-PortFromUrl -Url $ApiBaseUrl
 
 if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
     $EvidenceRoot = Join-Path $EnvRoot "validation"
@@ -106,6 +122,8 @@ try {
         evidenceDir = $EvidenceDir
         baseUrl = $BaseUrl
         apiBaseUrl = $ApiBaseUrl
+        frontendPort = $env:FRONTEND_PORT
+        serverPort = $env:SERVER_PORT
         computerName = $env:COMPUTERNAME
         userName = $env:USERNAME
         powershellVersion = $PSVersionTable.PSVersion.ToString()
