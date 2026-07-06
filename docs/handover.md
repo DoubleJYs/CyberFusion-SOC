@@ -70,6 +70,12 @@ scripts/smoke/run-acceptance.sh --dry-run
 Windows no-Docker verification replaces the Compose config checks with:
 
 ```powershell
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\prepare-d-drive.ps1
 .\scripts\win\verify-no-docker.ps1 -PreStart
 .\scripts\win\run-dev.ps1

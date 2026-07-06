@@ -102,6 +102,12 @@ The startup script creates these folders when missing:
 After MySQL and Redis are running:
 
 ```powershell
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\prepare-d-drive.ps1
 .\scripts\win\run-dev.ps1 -FrontendPort 5174 -ServerPort 18080
 ```

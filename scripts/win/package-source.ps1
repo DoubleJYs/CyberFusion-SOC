@@ -1,5 +1,6 @@
 param(
-    [string]$OutputZip
+    [string]$OutputZip,
+    [string]$EnvRoot = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { "D:\CyberFusion\Environment\cyberfusion-platform" } else { $env:CYBERFUSION_ENV_ROOT })
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,9 +9,28 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 $ProjectName = Split-Path -Leaf $ProjectRoot
 
-if ([string]::IsNullOrWhiteSpace($OutputZip)) {
-    $OutputZip = Join-Path (Split-Path -Parent $ProjectRoot) "$ProjectName-source.zip"
+function Assert-DDrivePath {
+    param(
+        [string]$Label,
+        [string]$PathValue
+    )
+
+    if ($PathValue -notmatch "^[A-Za-z]:") {
+        throw "$Label must use an absolute D: path, not $PathValue."
+    }
+    $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
+    if ($Drive -ne "D") {
+        throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
+    }
 }
+
+Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
+Assert-DDrivePath -Label "Environment root" -PathValue $EnvRoot
+
+if ([string]::IsNullOrWhiteSpace($OutputZip)) {
+    $OutputZip = Join-Path (Join-Path $EnvRoot "packages") "$ProjectName-source.zip"
+}
+Assert-DDrivePath -Label "Output zip" -PathValue $OutputZip
 $OutputDir = Split-Path -Parent $OutputZip
 if (-not [string]::IsNullOrWhiteSpace($OutputDir) -and -not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -38,7 +58,9 @@ foreach ($Item in $Required) {
     }
 }
 
-$StageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("cyberfusion-platform-source-" + [System.Guid]::NewGuid().ToString("N"))
+$StageParent = Join-Path $EnvRoot "package-staging"
+New-Item -ItemType Directory -Path $StageParent -Force | Out-Null
+$StageRoot = Join-Path $StageParent ("cyberfusion-platform-source-" + [System.Guid]::NewGuid().ToString("N"))
 $StageProject = Join-Path $StageRoot $ProjectName
 
 New-Item -ItemType Directory -Path $StageProject | Out-Null
@@ -137,4 +159,7 @@ Remove-Item -LiteralPath $StageRoot -Recurse -Force
 
 Write-Host "Created source package: $OutputZip"
 Write-Host "Windows quick start after unzip to D:\CyberFusion\00-cyberfusion-platform:"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\prepare-d-drive.ps1"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PreStart"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\run-dev.ps1"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PostStart"
