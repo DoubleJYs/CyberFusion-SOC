@@ -42,6 +42,9 @@ if ($ProjectRoot.Path -match "^[A-Za-z]:") {
 if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
     $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 }
+if ($env:CYBERFUSION_ENV_ROOT -notmatch "^[A-Za-z]:") {
+    throw "Windows no-Docker runtime data must use an absolute D: path, not $env:CYBERFUSION_ENV_ROOT."
+}
 if ($env:CYBERFUSION_ENV_ROOT -match "^[A-Za-z]:") {
     $EnvDrive = $env:CYBERFUSION_ENV_ROOT.Substring(0, 1).ToUpperInvariant()
     if ($EnvDrive -ne "D") {
@@ -56,6 +59,10 @@ if ($PreStart) {
 if ($PostStart) {
     $SkipBuild = $true
     $SkipDbInit = $true
+}
+
+Invoke-Step "D drive preparation and service reachability" {
+    & (Join-Path $ScriptDir "prepare-d-drive.ps1")
 }
 
 Invoke-Step "Environment check without Docker" {

@@ -22,11 +22,12 @@ if ($ProjectRoot -match "^[A-Za-z]:") {
     }
 }
 
-if ($BackupDir -match "^[A-Za-z]:") {
-    $BackupDrive = $BackupDir.Substring(0, 1).ToUpperInvariant()
-    if ($BackupDrive -ne "D") {
-        throw "Windows no-Docker restore data must come from D: under D:\CyberFusion, not $BackupDir."
-    }
+if ($BackupDir -notmatch "^[A-Za-z]:") {
+    throw "Windows no-Docker restore data must use an absolute D: path, not $BackupDir."
+}
+$BackupDrive = $BackupDir.Substring(0, 1).ToUpperInvariant()
+if ($BackupDrive -ne "D") {
+    throw "Windows no-Docker restore data must come from D: under D:\CyberFusion, not $BackupDir."
 }
 
 function Assert-Command {

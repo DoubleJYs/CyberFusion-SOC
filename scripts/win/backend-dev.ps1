@@ -11,15 +11,16 @@ if ($ProjectRoot.Path -match "^[A-Za-z]:") {
     }
 }
 
-if ($EnvRoot -match "^[A-Za-z]:") {
-    $EnvDrive = $EnvRoot.Substring(0, 1).ToUpperInvariant()
-    if ($EnvDrive -ne "D") {
-        throw "Windows no-Docker runtime data must stay on D: under D:\CyberFusion, not $EnvRoot."
-    }
-    $DriveRoot = "$($EnvRoot.Substring(0, 2))\"
-    if (-not (Test-Path $DriveRoot)) {
-        throw "Required Windows drive not found: $DriveRoot. Put CyberFusion on D: before starting."
-    }
+if ($EnvRoot -notmatch "^[A-Za-z]:") {
+    throw "Windows no-Docker runtime data must use an absolute D: path, not $EnvRoot."
+}
+$EnvDrive = $EnvRoot.Substring(0, 1).ToUpperInvariant()
+if ($EnvDrive -ne "D") {
+    throw "Windows no-Docker runtime data must stay on D: under D:\CyberFusion, not $EnvRoot."
+}
+$DriveRoot = "$($EnvRoot.Substring(0, 2))\"
+if (-not (Test-Path $DriveRoot)) {
+    throw "Required Windows drive not found: $DriveRoot. Put CyberFusion on D: before starting."
 }
 
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot

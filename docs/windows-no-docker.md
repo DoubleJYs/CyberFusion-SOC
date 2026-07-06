@@ -38,6 +38,14 @@ cd D:\CyberFusion\00-cyberfusion-platform
 
 The Windows startup scripts intentionally fail fast when the project is started from `C:`. Move the project to `D:\CyberFusion\00-cyberfusion-platform` instead of running it from Desktop, Downloads, or `C:\Users\...`.
 
+Create and verify the D drive runtime folders before startup:
+
+```powershell
+.\scripts\win\prepare-d-drive.ps1
+```
+
+The preparation script creates `uploads`, `logs\backend`, `backups\runtime`, and `local-vm` under `D:\CyberFusion\Environment\cyberfusion-platform`, then verifies that MySQL and Redis ports are reachable. Use `-SkipServiceCheck` only when you want to create folders before starting those services.
+
 ## Database
 
 Create or use a MySQL user that can create/update the `cyberfusion_soc` database. The seed SQL stores BCrypt hashes; the default local demo account is:
@@ -94,6 +102,7 @@ The startup script creates these folders when missing:
 After MySQL and Redis are running:
 
 ```powershell
+.\scripts\win\prepare-d-drive.ps1
 .\scripts\win\run-dev.ps1 -FrontendPort 5174 -ServerPort 18080
 ```
 

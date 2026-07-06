@@ -25,6 +25,9 @@ function Assert-DataOnDDrive {
         [string]$Label,
         [string]$PathValue
     )
+    if ($PathValue -notmatch "^[A-Za-z]:") {
+        throw "$Label must use an absolute D: path, not $PathValue."
+    }
     if ($PathValue -match "^[A-Za-z]:") {
         $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
         if ($Drive -ne "D") {

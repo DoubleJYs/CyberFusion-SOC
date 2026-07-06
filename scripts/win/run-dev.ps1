@@ -34,6 +34,9 @@ function Assert-ProjectOnDataDrive {
 
 function Assert-DriveRoot {
     param([string]$PathValue)
+    if ($PathValue -notmatch "^[A-Za-z]:") {
+        throw "Windows no-Docker runtime data must use an absolute D: path, not $PathValue."
+    }
     if ($PathValue -match "^[A-Za-z]:") {
         $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
         if ($Drive -ne "D") {
