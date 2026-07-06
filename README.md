@@ -23,7 +23,7 @@ Curated integration-side programs are copied into `integrations/` so the current
 ## Source And Runtime Boundaries
 
 - Source: this `00-cyberfusion-platform` directory, including `integrations/` for curated local integration programs.
-- Runtime root: set `CYBERFUSION_ENV_ROOT` outside the source tree, for example `$HOME/Environment/cyberfusion-platform` on macOS/Linux or `%USERPROFILE%\CyberFusion\Environment\cyberfusion-platform` on Windows.
+- Runtime root: set `CYBERFUSION_ENV_ROOT` outside the source tree, for example `$HOME/Environment/cyberfusion-platform` on macOS/Linux or `D:\CyberFusion\Environment\cyberfusion-platform` on Windows.
 - Source keeps code, README, docs, `.env.example`, config templates, deploy scripts, and SQL seed scripts.
 - Databases, logs, uploads, caches, certificates, secrets, Docker volumes, and backups must live under Environment or another protected runtime path.
 - Do not commit real tokens, API keys, private keys, customer data, large logs, Docker volumes, model files, or runtime databases.
@@ -61,10 +61,13 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:18080 pnpm --dir frontend dev --host 127.
 Windows PowerShell:
 
 ```powershell
+cd D:\CyberFusion\00-cyberfusion-platform
 $env:DB_PASSWORD = "replace-with-local-db-password"
-$env:CYBERFUSION_ENV_ROOT = "$env:USERPROFILE\CyberFusion\Environment\cyberfusion-platform"
+$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\run-dev.ps1 -DbPassword $env:DB_PASSWORD -FrontendPort 5174 -ServerPort 18080
 ```
+
+The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
 
 Default URLs:
 
@@ -91,11 +94,11 @@ Windows PowerShell:
 
 The doctor checks frontend/backend ports, the frontend `/api` proxy to the backend, backend Java process start time, `/api/health`, required SOC tables, key menu/permission seed rows, admin `/auth/me` menus/permissions, and employee 403 boundaries for SOC-only APIs. It does not delete volumes, reset passwords, import demo data, scan targets, execute local terminal commands, or send notifications.
 
-The doctor does not require a local `mysql` command. It uses local `mysql` when available, otherwise it falls back to the MySQL client inside `cyberfusion-platform-mysql-1`. In both modes `DB_PASSWORD` must come from the local environment and is not printed.
+The Windows no-Docker startup requires local `mysql.exe` because it initializes the schema directly against the configured MySQL server. The read-only doctor can still use local `mysql` when available, or fall back to the MySQL client inside `cyberfusion-platform-mysql-1` for Docker-based macOS/Linux setups. In both modes `DB_PASSWORD` must come from the local environment and is not printed.
 
 Safe backend startup sequence:
 
-1. Start MySQL/Redis with Docker Compose and keep runtime data under Environment.
+1. Start MySQL/Redis and keep runtime data under Environment. On Windows this means local services, not Docker.
 2. Apply `sql/schema.sql`, then `sql/data.sql`, then `scripts/sql/apply-latest-menu-and-policy-seed.sql` for already-initialized local databases.
 3. Stop any stale Java process that is still listening on the backend port.
 4. Start the backend from the current source checkout with the active local `DB_PASSWORD`.

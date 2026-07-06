@@ -69,7 +69,7 @@ Test-ProjectFile -Name "Windows one-click dev startup" -RelativePath "scripts\wi
 Write-Host ""
 Write-Host "[Runtime boundary]"
 if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
-    Write-Host "Use an Environment runtime root outside the source tree, for example C:\CyberFusion\Environment\cyberfusion-platform"
+    Write-Host "Use an Environment runtime root outside the source tree, for example D:\CyberFusion\Environment\cyberfusion-platform"
 } else {
     Write-Host "CYBERFUSION_ENV_ROOT=$env:CYBERFUSION_ENV_ROOT"
 }

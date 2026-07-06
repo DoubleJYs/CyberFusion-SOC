@@ -11,7 +11,7 @@
       :default-openeds="defaultOpeneds"
       router
       :collapse="collapsed"
-      unique-opened
+      :unique-opened="!experience.isSuperAdmin"
       class="sidebar-menu"
       @scroll.passive="rememberScroll"
     >
@@ -117,6 +117,9 @@ const sidebarHint = computed(() => {
 })
 
 const defaultOpeneds = computed(() => {
+  if (experience.value.isSuperAdmin) {
+    return menuGroups.value.flatMap((group) => group.items.flatMap(allDirectoryIndexes))
+  }
   const active = route.path
   for (const group of menuGroups.value) {
     for (const item of group.items) {
@@ -126,6 +129,12 @@ const defaultOpeneds = computed(() => {
   }
   return []
 })
+
+function allDirectoryIndexes(item: MenuItem): string[] {
+  const children = item.children || []
+  if (!children.length) return []
+  return [menuIndex(item), ...children.flatMap(allDirectoryIndexes)]
+}
 
 onMounted(() => {
   void restoreSidebarPosition(true)
@@ -183,9 +192,10 @@ function cloneVisible(item: MenuItem): MenuItem | null {
 
 function normalizeTaskMenus(source: MenuItem[]) {
   const findPath = (path: string) => findMenuByPath(source, path)
-  const leaf = (path: string, name: string, icon?: string) => {
+  const leaf = (path: string, name: string, icon?: string, fallback = false) => {
     const item = findPath(path)
-    return item ? { ...item, name, icon: icon || item.icon } : null
+    if (item) return { ...item, name, icon: icon || item.icon }
+    return fallback ? directMenu(fallbackId(path), name, path, icon || 'Menu', 1000) : null
   }
   const dir = (id: number, name: string, icon: string, children: Array<MenuItem | null>) => {
     const visibleChildren = children.filter((item): item is MenuItem => Boolean(item))
@@ -195,26 +205,27 @@ function normalizeTaskMenus(source: MenuItem[]) {
   }
 
   if (experience.value.isSuperAdmin) {
+    const adminLeaf = (path: string, name: string, icon?: string) => leaf(path, name, icon, true)
     return [
       dir(-100, '工作区', 'Odometer', [
         showcaseMenu,
-        leaf('/soc/dashboard', '安全运营工作台', 'DataAnalysis'),
-        leaf('/soc/capabilities', '平台能力说明', 'Grid'),
-        leaf('/soc/demo-range', '安全验证中心', 'Operation'),
+        adminLeaf('/soc/dashboard', '安全运营工作台', 'DataAnalysis'),
+        adminLeaf('/soc/capabilities', '平台能力说明', 'Grid'),
+        adminLeaf('/soc/demo-range', '安全验证中心', 'Operation'),
       ]),
       dir(-200, '安全运营', 'Monitor', [
-        leaf('/soc/incidents', '安全事件簇', 'Share'),
-        leaf('/soc/alerts', '告警中心', 'WarningFilled'),
-        leaf('/soc/assets', '资产风险', 'Cpu'),
-        leaf('/soc/client-security', '员工终端态势', 'Monitor'),
-        leaf('/soc/vulnerabilities', '漏洞中心', 'Aim'),
-        leaf('/soc/baselines', '基线核查', 'Checked'),
-        leaf('/soc/fim', '文件完整性', 'Files'),
-        leaf('/soc/external-events', '外部事件', 'Connection'),
+        adminLeaf('/soc/incidents', '安全事件簇', 'Share'),
+        adminLeaf('/soc/alerts', '告警中心', 'WarningFilled'),
+        adminLeaf('/soc/assets', '资产风险', 'Cpu'),
+        adminLeaf('/soc/client-security', '员工终端态势', 'Monitor'),
+        adminLeaf('/soc/vulnerabilities', '漏洞中心', 'Aim'),
+        adminLeaf('/soc/baselines', '基线核查', 'Checked'),
+        adminLeaf('/soc/fim', '文件完整性', 'Files'),
+        adminLeaf('/soc/external-events', '外部事件', 'Connection'),
       ]),
       dir(-300, '处置闭环', 'Tickets', [
-        leaf('/soc/tickets', '工单中心', 'Tickets'),
-        leaf('/soc/reports', '报表中心', 'DocumentChecked'),
+        adminLeaf('/soc/tickets', '工单中心', 'Tickets'),
+        adminLeaf('/soc/reports', '报表中心', 'DocumentChecked'),
         clientMenu,
         clientTaskMenu,
         clientReportMenu,
@@ -222,31 +233,31 @@ function normalizeTaskMenus(source: MenuItem[]) {
         clientLogMenu,
       ]),
       dir(-400, '策略治理', 'SetUp', [
-        leaf('/soc/policies', '策略与规则中心', 'SetUp'),
-        leaf('/soc/rules', '检测规则中心', 'List'),
-        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
-        leaf('/soc/settings', '接入与诊断设置', 'Tools'),
+        adminLeaf('/soc/policies', '策略与规则中心', 'SetUp'),
+        adminLeaf('/soc/rules', '检测规则中心', 'List'),
+        adminLeaf('/soc/alert-noise', '告警降噪', 'Filter'),
+        adminLeaf('/soc/settings', '接入与诊断设置', 'Tools'),
       ]),
       dir(-500, '平台管理', 'Setting', [
-        leaf('/dashboard', '平台仪表盘', 'DataLine'),
+        adminLeaf('/dashboard', '平台仪表盘', 'DataLine'),
         dir(-510, '身份权限', 'UserFilled', [
-          leaf('/system/user', '用户管理'),
-          leaf('/system/role', '角色管理'),
-          leaf('/system/menu', '菜单管理'),
+          adminLeaf('/system/user', '用户管理'),
+          adminLeaf('/system/role', '角色管理'),
+          adminLeaf('/system/menu', '菜单管理'),
         ]),
         dir(-520, '组织基础', 'OfficeBuilding', [
-          leaf('/system/dept', '部门管理'),
-          leaf('/system/post', '岗位管理'),
+          adminLeaf('/system/dept', '部门管理'),
+          adminLeaf('/system/post', '岗位管理'),
         ]),
         dir(-530, '配置与审计', 'DocumentChecked', [
-          leaf('/system/dict', '字典管理'),
-          leaf('/system/config', '参数配置'),
-          leaf('/system/notice', '通知公告'),
-          leaf('/system/log', '系统日志'),
-          leaf('/system/file', '文件管理'),
-          leaf('/system/excel/logs', '导入导出日志'),
-          leaf('/system/workflow/biz-sequence', '编号规则'),
-          leaf('/system/workflow/biz-flow-log', '流程日志'),
+          adminLeaf('/system/dict', '字典管理'),
+          adminLeaf('/system/config', '参数配置'),
+          adminLeaf('/system/notice', '通知公告'),
+          adminLeaf('/system/log', '系统日志'),
+          adminLeaf('/system/file', '文件管理'),
+          adminLeaf('/system/excel/logs', '导入导出日志'),
+          adminLeaf('/system/workflow/biz-sequence', '编号规则'),
+          adminLeaf('/system/workflow/biz-flow-log', '流程日志'),
         ]),
       ]),
     ].filter((item): item is MenuItem => Boolean(item))
@@ -331,6 +342,15 @@ function directMenu(id: number, name: string, path: string, icon: string, sort: 
     icon,
     children: [],
   }
+}
+
+function fallbackId(path: string) {
+  let hash = 0
+  for (const char of path) {
+    hash = ((hash << 5) - hash) + char.charCodeAt(0)
+    hash |= 0
+  }
+  return -10000 - Math.abs(hash)
 }
 
 function findMenuByPath(items: MenuItem[], path: string): MenuItem | null {

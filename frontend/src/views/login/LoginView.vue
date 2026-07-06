@@ -7,7 +7,7 @@
         <p>统一融合 Wazuh、Zeek、Suricata、MISP、Trivy、ZAP、CyberChef 与 Shuffle 的安全运营主系统。</p>
       </div>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="login-form" @keyup.enter="submit">
-        <el-alert title="本地演示账号：admin，密码以当前本地环境配置为准，仅用于授权测试环境" type="info" show-icon :closable="false" />
+        <el-alert title="本地演示账号：admin，密码：Admin@123456，仅用于授权测试环境" type="info" show-icon :closable="false" />
         <el-alert v-if="loginError" type="warning" show-icon :closable="false">
           <template #title>
             <span>{{ loginError }}</span>
@@ -18,7 +18,7 @@
           <el-input v-model="form.username" size="large" autocomplete="username" placeholder="请输入账号" @input="clearLoginError" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
-          <el-input v-model="form.password" size="large" type="password" autocomplete="current-password" show-password placeholder="请输入密码" @input="clearLoginError" />
+          <el-input v-model="form.password" size="large" type="password" autocomplete="new-password" show-password placeholder="请输入密码" @input="clearLoginError" />
         </el-form-item>
         <div class="form-row">
           <el-checkbox v-model="form.rememberMe">记住我</el-checkbox>
@@ -47,7 +47,7 @@ const loading = ref(false)
 const loginError = ref('')
 const showHealthAction = computed(() => loginError.value.includes('登录服务暂时不可用') || loginError.value.includes('后端'))
 const formRef = ref<FormInstance>()
-const form = reactive({ username: 'admin', password: '', rememberMe: true })
+const form = reactive({ username: 'admin', password: 'Admin@123456', rememberMe: true })
 const rules: FormRules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],

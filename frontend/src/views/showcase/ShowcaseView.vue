@@ -280,6 +280,8 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import EvidenceDrawer from '@/components/showcase/EvidenceDrawer.vue'
 import RecoverableErrorState from '@/components/showcase/RecoverableErrorState.vue'
+import { LOCAL_DEMO_TOKEN } from '@/stores/auth'
+import { getToken } from '@/utils/storage'
 import {
   createSecurityValidationReport,
   importShowcaseBatch,
@@ -355,12 +357,18 @@ async function load() {
   loading.value = true
   loadError.value = ''
   errorDiagnostics.value = []
+  if (getToken() === LOCAL_DEMO_TOKEN) {
+    showcaseData.value = JSON.parse(JSON.stringify(offlineShowcaseData)) as ShowcaseData
+    loading.value = false
+    return
+  }
   try {
     showcaseData.value = await loadLiveShowcaseData(showcaseData.value?.batchId)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    loadError.value = '演示数据加载失败'
-    errorDiagnostics.value = [message]
+    showcaseData.value = JSON.parse(JSON.stringify(offlineShowcaseData)) as ShowcaseData
+    loadError.value = ''
+    errorDiagnostics.value = [`实时接口不可用，已自动切换离线演示数据：${message}`]
   } finally {
     loading.value = false
   }

@@ -1,3 +1,8 @@
+param(
+    [switch]$IncludeDocker,
+    [switch]$SkipDatabaseClient
+)
+
 $ErrorActionPreference = "Continue"
 $Failed = $false
 
@@ -27,8 +32,15 @@ Invoke-EnvCheck -Name "Java" -Command "java" -Arguments @("-version")
 Invoke-EnvCheck -Name "Maven" -Command "mvn" -Arguments @("-v")
 Invoke-EnvCheck -Name "Node.js" -Command "node" -Arguments @("-v")
 Invoke-EnvCheck -Name "pnpm" -Command "pnpm" -Arguments @("-v")
-Invoke-EnvCheck -Name "Docker" -Command "docker" -Arguments @("--version")
-Invoke-EnvCheck -Name "Docker Compose" -Command "docker" -Arguments @("compose", "version")
+
+if (-not $SkipDatabaseClient) {
+    Invoke-EnvCheck -Name "MySQL Client" -Command "mysql" -Arguments @("--version")
+}
+
+if ($IncludeDocker) {
+    Invoke-EnvCheck -Name "Docker" -Command "docker" -Arguments @("--version")
+    Invoke-EnvCheck -Name "Docker Compose" -Command "docker" -Arguments @("compose", "version")
+}
 
 if ($Failed) {
     exit 1

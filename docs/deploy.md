@@ -20,12 +20,12 @@ scripts/mac/run-dev.sh
 ```
 
 ```powershell
-cd C:\path\to\00-cyberfusion-platform
+cd D:\CyberFusion\00-cyberfusion-platform
 $env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\run-dev.ps1
 ```
 
-Both entrypoints run the environment check and local VM compatibility check before starting the backend and frontend. They also create runtime folders under `CYBERFUSION_ENV_ROOT` and default to `~/Environment/cyberfusion-platform` on macOS/Linux or `%USERPROFILE%\Environment\cyberfusion-platform` on Windows.
+The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under `D:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\run-dev.ps1`. Both entrypoints run the environment check and local VM compatibility check before starting the backend and frontend. They also create runtime folders under `CYBERFUSION_ENV_ROOT` and default to `~/Environment/cyberfusion-platform` on macOS/Linux or `D:\CyberFusion\Environment\cyberfusion-platform` on Windows.
 
 To reuse an already verified machine without running the checks every time:
 
@@ -36,6 +36,22 @@ CYBERFUSION_SKIP_COMPAT_CHECK=1 scripts/mac/run-dev.sh
 ```powershell
 .\scripts\win\run-dev.ps1 -SkipCompatCheck
 ```
+
+Windows no-Docker database initialization:
+
+```powershell
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+
+.\scripts\win\init-local-db.ps1
+```
+
+The initializer applies `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`. See `docs/windows-no-docker.md` for the complete Windows checklist.
+
+macOS/Linux Docker local services:
 
 ```sh
 export LOCAL_DB_PASSWORD="replace-with-local-db-password"
@@ -142,7 +158,7 @@ mkdir -p "$DEMO_RANGE_RUNTIME_ROOT"/{logs/demo-target,logs/waf,logs/nginx,zap,tr
 ```
 
 ```powershell
-$env:DEMO_RANGE_RUNTIME_ROOT = "$env:USERPROFILE\Environment\cyberfusion-platform\demo-range"
+$env:DEMO_RANGE_RUNTIME_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform\demo-range"
 New-Item -ItemType Directory -Force `
   "$env:DEMO_RANGE_RUNTIME_ROOT\logs\demo-target", `
   "$env:DEMO_RANGE_RUNTIME_ROOT\logs\waf", `

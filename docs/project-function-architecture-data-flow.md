@@ -1,5 +1,151 @@
 # CyberFusion SOC Function Architecture And Data Flow
 
+## Current System Function Classification
+
+This section is the current high-level function model for reports, presentations, and defense-oriented handoff documents. The system should not be described as a flat list of pages or a loose collection of tools. The correct top-level view is:
+
+```text
+CyberFusion SOC 统一安全运营平台
+├── C1 多源检测接入
+├── C2 证据归一与规则
+├── C3 关联研判与风险
+├── C4 处置闭环与报告
+├── C5 自动化与员工协同
+└── C6 平台治理与审计
+```
+
+For presentation purposes, Wazuh, Zeek, Suricata, Trivy, ZAP, MISP, Sigma, CyberChef, and Shuffle are treated as CyberFusion's core functional capabilities because they are the visible detection, enrichment, field-analysis, and automation functions shown to the audience. The implementation boundary is still important: CyberFusion owns the unified portal, import adapters, normalized evidence model, workflow, permission, algorithm governance, and reporting layer; the upstream projects remain referenced or integrated security tools.
+
+### C1 Multi-source Detection Ingestion
+
+C1 answers: "Where does CyberFusion get security evidence from?"
+
+| Core function | Current CyberFusion role | Main UI/API/data entry |
+| --- | --- | --- |
+| Wazuh host threat center | Host security evidence, login/configuration change evidence, and FIM evidence enter the SOC host-threat view. | `/soc/settings`, `/soc/external-events`, `GET /api/soc/settings/wazuh-health`, `POST /api/soc/external-events/cyberfusion/import`, `soc_wazuh_config`, `soc_external_event`, `soc_file_integrity_event` |
+| Zeek network detection center | Zeek traffic metadata is imported as network context, source/destination IP evidence, service evidence, and correlation input. | `/soc/external-events`, `POST /api/soc/external-events/cyberfusion/import`, `soc_external_event` |
+| Suricata intrusion detection center | Suricata EVE events become IDS alerts, signature hits, severity-mapped evidence, and linked SOC alerts. | `/soc/external-events`, `POST /api/soc/external-events/suricata/import`, `soc_external_event`, `soc_alert` |
+| Trivy vulnerability center | Trivy JSON is normalized into dependency/package vulnerability rows and feeds asset risk scoring and remediation reports. | `/soc/vulnerabilities`, `POST /api/soc/external-events/cyberfusion/import`, `soc_vulnerability` |
+| ZAP Web exposure center | ZAP baseline findings are imported as authorized Web risk evidence and can be linked to alerts or reports. | `/soc/external-events`, `/soc/vulnerabilities`, `POST /api/soc/external-events/cyberfusion/import`, `soc_external_event` |
+| MISP threat intelligence center | Authorized IOC evidence becomes searchable threat-intel evidence and can promote alert/incident priority. | `/soc/external-events`, `POST /api/soc/external-events/cyberfusion/import`, `soc_external_event` |
+| Sigma detection rule reference | Sigma-style rule metadata and rule-hit evidence support rule catalog display and hit preview. | `/soc/rules`, `GET /api/soc/rules`, `GET /api/soc/rules/hits`, `soc_external_event`, `soc_alert` |
+| Demo Range / WAF evidence | Offline validation evidence proves the platform's evidence-to-alert-to-report chain without live public scanning. | `/soc/demo-range`, `POST /api/soc/demo-range/batches/import`, `GET /api/soc/demo-range/batches/{batchId}/evidence-chain` |
+
+The import pattern is unified: most source types use `POST /api/soc/external-events/cyberfusion/import`; Trivy writes vulnerability rows; other eligible sources write `soc_external_event` and can create or refresh `soc_alert` when `linkAlerts=true`.
+
+### C2 Evidence Normalization And Rule Management
+
+C2 answers: "How do different tool outputs become one SOC evidence model?"
+
+| Submodule | Function detail | Main implementation objects |
+| --- | --- | --- |
+| Unified event model | Normalizes `sourceType`, `eventType`, `severity`, `assetIp`, `eventTime`, `ruleId`, `batchId`, `demoCaseId`, `correlationKey`, and source-specific fields. | `SocOperationService`, `soc_external_event`, `soc_alert` |
+| Adapter mapping | Maintains source-to-normalized field mappings, severity mappings, dedup keys, and alert title templates. | `/soc/policies`, `soc_event_adapter_profile`, `soc_event_field_mapping`, `soc_event_severity_mapping`, `soc_event_alert_link_rule` |
+| Rule catalog | Shows built-in safe rule catalog plus live event/alert hits; no separate online rule-execution table is required for the current phase. | `/soc/rules`, `GET /api/soc/rules`, `GET /api/soc/rules/adapter-mappings` |
+| Hit preview | Lets analysts see which evidence and alerts matched one source/rule pair. | `GET /api/soc/rules/hits?sourceType=...&ruleId=...` |
+| Alert noise control | Supports whitelist, ignored/false-positive handling, adapter transparency, and noise-reduction visibility. | `/soc/alert-noise`, `soc_alert_whitelist`, `soc_alert` |
+| Evidence center | Provides the analyst-facing list/detail/status surface for all imported security evidence. | `/soc/external-events`, `GET /api/soc/external-events`, `GET /api/soc/external-events/{id}` |
+
+This layer is the bridge between tool-specific data and platform-level SOC operations. It is also where the system explains mapping failures and keeps safe fallback behavior when an active adapter is missing.
+
+### C3 Correlation, Analysis, And Risk
+
+C3 answers: "How does CyberFusion decide what matters first?"
+
+| Capability | Algorithm or logic type | Output |
+| --- | --- | --- |
+| Unified alert analysis | Deterministic status and severity handling over linked alerts. | Alert queue, alert detail, related incidents, ticket conversion |
+| Incident correlation | Explainable rule/threshold/window grouping over existing evidence, alerts, vulnerabilities, assets, and batch keys. | `soc_incident_cluster`, `soc_incident_evidence`, `relation_reason` |
+| Asset risk scoring | Numeric weighted scoring over alerts, vulnerabilities, baselines, FIM, incidents, tickets, employee tasks, and checkups. | `soc_asset_risk_snapshot`, `soc_asset_risk_factor`, `soc_asset.risk_score`, `soc_asset.risk_level` |
+| Recommendation ranking | Deterministic priority sorting for incident handling, vulnerability repair, ticket follow-up, employee tasks, and playbook tasks. | `/api/soc/recommendations/top`, asset recommendations, employee next actions |
+| Trend anomaly detection | Read-only statistical comparison between current windows and prior baseline windows. | `/api/soc/trends/*`, dashboard trend cards, report summaries |
+| Algorithm governance | Version status, dry-run replay, saved evaluation, and explainable preview without writing production results. | `/soc/policies`, `/api/soc/algorithm-center/*`, `soc_algorithm_evaluation`, `soc_algorithm_evaluation_item` |
+
+These are explainable rule, weight, aggregation, and replay mechanisms. They are not black-box AI, not LLM-driven automatic response, and not live scanner orchestration.
+
+### C4 Response Closure And Reporting
+
+C4 answers: "How is security work closed and proven?"
+
+| Submodule | Function detail | Main objects |
+| --- | --- | --- |
+| Alert handling | Confirm, ignore, false-positive, close, or convert alert to ticket. | `/soc/alerts`, `soc_alert` |
+| Ticket center | Create ticket, assign owner, track SLA, transition status, and expose ticket detail. | `/soc/tickets`, `soc_ticket` |
+| Timeline | Records state changes, notes, evidence submission, playbook task changes, and employee confirmations. | `soc_ticket_timeline`, `soc_ticket_task` |
+| Report center | Generates daily, monthly, and `security_validation` reports, with Excel or pseudo-PDF export paths. | `/soc/reports`, `soc_report` |
+| Demo story | Shows evidence chain, incident cluster, risk score, recommendation, ticket progress, employee task, and report output in a presentation-friendly sequence. | `/showcase`, `/soc/demo-range`, `DemoRangeEvidenceChain` |
+| Operations metrics | Gives managers SLA, risk trend, recommendation adoption, employee-task completion, playbook use, and notification dry-run indicators. | `/soc/dashboard`, `/api/soc/operations/*` |
+
+This layer is the platform's closed-loop proof: evidence becomes alert, alert becomes case or ticket, ticket creates timeline, and reports summarize the result.
+
+### C5 Automation And Employee Collaboration
+
+C5 answers: "How do analysts, automation examples, and employee-side actions work together?"
+
+| Submodule | Function detail | Safety boundary |
+| --- | --- | --- |
+| Shuffle automation examples | Notification templates and workflow examples write `DRY_RUN` logs for demo or validation evidence. | No real webhook, email, or chat sender is enabled by default. |
+| CyberChef field analysis | Local field helper decodes or extracts URLs, IPs, domains, Base64/Hex hints, and IOC candidates. | Analysis helper only; it does not exfiltrate data or execute payloads. |
+| Security Keeper checkup | Employee-side Web checkup aggregates existing SOC records for the authenticated employee's device. | No command execution, scan, auto-fix, public target, or external sender. |
+| Local check policy | Admin-maintained safe read-only command policies are stored as argv arrays and exposed only when active. | Backend validates and resolves `commandKey`; browser-submitted command text is not trusted. |
+| Employee tasks | Playbook or ticket tasks become employee-visible to-dos and confirmations. | Task confirmation writes timeline/status records only. |
+| Repair recommendations | Converts alerts, vulnerabilities, tickets, tasks, and checkups into employee-readable action guidance. | Guidance and status records only; no automatic remediation. |
+
+The collaboration layer turns SOC findings into concrete human work while keeping execution auditable and bounded.
+
+### C6 Platform Governance And Audit
+
+C6 answers: "How is the platform controlled, scoped, and audited?"
+
+| Governance area | Current implementation |
+| --- | --- |
+| Auth and session | `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`; Spring Security backend enforcement. |
+| RBAC and menu | `sys_user`, `sys_role`, `sys_menu`, `sys_user_role`, `sys_role_menu`; dynamic frontend routes from menu data with backend permission checks. |
+| Data scope | Department and role scopes are applied by backend security services before returning SOC records. |
+| System configuration | `/system/config`, `/system/dict`, `/system/notice`, `/system/file`, `/system/workflow/*`. |
+| Audit | Login logs, operation logs, import/export logs, flow logs, notification logs, playbook logs, and algorithm evaluation logs. |
+| Health diagnosis | `/api/health/liveness`, `/api/health/readiness`, Wazuh health, sync tasks, and platform readiness checks. |
+
+The governance layer should be drawn as a platform foundation, not as a separate security tool. It supports every functional category above.
+
+### Current Technology Stack Snapshot
+
+The active platform root is `00-cyberfusion-platform`.
+
+| Layer | Stack |
+| --- | --- |
+| Backend | Java 21, Spring Boot 3.5.3, Spring Security, Spring AOP, Spring Validation, Spring Data Redis, MyBatis-Plus 3.5.12, Springdoc OpenAPI 2.8.9, MySQL Connector/J, Lombok, Maven |
+| Frontend | Vue 3.5, Vite 7, TypeScript 5.8, Element Plus 2.10, Pinia 3, Vue Router 4, Axios 1.12, ECharts 5.6, pnpm 11 |
+| Database/cache | MySQL 8 with `sys_*` governance tables and `soc_*` SOC tables; Redis for cache/session support |
+| Testing and validation | Spring Boot tests, Playwright browser smoke tests, Vite build/typecheck, API smoke scripts, health readiness checks |
+| Local integration catalog | `integrations/catalog.json` maps core tool functions to local integration paths and safe CyberFusion API entrypoints |
+
+### Current Windows No-Docker Runtime Path
+
+For Windows delivery and classroom/demo laptops, the current `00-cyberfusion-platform` project now has a no-Docker startup path. This path keeps the existing Spring Boot/Vue architecture unchanged and only replaces Docker-managed infrastructure with local or reachable services.
+
+| Runtime part | Windows no-Docker implementation |
+| --- | --- |
+| Required local tools | JDK 21, Maven 3.9+, Node.js 20+, pnpm, MySQL 8 server/client, Redis-compatible server, PowerShell |
+| Database initialization | `scripts/win/init-local-db.ps1` applies `sql/schema.sql`, `sql/data.sql`, then `scripts/sql/apply-latest-menu-and-policy-seed.sql` through local `mysql.exe` |
+| One-command startup | `scripts/win/run-dev.ps1` validates local ports, initializes the database unless `-SkipDbInit` is passed, then starts backend and frontend PowerShell windows |
+| Backend runtime | `scripts/win/backend-dev.ps1` or `run-dev.ps1` starts Spring Boot on `SERVER_PORT=18080` by default |
+| Frontend runtime | `scripts/win/frontend-dev.ps1` or `run-dev.ps1` starts Vite on `FRONTEND_PORT=5174` and points `VITE_API_PROXY_TARGET` to `http://127.0.0.1:18080` |
+| Runtime root | `CYBERFUSION_ENV_ROOT`, defaulting to `D:\CyberFusion\Environment\cyberfusion-platform`, stores uploads, backend logs, backups, and local VM evidence outside source |
+| Diagnosis | `scripts/win/dev-doctor.ps1` checks frontend/backend connectivity, `/api/health`, key SOC tables, seed rows, menus, permissions, and role boundaries |
+
+Windows no-Docker mode expects the source project under `D:\CyberFusion\00-cyberfusion-platform` and runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`. It does not launch MySQL or Redis. Operators must start those two services first. The bundled SQL seed files currently create and seed the fixed database name `cyberfusion_soc`; custom database names require a manually prepared schema and `run-dev.ps1 -SkipDbInit`.
+
+### Drawing Guidance For Function Module Diagrams
+
+For future PPT or documentation diagrams, use this hierarchy:
+
+1. First page: draw only the total function categories `C1-C6` under `CyberFusion SOC`.
+2. Second level: draw one page per category, for example C1 expands into Wazuh, Zeek, Suricata, Trivy/ZAP, MISP/Sigma, and Demo Range.
+3. Third level: draw one detailed module page for a concrete function, for example Wazuh expands into connection configuration, host alert import, FIM normalization, and alert linkage.
+4. Keep support capabilities under the bottom/foundation layer: unified API, RBAC/data scope, MySQL/Redis, audit logs, algorithm governance, and safety boundaries.
+5. Avoid drawing tools, pages, APIs, and database tables in one flat layer. Tools are functional capabilities for the report, but APIs and tables are implementation/support elements.
+
 ## Integration Program Catalog
 
 CyberFusion now keeps curated integration-side programs under the root `integrations/` directory. The sibling `01-16` upstream directories remain reference origins, but demos, smoke tests, and handoff work should use the local paths recorded in `integrations/catalog.json` or returned by `GET /api/soc/integrations/catalog`.

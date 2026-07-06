@@ -1,7 +1,22 @@
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
-$EnvRoot = if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { Join-Path $env:USERPROFILE "Environment\cyberfusion-platform" } else { $env:CYBERFUSION_ENV_ROOT }
+$DefaultEnvRoot = "D:\CyberFusion\Environment\cyberfusion-platform"
+$EnvRoot = if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { $DefaultEnvRoot } else { $env:CYBERFUSION_ENV_ROOT }
+
+if ($ProjectRoot.Path -match "^[A-Za-z]:") {
+    $ProjectDrive = $ProjectRoot.Path.Substring(0, 1).ToUpperInvariant()
+    if ($ProjectDrive -ne "D") {
+        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $($ProjectRoot.Path). Move 00-cyberfusion-platform to D: before starting."
+    }
+}
+
+if ($EnvRoot -match "^[A-Za-z]:") {
+    $DriveRoot = "$($EnvRoot.Substring(0, 2))\"
+    if (-not (Test-Path $DriveRoot)) {
+        throw "Required Windows drive not found: $DriveRoot. Put CyberFusion on D: or set CYBERFUSION_ENV_ROOT to another non-source runtime path."
+    }
+}
 
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 $env:APP_UPLOAD_BASE_DIR = if ([string]::IsNullOrWhiteSpace($env:APP_UPLOAD_BASE_DIR)) { Join-Path $EnvRoot "uploads" } else { $env:APP_UPLOAD_BASE_DIR }

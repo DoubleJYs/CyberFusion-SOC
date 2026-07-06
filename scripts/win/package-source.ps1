@@ -24,6 +24,8 @@ $Required = @(
     "sql\data.sql",
     "deploy\docker-compose.yml",
     "scripts\win\run-dev.ps1",
+    "scripts\win\init-local-db.ps1",
+    "docs\windows-no-docker.md",
     ".env.example",
     "README.md"
 )
@@ -130,5 +132,5 @@ Compress-Archive -Path $StageProject -DestinationPath $OutputZip -Force
 Remove-Item -LiteralPath $StageRoot -Recurse -Force
 
 Write-Host "Created source package: $OutputZip"
-Write-Host "Windows quick start after unzip:"
+Write-Host "Windows quick start after unzip to D:\CyberFusion\00-cyberfusion-platform:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\run-dev.ps1"
