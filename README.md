@@ -68,10 +68,11 @@ $env:DB_NAME = "cyberfusion_soc"
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "replace-with-local-db-password"
 $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
-.\scripts\win\run-dev.ps1 -DbPassword $env:DB_PASSWORD -FrontendPort 5174 -ServerPort 18080
+.\scripts\win\start-no-docker.ps1
 ```
 
 The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. The scripts fail fast when started from `C:`; use `D:\CyberFusion\00-cyberfusion-platform` for source and `D:\CyberFusion\Environment\cyberfusion-platform` for runtime data. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
+Windows scripts also place Maven, pnpm, and npm caches under `D:\CyberFusion\Environment\cyberfusion-platform\caches` instead of the default user profile on C drive.
 
 Default URLs:
 
@@ -155,6 +156,12 @@ $env:DB_NAME = "cyberfusion_soc"
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "replace-with-local-db-password"
 $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
+.\scripts\win\start-no-docker.ps1
+```
+
+For phased verification or troubleshooting:
+
+```powershell
 .\scripts\win\prepare-d-drive.ps1
 .\scripts\win\verify-no-docker.ps1 -PreStart
 .\scripts\win\run-dev.ps1

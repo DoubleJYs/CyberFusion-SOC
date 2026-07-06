@@ -78,7 +78,12 @@ $RequiredDirs = @(
     (Join-Path $EnvRoot "uploads"),
     (Join-Path $EnvRoot "logs\backend"),
     (Join-Path $EnvRoot "backups\runtime"),
-    (Join-Path $EnvRoot "local-vm")
+    (Join-Path $EnvRoot "local-vm"),
+    (Join-Path $EnvRoot "caches\maven-repository"),
+    (Join-Path $EnvRoot "caches\pnpm-store"),
+    (Join-Path $EnvRoot "caches\npm"),
+    (Join-Path $EnvRoot "packages"),
+    (Join-Path $EnvRoot "package-staging")
 )
 
 foreach ($Dir in $RequiredDirs) {

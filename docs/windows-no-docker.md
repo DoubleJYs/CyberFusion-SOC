@@ -44,7 +44,7 @@ Create and verify the D drive runtime folders before startup:
 .\scripts\win\prepare-d-drive.ps1
 ```
 
-The preparation script creates `uploads`, `logs\backend`, `backups\runtime`, and `local-vm` under `D:\CyberFusion\Environment\cyberfusion-platform`, then verifies that MySQL and Redis ports are reachable. Use `-SkipServiceCheck` only when you want to create folders before starting those services.
+The preparation script creates `uploads`, `logs\backend`, `backups\runtime`, `local-vm`, dependency caches, package output, and package staging under `D:\CyberFusion\Environment\cyberfusion-platform`, then verifies that MySQL and Redis ports are reachable. Use `-SkipServiceCheck` only when you want to create folders before starting those services.
 
 ## Database
 
@@ -96,6 +96,13 @@ The startup script creates these folders when missing:
 - `logs\backend`
 - `backups`
 - `local-vm`
+- `caches\maven-repository`
+- `caches\pnpm-store`
+- `caches\npm`
+- `packages`
+- `package-staging`
+
+The Windows scripts pass Maven `-Dmaven.repo.local` and pnpm `--store-dir` so dependency caches stay under D drive instead of the default user profile on C drive.
 
 ## One-Command Start
 
@@ -108,6 +115,14 @@ $env:DB_NAME = "cyberfusion_soc"
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "replace-with-local-db-password"
 $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
+.\scripts\win\start-no-docker.ps1
+```
+
+The one-command script prepares D drive folders, runs pre-start verification, starts backend/frontend, then runs post-start verification.
+
+For phased startup or troubleshooting:
+
+```powershell
 .\scripts\win\prepare-d-drive.ps1
 .\scripts\win\run-dev.ps1 -FrontendPort 5174 -ServerPort 18080
 ```

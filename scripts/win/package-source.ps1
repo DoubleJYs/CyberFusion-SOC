@@ -43,6 +43,7 @@ $Required = @(
     "sql\schema.sql",
     "sql\data.sql",
     "deploy\docker-compose.yml",
+    "scripts\win\start-no-docker.ps1",
     "scripts\win\run-dev.ps1",
     "scripts\win\init-local-db.ps1",
     "scripts\win\prepare-d-drive.ps1",
@@ -159,6 +160,8 @@ Remove-Item -LiteralPath $StageRoot -Recurse -Force
 
 Write-Host "Created source package: $OutputZip"
 Write-Host "Windows quick start after unzip to D:\CyberFusion\00-cyberfusion-platform:"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\start-no-docker.ps1"
+Write-Host "Manual phased startup:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\prepare-d-drive.ps1"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PreStart"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\run-dev.ps1"
