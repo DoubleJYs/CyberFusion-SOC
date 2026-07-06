@@ -1,5 +1,5 @@
 param(
-    [string]$EnvRoot = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { "D:\CyberFusion\Environment\cyberfusion-platform" } else { $env:CYBERFUSION_ENV_ROOT }),
+    [string]$EnvRoot = "",
     [string]$EvidenceRoot = "",
     [string]$BaseUrl = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_FRONTEND_URL)) { "http://127.0.0.1:5174" } else { $env:CYBERFUSION_FRONTEND_URL }),
     [string]$ApiBaseUrl = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_API_BASE)) { "http://127.0.0.1:18080/api" } else { $env:CYBERFUSION_API_BASE }),
@@ -12,24 +12,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
-$StepResults = New-Object System.Collections.Generic.List[object]
+. (Join-Path $ScriptDir "runtime-paths.ps1")
 
-function Assert-DDrivePath {
-    param(
-        [string]$Label,
-        [string]$PathValue
-    )
-    if ([string]::IsNullOrWhiteSpace($PathValue)) {
-        throw "$Label must be set to an absolute D: path."
-    }
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        throw "$Label must use an absolute D: path, not $PathValue."
-    }
-    if ($PathValue.Substring(0, 1).ToUpperInvariant() -ne "D") {
-        throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-    }
-}
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+$StepResults = New-Object System.Collections.Generic.List[object]
 
 function Invoke-EvidenceStep {
     param(
@@ -88,21 +74,20 @@ function Get-PortFromUrl {
     return "80"
 }
 
-function Test-DDrivePath {
+function Test-RuntimePath {
     param(
         [string]$PathValue
     )
-    if ([string]::IsNullOrWhiteSpace($PathValue)) {
+    try {
+        Assert-CyberFusionRuntimePath -Label "Runtime path" -PathValue $PathValue -ProjectRoot $ProjectRoot
+        return $true
+    } catch {
         return $false
     }
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        return $false
-    }
-    return $PathValue.Substring(0, 1).ToUpperInvariant() -eq "D"
 }
 
-Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
-Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
+$EnvRoot = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
+Set-CyberFusionRuntimeEnvironment -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 $env:CYBERFUSION_FRONTEND_URL = $BaseUrl
 $env:CYBERFUSION_API_BASE = $ApiBaseUrl
@@ -112,7 +97,7 @@ $env:SERVER_PORT = Get-PortFromUrl -Url $ApiBaseUrl
 if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
     $EvidenceRoot = Join-Path $EnvRoot "validation"
 }
-Assert-DDrivePath -Label "Evidence root" -PathValue $EvidenceRoot
+Assert-CyberFusionRuntimePath -Label "Evidence root" -PathValue $EvidenceRoot -ProjectRoot $ProjectRoot
 
 $Timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $EvidenceDir = Join-Path $EvidenceRoot $Timestamp
@@ -130,7 +115,7 @@ try {
 
     $Facts = [ordered]@{
         createdAt = (Get-Date).ToString("o")
-        projectRoot = $ProjectRoot.Path
+        projectRoot = $ProjectRoot
         envRoot = $EnvRoot
         evidenceDir = $EvidenceDir
         baseUrl = $BaseUrl
@@ -139,9 +124,9 @@ try {
         serverPort = $env:SERVER_PORT
         noDockerMode = $true
         dockerRequired = $false
-        projectOnDDrive = Test-DDrivePath -PathValue $ProjectRoot.Path
-        runtimeOnDDrive = Test-DDrivePath -PathValue $EnvRoot
-        evidenceOnDDrive = Test-DDrivePath -PathValue $EvidenceDir
+        projectPathConfigurable = $true
+        runtimePathValid = Test-RuntimePath -PathValue $EnvRoot
+        evidencePathValid = Test-RuntimePath -PathValue $EvidenceDir
         uploadsPath = Join-Path $EnvRoot "uploads"
         logsPath = Join-Path $EnvRoot "logs\backend"
         tempPath = Join-Path $EnvRoot "tmp"
@@ -166,8 +151,8 @@ try {
         & (Join-Path $ScriptDir "check-env.ps1")
     }
 
-    Invoke-EvidenceStep -Name "D drive preparation and service reachability" -Action {
-        & (Join-Path $ScriptDir "prepare-d-drive.ps1") -EnvRoot $EnvRoot
+    Invoke-EvidenceStep -Name "Runtime directory preparation and service reachability" -Action {
+        & (Join-Path $ScriptDir "prepare-runtime.ps1") -EnvRoot $EnvRoot
     }
 
     if ($SkipStart) {

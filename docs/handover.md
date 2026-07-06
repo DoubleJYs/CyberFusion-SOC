@@ -17,7 +17,7 @@ The package intentionally excludes runtime data, Docker volumes, generated logs,
 | Backend | `backend/` | Spring Boot 3, Java 21. |
 | Frontend | `frontend/` | Vue 3, Vite, TypeScript, Element Plus, Pinia. |
 | SQL schema and seed | `sql/schema.sql`, `sql/data.sql` | MySQL 8 initialization. |
-| Windows no-Docker guide | `docs/windows-no-docker.md` | D drive layout, local MySQL/Redis, PowerShell startup. |
+| Windows no-Docker guide | `docs/windows-no-docker.md` | User-configured Windows layout, local MySQL/Redis, PowerShell startup. |
 | Main deploy templates | `deploy/docker-compose.yml`, `deploy/nginx*.conf` | Local and server deployment examples. |
 | Demo Range deploy templates | `deploy/demo-range/` | Isolated demo target, WAF, ZAP baseline, Trivy, bridge. |
 | API docs | `docs/api.md` | Endpoint summary and request/response examples. |
@@ -34,8 +34,8 @@ The package intentionally excludes runtime data, Docker volumes, generated logs,
 
 Windows laptop no-Docker path:
 
-1. Put source under `D:\CyberFusion\00-cyberfusion-platform`.
-2. Put runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`.
+1. Put source under a stable Windows folder chosen by the operator, for example `E:\CyberFusion\00-cyberfusion-platform`.
+2. Put runtime data outside the source tree, for example `E:\CyberFusion\Environment\cyberfusion-platform`.
 3. Install Java 21, Maven, Node.js with pnpm, MySQL 8 server/client, and a Redis-compatible Windows service.
 4. Start MySQL and Redis as local or reachable services; do not start Docker for the Windows path.
 5. Set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, and `CYBERFUSION_ENV_ROOT` in the current PowerShell session.
@@ -75,14 +75,14 @@ $env:DB_PORT = "3306"
 $env:DB_NAME = "cyberfusion_soc"
 $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "replace-with-local-db-password"
-$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
+$env:CYBERFUSION_ENV_ROOT = "E:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\start-no-docker.ps1
 ```
 
 For phased verification or troubleshooting:
 
 ```powershell
-.\scripts\win\prepare-d-drive.ps1
+.\scripts\win\prepare-runtime.ps1
 .\scripts\win\verify-no-docker.ps1 -PreStart
 .\scripts\win\run-dev.ps1
 .\scripts\win\verify-no-docker.ps1 -PostStart

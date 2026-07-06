@@ -4,7 +4,7 @@ Date: 2026-06-22
 
 Scope: CyberFusion SOC local development and demo runtime under `00-cyberfusion-platform`.
 
-This document records repeatable triage steps for startup, schema, seed, password, and smoke-test issues. The steps are read-only unless they explicitly say to apply SQL. For Windows delivery, use the no-Docker D drive path in `docs/windows-no-docker.md`: source under `D:\CyberFusion\00-cyberfusion-platform`, runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`, local MySQL 8, and local Redis. Do not delete Docker volumes, do not run `docker compose down -v`, and do not write real secrets into source.
+This document records repeatable triage steps for startup, schema, seed, password, and smoke-test issues. The steps are read-only unless they explicitly say to apply SQL. For Windows delivery, use the no-Docker path in `docs/windows-no-docker.md`: source under a stable operator-chosen Windows folder, runtime data under `CYBERFUSION_ENV_ROOT` outside source, local MySQL 8, and local Redis. Do not delete Docker volumes, do not run `docker compose down -v`, and do not write real secrets into source.
 
 ## First Command
 
@@ -120,7 +120,7 @@ Symptom:
 Windows no-Docker non-destructive repair:
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
+cd E:\CyberFusion\00-cyberfusion-platform
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
 $env:DB_NAME = "cyberfusion_soc"
@@ -177,7 +177,7 @@ Symptom:
 Triage:
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
+cd E:\CyberFusion\00-cyberfusion-platform
 $env:DB_PASSWORD = "your-local-mysql-password"
 mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p cyberfusion_soc -e "SELECT 1;"
 .\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
@@ -187,7 +187,7 @@ If the SQL probe fails, fix the Windows MySQL service user/password first. Do no
 
 ## Docker MySQL Root Password Rejected
 
-This section applies to the macOS/Linux Docker-backed local path and older historical Docker troubleshooting. It does not apply to the current Windows no-Docker D drive path.
+This section applies to the macOS/Linux Docker-backed local path and older historical Docker troubleshooting. It does not apply to the current Windows no-Docker path.
 
 Symptom:
 

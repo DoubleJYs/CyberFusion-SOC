@@ -8,7 +8,7 @@ Runtime database files must stay outside source, normally under:
 
 ```text
 /Users/zhangjiyan/Environment/cyberfusion-platform/mysql
-D:\CyberFusion\Environment\cyberfusion-platform\mysql
+E:\CyberFusion\Environment\cyberfusion-platform\mysql
 ```
 
 Do not place MySQL data directories, backup dumps, customer exports, or Docker volumes under `00-cyberfusion-platform`.
@@ -27,7 +27,7 @@ mysql --default-character-set=utf8mb4 -h 127.0.0.1 -P 3306 -u root -p"$DB_PASSWO
 Windows PowerShell:
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
+cd E:\CyberFusion\00-cyberfusion-platform
 
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
@@ -120,7 +120,7 @@ Windows no-Docker:
 ```powershell
 $env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\backup-runtime.ps1
-.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
+.\scripts\win\restore-runtime.ps1 -BackupDir "E:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
 ```
 
 Before handoff, verify that backups, dumps, generated reports, logs, and uploads are not inside source.

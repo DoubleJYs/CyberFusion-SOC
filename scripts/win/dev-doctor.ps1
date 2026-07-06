@@ -13,34 +13,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+. (Join-Path $ScriptDir "runtime-paths.ps1")
 
-function Assert-DDrivePath {
-  param(
-    [string]$Label,
-    [string]$PathValue
-  )
-  if ([string]::IsNullOrWhiteSpace($PathValue)) {
-    throw "$Label must be set to an absolute D: path."
-  }
-  if ($PathValue -notmatch "^[A-Za-z]:") {
-    throw "$Label must use an absolute D: path, not $PathValue."
-  }
-  if ($PathValue.Substring(0, 1).ToUpperInvariant() -ne "D") {
-    throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-  }
-}
-
-if ($ProjectRoot.Path -match "^[A-Za-z]:") {
-  $ProjectDrive = $ProjectRoot.Path.Substring(0, 1).ToUpperInvariant()
-  if ($ProjectDrive -ne "D") {
-    throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $($ProjectRoot.Path). Move 00-cyberfusion-platform to D: before running diagnostics."
-  }
-}
-if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
-  $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
-}
-Assert-DDrivePath -Label "CYBERFUSION_ENV_ROOT" -PathValue $env:CYBERFUSION_ENV_ROOT
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+$env:CYBERFUSION_ENV_ROOT = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $env:CYBERFUSION_ENV_ROOT
+Assert-CyberFusionRuntimePath -Label "CYBERFUSION_ENV_ROOT" -PathValue $env:CYBERFUSION_ENV_ROOT -ProjectRoot $ProjectRoot
 
 $DemoPassword = if ($env:CYBERFUSION_DEMO_PASSWORD) { $env:CYBERFUSION_DEMO_PASSWORD } else { "Admin@123456" }
 $AdminPassword = if ($env:CYBERFUSION_ADMIN_PASSWORD) { $env:CYBERFUSION_ADMIN_PASSWORD } else { $DemoPassword }

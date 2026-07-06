@@ -254,7 +254,7 @@ Common causes:
 For an already initialized Windows no-Docker database, refresh schema and seed data idempotently instead of deleting data:
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
+cd E:\CyberFusion\00-cyberfusion-platform
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
 $env:DB_NAME = "cyberfusion_soc"

@@ -12,7 +12,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+. (Join-Path $ScriptDir "runtime-paths.ps1")
+
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 
 function Invoke-Step {
     param(
@@ -32,25 +34,8 @@ function Invoke-Step {
     }
 }
 
-if ($ProjectRoot.Path -match "^[A-Za-z]:") {
-    $ProjectDrive = $ProjectRoot.Path.Substring(0, 1).ToUpperInvariant()
-    if ($ProjectDrive -ne "D") {
-        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $($ProjectRoot.Path). Move 00-cyberfusion-platform to D: before verification."
-    }
-}
-
-if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
-    $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
-}
-if ($env:CYBERFUSION_ENV_ROOT -notmatch "^[A-Za-z]:") {
-    throw "Windows no-Docker runtime data must use an absolute D: path, not $env:CYBERFUSION_ENV_ROOT."
-}
-if ($env:CYBERFUSION_ENV_ROOT -match "^[A-Za-z]:") {
-    $EnvDrive = $env:CYBERFUSION_ENV_ROOT.Substring(0, 1).ToUpperInvariant()
-    if ($EnvDrive -ne "D") {
-        throw "Windows no-Docker runtime data must stay on D: under D:\CyberFusion, not $env:CYBERFUSION_ENV_ROOT."
-    }
-}
+$env:CYBERFUSION_ENV_ROOT = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $env:CYBERFUSION_ENV_ROOT
+Set-CyberFusionRuntimeEnvironment -ProjectRoot $ProjectRoot -EnvRoot $env:CYBERFUSION_ENV_ROOT
 
 if ($PreStart) {
     $SkipDoctor = $true
@@ -61,8 +46,8 @@ if ($PostStart) {
     $SkipDbInit = $true
 }
 
-Invoke-Step "D drive preparation and service reachability" {
-    & (Join-Path $ScriptDir "prepare-d-drive.ps1")
+Invoke-Step "Runtime directory preparation and service reachability" {
+    & (Join-Path $ScriptDir "prepare-runtime.ps1")
 }
 
 Invoke-Step "Environment check without Docker" {

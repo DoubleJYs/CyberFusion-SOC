@@ -6,14 +6,14 @@ Scope: `/Users/zhangjiyan/Programs/projects/cyberspace_Security_shot_time/00-cyb
 
 ## Current Windows No-Docker Status 2026-07-06
 
-The current Windows delivery path is no-Docker and D-drive based. Use `docs/windows-no-docker.md`, `README.md`, and `scripts/win/*.ps1` as the current startup source of truth:
+The current Windows delivery path is no-Docker and uses an operator-configured runtime root. Use `docs/windows-no-docker.md`, `README.md`, and `scripts/win/*.ps1` as the current startup source of truth:
 
-- Source path: `D:\CyberFusion\00-cyberfusion-platform`.
-- Runtime path: `D:\CyberFusion\Environment\cyberfusion-platform`.
+- Source path: any stable Windows folder chosen by the operator, for example `E:\CyberFusion\00-cyberfusion-platform`.
+- Runtime path: `CYBERFUSION_ENV_ROOT`, for example `E:\CyberFusion\Environment\cyberfusion-platform`, and outside source.
 - MySQL and Redis must be local or reachable Windows services started before CyberFusion.
-- `scripts/win/start-no-docker.ps1` is the primary Windows entrypoint. It prepares D drive runtime folders, runs pre-start checks, starts backend/frontend, and runs post-start verification.
+- `scripts/win/start-no-docker.ps1` is the primary Windows entrypoint. It prepares configured runtime folders, runs pre-start checks, starts backend/frontend, and runs post-start verification.
 - `scripts/win/run-dev.ps1`, `scripts/win/init-local-db.ps1`, `scripts/win/dev-doctor.ps1`, `scripts/win/backup-runtime.ps1`, and `scripts/win/restore-runtime.ps1` use local MySQL client tools, not Docker.
-- Windows scripts keep Maven, pnpm, and npm caches under `D:\CyberFusion\Environment\cyberfusion-platform\caches` instead of the default user profile on C drive.
+- Windows scripts keep Maven, pnpm, and npm caches under `CYBERFUSION_ENV_ROOT\caches` instead of the default user profile or source tree.
 - Older Docker fallback notes below are historical validation records for the macOS/Linux Docker-backed local path and should not be used as Windows startup instructions.
 
 ## SOC Operations Metrics Center v1 2026-06-22

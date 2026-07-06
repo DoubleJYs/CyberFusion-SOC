@@ -14,34 +14,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "runtime-paths.ps1")
+
 $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-if ($ProjectRoot -match "^[A-Za-z]:") {
-    $ProjectDrive = $ProjectRoot.Substring(0, 1).ToUpperInvariant()
-    if ($ProjectDrive -ne "D") {
-        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $ProjectRoot. Move 00-cyberfusion-platform to D: before restoring runtime data."
-    }
-}
 
-if ($BackupDir -notmatch "^[A-Za-z]:") {
-    throw "Windows no-Docker restore data must use an absolute D: path, not $BackupDir."
-}
-$BackupDrive = $BackupDir.Substring(0, 1).ToUpperInvariant()
-if ($BackupDrive -ne "D") {
-    throw "Windows no-Docker restore data must come from D: under D:\CyberFusion, not $BackupDir."
-}
-
-function Assert-DataOnDDrive {
-    param(
-        [string]$Label,
-        [string]$PathValue
-    )
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        throw "$Label must use an absolute D: path, not $PathValue."
-    }
-    if ($PathValue.Substring(0, 1).ToUpperInvariant() -ne "D") {
-        throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-    }
-}
+Assert-CyberFusionRuntimePath -Label "Backup directory" -PathValue $BackupDir -ProjectRoot $ProjectRoot
 
 function Assert-Command {
     param([string]$Command)
@@ -99,7 +76,7 @@ if ($RestoreRedis) {
     if ([string]::IsNullOrWhiteSpace($RedisTargetDumpPath)) {
         throw "Redis restore requested. Set REDIS_DUMP_PATH or pass -RedisTargetDumpPath to the local Redis dump.rdb location, then stop Redis before copying."
     }
-    Assert-DataOnDDrive -Label "Redis target dump path" -PathValue $RedisTargetDumpPath
+    Assert-CyberFusionRuntimePath -Label "Redis target dump path" -PathValue $RedisTargetDumpPath -ProjectRoot $ProjectRoot
     Copy-Item -Path $RedisDump -Destination $RedisTargetDumpPath -Force
     Write-Host "Copied Redis dump to $RedisTargetDumpPath. Restart the Redis service manually so it loads the file."
 } else {

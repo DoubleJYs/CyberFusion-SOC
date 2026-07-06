@@ -4,7 +4,7 @@ param(
     [string]$DbName = $(if ($env:DB_NAME) { $env:DB_NAME } else { "cyberfusion_soc" }),
     [string]$DbUsername = $(if ($env:DB_USERNAME) { $env:DB_USERNAME } else { "root" }),
     [string]$DbPassword = $env:DB_PASSWORD,
-    [string]$EnvRoot = $(if ($env:CYBERFUSION_ENV_ROOT) { $env:CYBERFUSION_ENV_ROOT } else { "D:\CyberFusion\Environment\cyberfusion-platform" }),
+    [string]$EnvRoot = "",
     [string]$BackupRoot = $(if ($env:CYBERFUSION_BACKUP_ROOT) { $env:CYBERFUSION_BACKUP_ROOT } else { "" }),
     [string]$RedisDumpPath = $env:REDIS_DUMP_PATH
 )
@@ -12,35 +12,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "runtime-paths.ps1")
+
 $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-if ($ProjectRoot -match "^[A-Za-z]:") {
-    $ProjectDrive = $ProjectRoot.Substring(0, 1).ToUpperInvariant()
-    if ($ProjectDrive -ne "D") {
-        throw "Windows no-Docker mode requires the project under D:\CyberFusion, not $ProjectRoot. Move 00-cyberfusion-platform to D: before creating backups."
-    }
-}
 
-function Assert-DataOnDDrive {
-    param(
-        [string]$Label,
-        [string]$PathValue
-    )
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        throw "$Label must use an absolute D: path, not $PathValue."
-    }
-    if ($PathValue -match "^[A-Za-z]:") {
-        $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
-        if ($Drive -ne "D") {
-            throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-        }
-    }
-}
-
-Assert-DataOnDDrive -Label "Environment root" -PathValue $EnvRoot
+$EnvRoot = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
+Assert-CyberFusionRuntimePath -Label "Environment root" -PathValue $EnvRoot -ProjectRoot $ProjectRoot
 if ([string]::IsNullOrWhiteSpace($BackupRoot)) {
     $BackupRoot = Join-Path $EnvRoot "backups\runtime"
 }
-Assert-DataOnDDrive -Label "Backup root" -PathValue $BackupRoot
+Assert-CyberFusionRuntimePath -Label "Backup root" -PathValue $BackupRoot -ProjectRoot $ProjectRoot
 
 function Assert-Command {
     param([string]$Command)
@@ -81,7 +62,7 @@ try {
 }
 
 if (-not [string]::IsNullOrWhiteSpace($RedisDumpPath)) {
-    Assert-DataOnDDrive -Label "Redis dump path" -PathValue $RedisDumpPath
+    Assert-CyberFusionRuntimePath -Label "Redis dump path" -PathValue $RedisDumpPath -ProjectRoot $ProjectRoot
     if (-not (Test-Path $RedisDumpPath -PathType Leaf)) {
         throw "REDIS_DUMP_PATH was set but does not point to a file: $RedisDumpPath"
     }

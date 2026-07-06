@@ -1,36 +1,22 @@
 param(
     [string]$OutputZip,
-    [string]$EnvRoot = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { "D:\CyberFusion\Environment\cyberfusion-platform" } else { $env:CYBERFUSION_ENV_ROOT })
+    [string]$EnvRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+. (Join-Path $ScriptDir "runtime-paths.ps1")
+
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 $ProjectName = Split-Path -Leaf $ProjectRoot
-
-function Assert-DDrivePath {
-    param(
-        [string]$Label,
-        [string]$PathValue
-    )
-
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        throw "$Label must use an absolute D: path, not $PathValue."
-    }
-    $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
-    if ($Drive -ne "D") {
-        throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-    }
-}
-
-Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
-Assert-DDrivePath -Label "Environment root" -PathValue $EnvRoot
+$EnvRoot = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
+Assert-CyberFusionRuntimePath -Label "Environment root" -PathValue $EnvRoot -ProjectRoot $ProjectRoot
 
 if ([string]::IsNullOrWhiteSpace($OutputZip)) {
     $OutputZip = Join-Path (Join-Path $EnvRoot "packages") "$ProjectName-source.zip"
 }
-Assert-DDrivePath -Label "Output zip" -PathValue $OutputZip
+Assert-CyberFusionRuntimePath -Label "Output zip" -PathValue $OutputZip -ProjectRoot $ProjectRoot
 $OutputDir = Split-Path -Parent $OutputZip
 if (-not [string]::IsNullOrWhiteSpace($OutputDir) -and -not (Test-Path $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -46,7 +32,8 @@ $Required = @(
     "scripts\win\start-no-docker.ps1",
     "scripts\win\run-dev.ps1",
     "scripts\win\init-local-db.ps1",
-    "scripts\win\prepare-d-drive.ps1",
+    "scripts\win\prepare-runtime.ps1",
+    "scripts\win\runtime-paths.ps1",
     "scripts\win\verify-no-docker.ps1",
     "scripts\win\collect-windows-evidence.ps1",
     "docs\windows-no-docker.md",
@@ -166,12 +153,12 @@ Compress-Archive -Path $StageProject -DestinationPath $OutputZip -Force
 Remove-Item -LiteralPath $StageRoot -Recurse -Force
 
 Write-Host "Created source package: $OutputZip"
-Write-Host "Windows quick start after unzip to D:\CyberFusion\00-cyberfusion-platform:"
+Write-Host "Windows quick start after unzip to your chosen project folder:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\start-no-docker.ps1"
 Write-Host "Windows evidence collection after setting DB_PASSWORD:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\collect-windows-evidence.ps1"
 Write-Host "Manual phased startup:"
-Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\prepare-d-drive.ps1"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\prepare-runtime.ps1"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PreStart"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\run-dev.ps1"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PostStart"

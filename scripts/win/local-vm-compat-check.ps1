@@ -2,7 +2,9 @@ $ErrorActionPreference = "Continue"
 $Failed = $false
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+. (Join-Path $ScriptDir "runtime-paths.ps1")
+
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
 
 function Invoke-CompatCheck {
     param(
@@ -70,16 +72,14 @@ Test-ProjectFile -Name "Windows phased dev startup" -RelativePath "scripts\win\r
 Write-Host ""
 Write-Host "[Runtime boundary]"
 if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) {
-    Write-Host "MISSING: CYBERFUSION_ENV_ROOT. Use D:\CyberFusion\Environment\cyberfusion-platform"
-    $script:Failed = $true
-} elseif ($env:CYBERFUSION_ENV_ROOT -notmatch "^[A-Za-z]:") {
-    Write-Host "INVALID: CYBERFUSION_ENV_ROOT must be an absolute D: path, not $env:CYBERFUSION_ENV_ROOT"
-    $script:Failed = $true
-} elseif ($env:CYBERFUSION_ENV_ROOT.Substring(0, 1).ToUpperInvariant() -ne "D") {
-    Write-Host "INVALID: CYBERFUSION_ENV_ROOT must stay on D: under D:\CyberFusion, not $env:CYBERFUSION_ENV_ROOT"
-    $script:Failed = $true
-} else {
+    $env:CYBERFUSION_ENV_ROOT = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot
+}
+try {
+    Assert-CyberFusionRuntimePath -Label "CYBERFUSION_ENV_ROOT" -PathValue $env:CYBERFUSION_ENV_ROOT -ProjectRoot $ProjectRoot
     Write-Host "CYBERFUSION_ENV_ROOT=$env:CYBERFUSION_ENV_ROOT"
+} catch {
+    Write-Host "INVALID: $($_.Exception.Message)"
+    $script:Failed = $true
 }
 
 if ($Failed) {

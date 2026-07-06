@@ -8,7 +8,7 @@ param(
     [int]$RedisPort = $(if ([string]::IsNullOrWhiteSpace($env:REDIS_PORT)) { 6379 } else { [int]$env:REDIS_PORT }),
     [string]$ServerPort = $(if ([string]::IsNullOrWhiteSpace($env:SERVER_PORT)) { "18080" } else { $env:SERVER_PORT }),
     [string]$FrontendPort = $(if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { "5174" } else { $env:FRONTEND_PORT }),
-    [string]$EnvRoot = $(if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_ENV_ROOT)) { "D:\CyberFusion\Environment\cyberfusion-platform" } else { $env:CYBERFUSION_ENV_ROOT }),
+    [string]$EnvRoot = "",
     [switch]$SkipDbInit,
     [switch]$SkipBuild,
     [switch]$SkipBrowserOpen
@@ -17,22 +17,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ProjectRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+. (Join-Path $ScriptDir "runtime-paths.ps1")
 
-function Assert-DDrivePath {
-    param(
-        [string]$Label,
-        [string]$PathValue
-    )
-
-    if ($PathValue -notmatch "^[A-Za-z]:") {
-        throw "$Label must use an absolute D: path, not $PathValue."
-    }
-    $Drive = $PathValue.Substring(0, 1).ToUpperInvariant()
-    if ($Drive -ne "D") {
-        throw "$Label must stay on D: under D:\CyberFusion, not $PathValue."
-    }
-}
+$ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+$EnvRoot = Resolve-CyberFusionEnvRoot -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
 
 if ([string]::IsNullOrWhiteSpace($DbPassword)) {
     $SecurePassword = Read-Host "Enter local MySQL password for $DbUsername@$DbHost`:$DbPort" -AsSecureString
@@ -50,8 +38,7 @@ if ([string]::IsNullOrWhiteSpace($DbPassword)) {
     throw "DB_PASSWORD is required. Provide -DbPassword or enter it when prompted."
 }
 
-Assert-DDrivePath -Label "Project root" -PathValue $ProjectRoot.Path
-Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
+Set-CyberFusionRuntimeEnvironment -ProjectRoot $ProjectRoot -EnvRoot $EnvRoot
 
 $env:DB_HOST = $DbHost
 $env:DB_PORT = "$DbPort"
@@ -64,7 +51,7 @@ $env:SERVER_PORT = $ServerPort
 $env:FRONTEND_PORT = $FrontendPort
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 
-& (Join-Path $ScriptDir "prepare-d-drive.ps1") -EnvRoot $EnvRoot -DbHost $DbHost -DbPort $DbPort -RedisHost $RedisHost -RedisPort $RedisPort
+& (Join-Path $ScriptDir "prepare-runtime.ps1") -EnvRoot $EnvRoot -DbHost $DbHost -DbPort $DbPort -RedisHost $RedisHost -RedisPort $RedisPort
 
 $PreStartArgs = @("-PreStart")
 if ($SkipDbInit) { $PreStartArgs += "-SkipDbInit" }

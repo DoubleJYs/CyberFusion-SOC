@@ -20,12 +20,12 @@ scripts/mac/run-dev.sh
 ```
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
+cd E:\CyberFusion\00-cyberfusion-platform
 $env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\start-no-docker.ps1
 ```
 
-The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under `D:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\start-no-docker.ps1`. The Windows entrypoint prepares D drive runtime folders, runs pre-start verification, starts the backend and frontend, then runs post-start verification. It defaults runtime data and dependency caches to `D:\CyberFusion\Environment\cyberfusion-platform`. Use `scripts\win\run-dev.ps1` only for phased troubleshooting.
+The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under a stable operator-chosen folder such as `E:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\start-no-docker.ps1`. The Windows entrypoint prepares the configured runtime folders, runs pre-start verification, starts the backend and frontend, then runs post-start verification. If `CYBERFUSION_ENV_ROOT` is not set, runtime data and dependency caches default to an `Environment\cyberfusion-platform` folder next to the project parent. Use `scripts\win\run-dev.ps1` only for phased troubleshooting.
 
 To reuse an already verified machine without rebuilding every time:
 
@@ -40,8 +40,8 @@ CYBERFUSION_SKIP_COMPAT_CHECK=1 scripts/mac/run-dev.sh
 Windows no-Docker database initialization:
 
 ```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
-$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
+cd E:\CyberFusion\00-cyberfusion-platform
+$env:CYBERFUSION_ENV_ROOT = "E:\CyberFusion\Environment\cyberfusion-platform"
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
 $env:DB_NAME = "cyberfusion_soc"
@@ -58,7 +58,7 @@ Windows no-Docker backup and restore also use local MySQL client tools, not Dock
 ```powershell
 $env:DB_PASSWORD = "replace-with-local-db-password"
 .\scripts\win\backup-runtime.ps1
-.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
+.\scripts\win\restore-runtime.ps1 -BackupDir "E:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
 ```
 
 macOS/Linux Docker local services:
@@ -168,7 +168,7 @@ mkdir -p "$DEMO_RANGE_RUNTIME_ROOT"/{logs/demo-target,logs/waf,logs/nginx,zap,tr
 ```
 
 ```powershell
-$env:DEMO_RANGE_RUNTIME_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform\demo-range"
+$env:DEMO_RANGE_RUNTIME_ROOT = "E:\CyberFusion\Environment\cyberfusion-platform\demo-range"
 New-Item -ItemType Directory -Force `
   "$env:DEMO_RANGE_RUNTIME_ROOT\logs\demo-target", `
   "$env:DEMO_RANGE_RUNTIME_ROOT\logs\waf", `
