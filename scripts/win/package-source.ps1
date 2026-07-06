@@ -48,6 +48,7 @@ $Required = @(
     "scripts\win\init-local-db.ps1",
     "scripts\win\prepare-d-drive.ps1",
     "scripts\win\verify-no-docker.ps1",
+    "scripts\win\collect-windows-evidence.ps1",
     "docs\windows-no-docker.md",
     ".env.example",
     "README.md"
@@ -161,6 +162,8 @@ Remove-Item -LiteralPath $StageRoot -Recurse -Force
 Write-Host "Created source package: $OutputZip"
 Write-Host "Windows quick start after unzip to D:\CyberFusion\00-cyberfusion-platform:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\start-no-docker.ps1"
+Write-Host "Windows evidence collection after setting DB_PASSWORD:"
+Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\collect-windows-evidence.ps1"
 Write-Host "Manual phased startup:"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\prepare-d-drive.ps1"
 Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\win\verify-no-docker.ps1 -PreStart"

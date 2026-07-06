@@ -190,6 +190,20 @@ After `run-dev.ps1` starts the backend and frontend, run the post-start runtime 
 
 The verifier checks the D drive project location, required local tools, local MySQL schema/seed, frontend/backend build, and runtime doctor. It does not call Docker.
 
+To produce a shareable Windows validation evidence folder under `D:\CyberFusion\Environment\cyberfusion-platform\validation`, set `DB_PASSWORD` in the current PowerShell session and run:
+
+```powershell
+.\scripts\win\collect-windows-evidence.ps1
+```
+
+If the backend and frontend are already running and you only need to collect post-start evidence:
+
+```powershell
+.\scripts\win\collect-windows-evidence.ps1 -SkipStart
+```
+
+The evidence script records tool versions, Git revision, preflight results, startup or post-start verification results, and a transcript. It does not accept a database password parameter and does not write passwords to the evidence JSON.
+
 You can also run the read-only doctor directly after startup:
 
 ```powershell

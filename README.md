@@ -168,6 +168,12 @@ For phased verification or troubleshooting:
 .\scripts\win\verify-no-docker.ps1 -PostStart
 ```
 
+To collect a Windows validation evidence folder on the target laptop after setting `DB_PASSWORD` locally:
+
+```powershell
+.\scripts\win\collect-windows-evidence.ps1
+```
+
 macOS/Linux Docker-backed local path:
 
 ```sh
