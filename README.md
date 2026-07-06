@@ -1,36 +1,187 @@
 # CyberFusion SOC
 
-CyberFusion SOC is the unified security operations portal for the local `cyberspace_Security_shot_time` workspace. The active product, backend, frontend, SQL, docs, deployment templates, demo data, and curated integration programs now live under this `00-cyberfusion-platform` directory. The sibling `01-16` directories remain upstream/reference sources only.
+CyberFusion SOC 是 `cyberspace_Security_shot_time` 工作区中的主安全运营平台项目。当前开发、运行、交付和演示都以本目录 `00-cyberfusion-platform` 为准；旁边的 `01-16` 目录只作为上游参考或历史素材，不作为主项目启动入口。
 
-## Scope
+本项目面向本地研发、教学演示、小型内网安全运营和受控客户交付，聚合资产、事件、告警、工单、报告、策略、集成适配器和本地客户端安全视图。项目不执行未授权扫描、不连接公网攻击目标、不自动下发处置动作。
 
-- Main system: Spring Boot 3 backend plus Vue 3/Vite/Element Plus frontend.
-- P0: login, RBAC, departments, data scope, SOC layout, assets, raw/normalized events, alerts, tickets, reports, audit logs, demo data.
-- P1/P2 adapters: Wazuh demo alerts, Zeek logs, Suricata `eve.json`, Trivy JSON, MISP IOC, ZAP JSON, Sigma rule records, CyberChef field analysis, Shuffle dry-run notification workflow.
-- Optional adapters: Security Onion, Falco, OpenCTI-lite, osquery, Velociraptor, Cowrie.
-- Excluded mainline: `15-juice-shop`; kept only as a future training range source.
+## 当前交付重点
 
-## Integration Programs
+- Windows 电脑可以在不使用 Docker 的情况下运行。
+- Windows 项目源码必须放在 `D:\CyberFusion\00-cyberfusion-platform`。
+- Windows 运行数据、日志、上传、备份、缓存、临时文件和验证证据必须放在 `D:\CyberFusion\Environment\cyberfusion-platform`。
+- macOS/Linux 原有 Docker Compose 本地路径保留，不破坏原来的开发方式。
+- 真实密码、Token、证书、客户数据、数据库文件、日志、Docker 卷和大模型文件不得进入源码仓库。
 
-Curated integration-side programs are copied into `integrations/` so the current project no longer depends on manually jumping across sibling directories during demos and handoff.
+## 技术栈
 
-- `integrations/catalog.json` is the local source of truth for integration program paths and CyberFusion API entrypoints.
-- `integrations/README.md` explains the copied directories, source modules, safety boundaries, and import APIs.
-- `GET /api/soc/integrations/catalog` exposes the same read-only catalog to the platform UI and smoke checks.
-- All defensive evidence still enters CyberFusion through the platform APIs, primarily `POST /api/soc/external-events/cyberfusion/import`.
-- Real runtime data, generated logs, Docker volumes, credentials, tokens, and private keys still belong outside source under Environment.
+| 层级 | 技术 |
+| --- | --- |
+| 后端 | Java 21, Spring Boot 3, Maven, MyBatis-Plus |
+| 前端 | Vue 3, Vite, TypeScript, Element Plus, Pinia, pnpm |
+| 数据库 | MySQL 8 |
+| 缓存/队列 | Redis 兼容服务 |
+| 本地验证 | Maven test, Vite build, Playwright, PowerShell scripts |
+| 集成素材 | Wazuh, Zeek, Suricata, Trivy, MISP, ZAP, Sigma, CyberChef, Shuffle 等防御侧数据适配 |
 
-## Source And Runtime Boundaries
+## 功能范围
 
-- Source: this `00-cyberfusion-platform` directory, including `integrations/` for curated local integration programs.
-- Runtime root: set `CYBERFUSION_ENV_ROOT` outside the source tree, for example `$HOME/Environment/cyberfusion-platform` on macOS/Linux or `D:\CyberFusion\Environment\cyberfusion-platform` on Windows.
-- Source keeps code, README, docs, `.env.example`, config templates, deploy scripts, and SQL seed scripts.
-- Databases, logs, uploads, caches, certificates, secrets, Docker volumes, and backups must live under Environment or another protected runtime path.
-- Do not commit real tokens, API keys, private keys, customer data, large logs, Docker volumes, model files, or runtime databases.
+- 登录、RBAC、部门、岗位、角色、菜单、字典、配置、审计日志。
+- SOC 工作台、资产中心、外部事件、告警中心、降噪、事件聚类、工单、报告。
+- 策略中心、检测规则、关联规则、风险评分、本地检查命令、响应剧本。
+- 客户端工作台、本地靶场视图、设备管理、安全日志、数据报告、运维视图。
+- 多源安全数据导入：Zeek `conn.log`、Suricata `eve.json`、Wazuh demo alert、MISP IOC、Trivy JSON、ZAP JSON。
+- 集成目录 API：`GET /api/soc/integrations/catalog`。
+- 防御侧统一导入入口：`POST /api/soc/external-events/cyberfusion/import`。
 
-## Start
+## 目录说明
 
-macOS / Linux:
+```text
+00-cyberfusion-platform/
+  backend/          Spring Boot 后端
+  frontend/         Vue/Vite 前端
+  sql/              MySQL schema 和 seed
+  scripts/          macOS、Windows、smoke、SQL 辅助脚本
+  deploy/           Docker Compose、Nginx、Demo Range 部署模板
+  integrations/     已整理到主项目内的集成素材
+  docs/             架构、API、部署、使用、交接、测试报告
+  demo-data/        本地演示数据
+```
+
+## Windows 无 Docker 快速启动
+
+### 1. 准备目录
+
+```powershell
+New-Item -ItemType Directory -Force D:\CyberFusion | Out-Null
+cd D:\CyberFusion
+# 推荐把本仓库 clone 或复制为：
+# D:\CyberFusion\00-cyberfusion-platform
+cd D:\CyberFusion\00-cyberfusion-platform
+```
+
+不要从 `C:\Users\...`、桌面、下载目录或源码外的临时目录启动。Windows 脚本会在检测到非 D 盘路径时直接失败。
+
+### 2. 安装并启动依赖
+
+Windows 无 Docker 路径不会自动启动数据库服务，需要你先准备：
+
+- JDK 21+
+- Maven 3.9+
+- Node.js 20+
+- pnpm 11+
+- MySQL 8 server
+- MySQL 8 client `mysql.exe` 和 `mysqldump.exe`
+- Redis 兼容服务
+
+确认 MySQL 和 Redis 已经运行后，设置当前 PowerShell 会话变量：
+
+```powershell
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
+```
+
+不要把真实数据库密码写进源码文件。
+
+### 3. 一键启动
+
+```powershell
+.\scripts\win\start-no-docker.ps1
+```
+
+这个脚本会按顺序执行：
+
+1. 创建 D 盘运行目录。
+2. 检查 MySQL/Redis 端口可达。
+3. 执行 Windows pre-start 验证。
+4. 初始化或刷新 MySQL schema/seed。
+5. 启动 Spring Boot 后端和 Vite 前端。
+6. 执行 post-start 运行检查。
+
+默认地址：
+
+- 前端：`http://127.0.0.1:5174`
+- 后端 API：`http://127.0.0.1:18080/api`
+- 健康检查：`http://127.0.0.1:18080/api/health`
+- Swagger：`http://127.0.0.1:18080/api/swagger-ui.html`
+
+本地演示账号：
+
+```text
+admin / Admin@123456
+```
+
+如果已有本地数据库曾修改过管理员密码，可能需要使用当前数据库中的密码；部分历史 smoke 脚本也兼容 `admin123` 作为本地 fallback。
+
+### 4. 分阶段排障
+
+如果一键启动失败，用下面的分阶段命令定位问题：
+
+```powershell
+.\scripts\win\prepare-d-drive.ps1
+.\scripts\win\verify-no-docker.ps1 -PreStart
+.\scripts\win\run-dev.ps1
+.\scripts\win\verify-no-docker.ps1 -PostStart
+```
+
+只启动后端：
+
+```powershell
+.\scripts\win\backend-dev.ps1
+```
+
+只启动前端：
+
+```powershell
+.\scripts\win\frontend-dev.ps1
+```
+
+## Windows D 盘边界
+
+Windows 脚本会把以下内容固定在 `D:\CyberFusion\Environment\cyberfusion-platform` 下：
+
+- `uploads`
+- `logs\backend`
+- `backups\runtime`
+- `local-vm`
+- `caches\maven-repository`
+- `caches\pnpm-store`
+- `caches\npm`
+- `tmp`
+- `packages`
+- `package-staging`
+- `validation`
+
+脚本会传递 Maven `-Dmaven.repo.local`、pnpm `--store-dir`，并设置 npm cache、`TEMP`、`TMP` 和 Java `java.io.tmpdir`，避免依赖缓存和临时文件落到 C 盘用户目录。
+
+## Windows 验证证据
+
+在 Windows 目标机器上设置好 `DB_PASSWORD` 后，可以生成验证证据包：
+
+```powershell
+.\scripts\win\collect-windows-evidence.ps1
+```
+
+如果后端和前端已经在运行，只采集 post-start 证据：
+
+```powershell
+.\scripts\win\collect-windows-evidence.ps1 -SkipStart
+```
+
+证据会写入：
+
+```text
+D:\CyberFusion\Environment\cyberfusion-platform\validation
+```
+
+证据脚本记录工具版本、Git revision、preflight、启动或 post-start 验证结果和 transcript，不接收数据库密码参数，也不会把密码写入证据 JSON。
+
+## macOS / Linux 本地启动
+
+macOS/Linux 仍保留 Docker Compose 路径：
 
 ```sh
 export LOCAL_DB_PASSWORD="replace-with-local-db-password"
@@ -46,107 +197,34 @@ MYSQL_PWD="$LOCAL_DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-
   mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < sql/data.sql
 
 DB_PASSWORD="$LOCAL_DB_PASSWORD" scripts/mac/backend-dev.sh
-
 scripts/mac/frontend-dev.sh
 ```
 
-The frontend script defaults to `FRONTEND_PORT=5174` and automatically sets
-`VITE_API_PROXY_TARGET=http://127.0.0.1:18080`. If you start Vite manually, keep
-the same proxy target:
+如果手动启动前端，保持代理目标一致：
 
 ```sh
 VITE_API_PROXY_TARGET=http://127.0.0.1:18080 pnpm --dir frontend dev --host 127.0.0.1 --port 5174
 ```
 
-Windows PowerShell:
+## 运行检查
 
-```powershell
-cd D:\CyberFusion\00-cyberfusion-platform
-$env:DB_HOST = "127.0.0.1"
-$env:DB_PORT = "3306"
-$env:DB_NAME = "cyberfusion_soc"
-$env:DB_USERNAME = "root"
-$env:DB_PASSWORD = "replace-with-local-db-password"
-$env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
-.\scripts\win\start-no-docker.ps1
-```
-
-The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. The scripts fail fast when started from `C:`; use `D:\CyberFusion\00-cyberfusion-platform` for source and `D:\CyberFusion\Environment\cyberfusion-platform` for runtime data. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
-Windows scripts also place Maven, pnpm, and npm caches under `D:\CyberFusion\Environment\cyberfusion-platform\caches`, and set process/Java temporary directories under `D:\CyberFusion\Environment\cyberfusion-platform\tmp` instead of the default user profile on C drive.
-
-Default URLs:
-
-- Frontend: `http://127.0.0.1:5174` when using the local dev scripts, or the port passed to the dev script.
-- Backend API: `http://127.0.0.1:18080/api` when using the local dev scripts, or the `ServerPort` passed to the dev script.
-- Health: `http://127.0.0.1:18080/api/health`
-- Swagger: `http://127.0.0.1:18080/api/swagger-ui.html`
-
-Demo account: `admin / Admin@123456` from the seed SQL. Some local demo databases may have changed the admin password to `admin123`; the smoke scripts also accept that fallback unless `CYBERFUSION_ADMIN_PASSWORD` is set. These are local demo-only accounts; the SQL stores BCrypt hashes. Re-running `sql/data.sql` preserves existing user password hashes and will not reset an already-initialized admin password.
-
-## Runtime Doctor
-
-Before live smoke or after any startup issue, run the read-only doctor:
-
-```sh
-scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
-```
-
-Windows PowerShell:
+Windows：
 
 ```powershell
 .\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
 ```
 
-The doctor checks frontend/backend ports, the frontend `/api` proxy to the backend, backend Java process start time, `/api/health`, required SOC tables, key menu/permission seed rows, admin `/auth/me` menus/permissions, and employee 403 boundaries for SOC-only APIs. It does not delete volumes, reset passwords, import demo data, scan targets, execute local terminal commands, or send notifications.
-
-The Windows no-Docker startup and doctor require local `mysql.exe` because they initialize and verify the schema directly against the configured MySQL server. Windows backup and restore are also no-Docker: `scripts\win\backup-runtime.ps1` uses local `mysqldump.exe`, and `scripts\win\restore-runtime.ps1` uses local `mysql.exe`. `DB_PASSWORD` must come from the local environment and is not printed.
-
-Safe backend startup sequence:
-
-1. Start MySQL/Redis and keep runtime data under Environment. On Windows this means local services, not Docker.
-2. Apply `sql/schema.sql`, then `sql/data.sql`, then `scripts/sql/apply-latest-menu-and-policy-seed.sql` for already-initialized local databases.
-3. Stop any stale Java process that is still listening on the backend port.
-4. Start the backend from the current source checkout with the active local `DB_PASSWORD`.
-5. Confirm `GET /api/health` reports `database`, `schema`, `seed`, and `redis`.
-
-## Local VM Field Compatibility
-
-The client local field at `/client/local-range` is built to survive project restarts and OS changes:
-
-- The page starts from a local VM-style login screen; demo passwords are not stored.
-- Activity evidence and the optional noVNC / VM console URL are stored in browser local storage per asset IP.
-- The terminal command menu adapts to the browser host OS: Windows uses `whoami /groups`, `tasklist`, `netstat`, and `reg query`; macOS uses `id`, `ps`, `lsof`, and `launchctl`; Linux uses `id`, `ps`, `ss`/fallbacks, and `systemctl`/fallbacks.
-- Backend fact collection uses fixed read-only command candidates per OS and writes results to SOC as `osquery`-style evidence. It does not run arbitrary user commands.
-- Optional VM console embedding only accepts localhost or private-network URLs such as `http://127.0.0.1:6080/vnc.html`.
-
-Compatibility checks:
+macOS/Linux：
 
 ```sh
-bash scripts/mac/local-vm-compat-check.sh
+scripts/smoke/dev-doctor.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
 ```
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\win\local-vm-compat-check.ps1
-```
+Doctor 会检查前后端端口、前端 `/api` 代理、`/api/health`、核心 SOC 表、菜单/权限 seed、管理员菜单权限和员工账号 403 边界。它不会删除数据、重置密码、执行扫描或发送真实通知。
 
-## Validation Loop
+## 本地验收命令
 
-The external event page can import:
-
-- Zeek `conn.log` rows.
-- Suricata `eve.json` JSON Lines.
-- Wazuh demo alert JSON.
-- MISP IOC JSON.
-- Trivy JSON into the vulnerability center.
-- ZAP JSON findings.
-
-Then use the alert center to convert a generated alert to a ticket, use CyberChef analysis on an IOC/network field, trigger the Shuffle dry-run notification, and generate a comprehensive report.
-
-## One-Command Acceptance
-
-Run these commands from `00-cyberfusion-platform` before handing over a release candidate.
-
-Windows no-Docker:
+Windows 无 Docker：
 
 ```powershell
 git status --short
@@ -157,24 +235,10 @@ $env:DB_USERNAME = "root"
 $env:DB_PASSWORD = "replace-with-local-db-password"
 $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 .\scripts\win\start-no-docker.ps1
+.\scripts\win\collect-windows-evidence.ps1 -SkipStart
 ```
 
-For phased verification or troubleshooting:
-
-```powershell
-.\scripts\win\prepare-d-drive.ps1
-.\scripts\win\verify-no-docker.ps1 -PreStart
-.\scripts\win\run-dev.ps1
-.\scripts\win\verify-no-docker.ps1 -PostStart
-```
-
-To collect a Windows validation evidence folder on the target laptop after setting `DB_PASSWORD` locally:
-
-```powershell
-.\scripts\win\collect-windows-evidence.ps1
-```
-
-macOS/Linux Docker-backed local path:
+macOS/Linux：
 
 ```sh
 git status --short
@@ -189,79 +253,51 @@ scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-ur
 scripts/smoke/run-acceptance.sh --dry-run
 ```
 
-`scripts/smoke/run-acceptance.sh --dry-run` still calls the local API to prove the acceptance chain. It covers demo batch import, evidence, linked alerts, incident correlation, incident-cluster detail, alert-to-incident lookup, incident-to-ticket conversion, recommended response playbook application, ticket tasks, report generation, policy checks, adapter preview, and dry-run notifications. The dry-run boundary means it uses local demo data and dry-run notification logs only; it does not scan public targets and does not send real email, webhook, Feishu, WeCom, DingTalk, Slack, or SIEM/WAF/IDS traffic. Set `CYBERFUSION_API_BASE` if the backend is not on `http://localhost:18080/api`.
+## 备份和恢复
 
-Before running live acceptance, start the backend from the current source checkout with Environment-managed database variables. On Windows no-Docker, `DB_PASSWORD` must match the local MySQL service; an incorrect value can allow the backend process to start but make `/api/auth/login` return `500`.
-
-## Demo Data Governance
-
-Repeated live smoke runs reuse stable demo identifiers and are designed to be idempotent, but reports, dry-run notification logs, tickets, and incident evidence can still accumulate during manual demos. Use the cleanup script in dry-run mode first:
-
-```sh
-scripts/smoke/cleanup-demo-data.sh
-```
-
-The script only targets demo/smoke scoped rows for `DEMO-RANGE-OFFLINE-V1` and `DEMO-RANGE-ACCEPTANCE-SMOKE`: multi-source events, linked alerts, Trivy demo vulnerabilities, incident clusters/evidence, linked demo tickets/tasks/timeline rows, security-validation reports, playbook match logs, and dry-run notification logs. It does not delete Docker volumes or unrelated business data.
-
-Real cleanup requires explicit confirmation:
-
-```sh
-scripts/smoke/cleanup-demo-data.sh --batch-id DEMO-RANGE-ACCEPTANCE-SMOKE --confirm
-```
-
-Optional page smoke screenshots:
-
-```sh
-pnpm --dir frontend exec playwright test tests/e2e/release-pages.spec.ts
-```
-
-The page smoke writes acceptance screenshots to `docs/screenshots/acceptance-*.png` and records the expected set in `docs/screenshots/manifest.json`.
-
-If the latest UI changes are not visible, run the visibility check before changing code:
-
-```sh
-scripts/smoke/check-visibility.sh --base-url http://127.0.0.1:5174 --api-base-url http://127.0.0.1:18080/api
-```
-
-The visibility check includes the customer demo route, `/soc/incidents`, `/soc/policies`, the policy center `事件关联规则` tab/API, and employee 403 boundaries for incident and rule-management APIs.
-
-It logs in with local demo users, prints `/api/auth/me` menu paths, checks key frontend routes such as `/showcase`, `/soc/policies`, `/client/tasks`, checks policy/adapter/playbook APIs, and confirms employees receive `403` for policy APIs. Existing databases may need a schema and seed refresh because `sql/data.sql` is only applied automatically for newly initialized databases.
-
-Windows no-Docker refresh:
+Windows 无 Docker 备份使用本地 MySQL client：
 
 ```powershell
-.\scripts\win\init-local-db.ps1
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\backup-runtime.ps1
 ```
 
-macOS/Linux Docker-backed refresh:
+默认备份位置：
 
-```sh
-MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
-  mysql --default-character-set=utf8mb4 -uroot < sql/schema.sql
-MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
-  mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < sql/data.sql
-MYSQL_PWD="$DB_PASSWORD" docker exec -e MYSQL_PWD -i cyberfusion-platform-mysql-1 \
-  mysql --default-character-set=utf8mb4 -uroot cyberfusion_soc < scripts/sql/apply-latest-menu-and-policy-seed.sql
+```text
+D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS
 ```
 
-After refreshing SQL, restart the backend process so `/api` loads the latest `backend/target/classes`. A Java process that was started before the latest Maven build can still serve old controller/service code.
+恢复必须显式确认：
 
-## Enterprise Delivery Checklist
+```powershell
+$env:DB_PASSWORD = "replace-with-local-db-password"
+.\scripts\win\restore-runtime.ps1 -BackupDir "D:\CyberFusion\Environment\cyberfusion-platform\backups\runtime\YYYYMMDD-HHMMSS" -ConfirmRestore
+```
 
-- README, `.env.example`, `.gitignore`, `.gitattributes`, SQL, scripts, Docker Compose, Nginx templates, and docs are the reusable delivery assets.
-- Runtime data, Docker volumes, logs, uploads, database files, generated reports, test output, real secrets, and customer data must stay outside source.
-- The 10-minute acceptance demo is documented in [User Manual](docs/user-manual.md).
-- Screenshot requirements, actual page screenshots, common bugs, and triage commands are documented in [User Manual](docs/user-manual.md). The screenshot assets live under `docs/screenshots/`.
-- Handover checklist and final verification commands are documented in [Handover](docs/handover.md).
+Redis 备份/恢复也必须使用 D 盘路径，例如：
 
-## Docs
+```powershell
+$env:REDIS_DUMP_PATH = "D:\CyberFusion\Redis\data\dump.rdb"
+```
 
-- [Architecture](docs/architecture.md)
-- [API](docs/api.md)
-- [Database](docs/database.md)
-- [Deploy](docs/deploy.md)
-- [User Manual](docs/user-manual.md)
-- [Handover](docs/handover.md)
-- [Upstream And Licenses](docs/upstream.md)
-- [Validation Report](docs/test-report.md)
-- [Final Implementation Report](docs/final-report.md)
+## 安全边界
+
+- 不要把真实 `.env`、Token、API key、私钥、证书、客户数据提交到 Git。
+- 不要把 MySQL data directory、Redis dump、上传文件、日志、备份、验证证据、依赖缓存放进源码目录。
+- 不要运行未授权公网扫描。
+- Demo Range、ZAP、Trivy、Shuffle 等演示链路默认只用于本地受控环境和 dry-run。
+- 不要用 `docker compose down -v` 解决问题，除非明确确认要删除本地数据卷。
+
+## 常用文档
+
+- [架构说明](docs/architecture.md)
+- [API 文档](docs/api.md)
+- [数据库说明](docs/database.md)
+- [部署说明](docs/deploy.md)
+- [Windows 无 Docker 指南](docs/windows-no-docker.md)
+- [用户手册](docs/user-manual.md)
+- [交接清单](docs/handover.md)
+- [上游与许可证](docs/upstream.md)
+- [测试报告](docs/test-report.md)
+- [最终实现报告](docs/final-report.md)
