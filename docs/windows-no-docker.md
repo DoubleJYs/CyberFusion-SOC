@@ -5,10 +5,10 @@ This guide is for running the current `00-cyberfusion-platform` project on a Win
 ## Required Software
 
 - Windows 10/11 with PowerShell 5.1 or newer.
-- JDK 21 in `PATH`.
+- JDK 21 or newer in `PATH`.
 - Maven 3.9 or newer in `PATH`.
 - Node.js 20 or newer in `PATH`.
-- pnpm in `PATH`.
+- pnpm 11 or newer in `PATH`.
 - MySQL 8 server running locally or on a reachable host.
 - MySQL 8 client `mysql.exe` in `PATH`.
 - Redis-compatible server running locally or on a reachable host.
