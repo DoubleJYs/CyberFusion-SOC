@@ -44,14 +44,13 @@ Validation matrix:
 
 ## Docker MySQL Client Fallback 2026-06-22
 
-Scope: local runtime diagnostics and SQL refresh documentation for environments without a host `mysql` command.
+Historical scope: local runtime diagnostics and SQL refresh documentation for the 2026-06-22 macOS/Linux Docker-backed path and earlier Windows notes. This section is retained as evidence history only. It is not the current Windows startup contract; as of 2026-07-06, Windows no-Docker scripts require local MySQL client tools and do not use Docker fallback.
 
-Changes verified:
+Historical changes verified at that time:
 
 - `scripts/smoke/dev-doctor.sh` no longer requires a host MySQL client for schema, seed, menu, and permission diagnostics.
 - The doctor uses host `mysql` when available and falls back to `docker exec cyberfusion-platform-mysql-1 mysql` when host `mysql` is missing.
-- `scripts/win/dev-doctor.ps1` has the same local-client-first, Docker-client-fallback behavior.
-- `scripts/win/run-dev.ps1` now imports `schema.sql` and `data.sql` through the Docker Compose MySQL client with `MYSQL_PWD`, instead of passing the password through a `-p...` command argument.
+- Older Windows notes in this section have been superseded by `scripts/win/start-no-docker.ps1`, `scripts/win/run-dev.ps1`, and `scripts/win/dev-doctor.ps1`, which use local `mysql.exe` and do not call Docker.
 - `scripts/mac/backup-runtime.sh`, `scripts/mac/restore-runtime.sh`, `scripts/win/backup-runtime.ps1`, and `scripts/win/restore-runtime.ps1` now pass `MYSQL_PWD` from the explicit local `DB_PASSWORD` instead of relying on container `MYSQL_ROOT_PASSWORD`.
 - `scripts/smoke/cleanup-demo-data.sh` now requires `DB_PASSWORD` for both dry-run and confirm modes, and passes it through `MYSQL_PWD` to the Docker MySQL client.
 - SQL checks prefer `DB_PASSWORD` when it is present. If it is absent in local development, `scripts/smoke/dev-doctor.sh` can read the existing Docker MySQL container `MYSQL_ROOT_PASSWORD` into process memory, use the Docker MySQL client, and still avoid printing or writing the password.

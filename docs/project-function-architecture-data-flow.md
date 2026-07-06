@@ -128,13 +128,13 @@ For Windows delivery and classroom/demo laptops, the current `00-cyberfusion-pla
 | --- | --- |
 | Required local tools | JDK 21, Maven 3.9+, Node.js 20+, pnpm, MySQL 8 server/client, Redis-compatible server, PowerShell |
 | Database initialization | `scripts/win/init-local-db.ps1` applies `sql/schema.sql`, `sql/data.sql`, then `scripts/sql/apply-latest-menu-and-policy-seed.sql` through local `mysql.exe` |
-| One-command startup | `scripts/win/run-dev.ps1` validates local ports, initializes the database unless `-SkipDbInit` is passed, then starts backend and frontend PowerShell windows |
+| One-command startup | `scripts/win/start-no-docker.ps1` prepares D drive folders, runs pre-start verification, calls `run-dev.ps1`, then runs post-start verification |
 | Backend runtime | `scripts/win/backend-dev.ps1` or `run-dev.ps1` starts Spring Boot on `SERVER_PORT=18080` by default |
 | Frontend runtime | `scripts/win/frontend-dev.ps1` or `run-dev.ps1` starts Vite on `FRONTEND_PORT=5174` and points `VITE_API_PROXY_TARGET` to `http://127.0.0.1:18080` |
-| Runtime root | `CYBERFUSION_ENV_ROOT`, defaulting to `D:\CyberFusion\Environment\cyberfusion-platform`, stores uploads, backend logs, backups, and local VM evidence outside source |
+| Runtime root | `CYBERFUSION_ENV_ROOT`, defaulting to `D:\CyberFusion\Environment\cyberfusion-platform`, stores uploads, backend logs, backups, local VM evidence, Maven cache, pnpm store, and npm cache outside source |
 | Diagnosis | `scripts/win/dev-doctor.ps1` checks frontend/backend connectivity, `/api/health`, key SOC tables, seed rows, menus, permissions, and role boundaries |
 
-Windows no-Docker mode expects the source project under `D:\CyberFusion\00-cyberfusion-platform` and runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`. It does not launch MySQL or Redis. Operators must start those two services first. The bundled SQL seed files currently create and seed the fixed database name `cyberfusion_soc`; custom database names require a manually prepared schema and `run-dev.ps1 -SkipDbInit`.
+Windows no-Docker mode expects the source project under `D:\CyberFusion\00-cyberfusion-platform` and runtime data under `D:\CyberFusion\Environment\cyberfusion-platform`. It does not launch MySQL or Redis. Operators must start those two services first. The bundled SQL seed files currently create and seed the fixed database name `cyberfusion_soc`; custom database names require a manually prepared schema and `start-no-docker.ps1 -SkipDbInit`.
 
 ### Drawing Guidance For Function Module Diagrams
 

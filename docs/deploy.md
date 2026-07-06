@@ -22,19 +22,19 @@ scripts/mac/run-dev.sh
 ```powershell
 cd D:\CyberFusion\00-cyberfusion-platform
 $env:DB_PASSWORD = "replace-with-local-db-password"
-.\scripts\win\run-dev.ps1
+.\scripts\win\start-no-docker.ps1
 ```
 
-The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under `D:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\run-dev.ps1`. Both entrypoints run the environment check and local VM compatibility check before starting the backend and frontend. They also create runtime folders under `CYBERFUSION_ENV_ROOT` and default to `~/Environment/cyberfusion-platform` on macOS/Linux or `D:\CyberFusion\Environment\cyberfusion-platform` on Windows.
+The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under `D:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\start-no-docker.ps1`. The Windows entrypoint prepares D drive runtime folders, runs pre-start verification, starts the backend and frontend, then runs post-start verification. It defaults runtime data and dependency caches to `D:\CyberFusion\Environment\cyberfusion-platform`. Use `scripts\win\run-dev.ps1` only for phased troubleshooting.
 
-To reuse an already verified machine without running the checks every time:
+To reuse an already verified machine without rebuilding every time:
 
 ```sh
 CYBERFUSION_SKIP_COMPAT_CHECK=1 scripts/mac/run-dev.sh
 ```
 
 ```powershell
-.\scripts\win\run-dev.ps1 -SkipCompatCheck
+.\scripts\win\start-no-docker.ps1 -SkipBuild
 ```
 
 Windows no-Docker database initialization:
