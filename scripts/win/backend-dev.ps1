@@ -41,11 +41,20 @@ $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 $env:APP_UPLOAD_BASE_DIR = if ([string]::IsNullOrWhiteSpace($env:APP_UPLOAD_BASE_DIR)) { Join-Path $EnvRoot "uploads" } else { $env:APP_UPLOAD_BASE_DIR }
 $env:LOGGING_FILE_PATH = if ([string]::IsNullOrWhiteSpace($env:LOGGING_FILE_PATH)) { Join-Path $EnvRoot "logs\backend" } else { $env:LOGGING_FILE_PATH }
 $env:MAVEN_REPO_LOCAL = if ([string]::IsNullOrWhiteSpace($env:MAVEN_REPO_LOCAL)) { Join-Path $EnvRoot "caches\maven-repository" } else { $env:MAVEN_REPO_LOCAL }
+$env:CYBERFUSION_TEMP_DIR = if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_TEMP_DIR)) { Join-Path $EnvRoot "tmp" } else { $env:CYBERFUSION_TEMP_DIR }
 $env:SERVER_PORT = if ([string]::IsNullOrWhiteSpace($env:SERVER_PORT)) { "18080" } else { $env:SERVER_PORT }
 Assert-DDrivePath -Label "Upload directory" -PathValue $env:APP_UPLOAD_BASE_DIR
 Assert-DDrivePath -Label "Log directory" -PathValue $env:LOGGING_FILE_PATH
 Assert-DDrivePath -Label "Maven repository" -PathValue $env:MAVEN_REPO_LOCAL
-New-Item -ItemType Directory -Force -Path $env:APP_UPLOAD_BASE_DIR, $env:LOGGING_FILE_PATH, $env:MAVEN_REPO_LOCAL | Out-Null
+Assert-DDrivePath -Label "Temp directory" -PathValue $env:CYBERFUSION_TEMP_DIR
+New-Item -ItemType Directory -Force -Path $env:APP_UPLOAD_BASE_DIR, $env:LOGGING_FILE_PATH, $env:MAVEN_REPO_LOCAL, $env:CYBERFUSION_TEMP_DIR | Out-Null
+$env:TEMP = $env:CYBERFUSION_TEMP_DIR
+$env:TMP = $env:CYBERFUSION_TEMP_DIR
+if ([string]::IsNullOrWhiteSpace($env:JAVA_TOOL_OPTIONS)) {
+    $env:JAVA_TOOL_OPTIONS = "-Djava.io.tmpdir=$env:CYBERFUSION_TEMP_DIR"
+} elseif ($env:JAVA_TOOL_OPTIONS -notmatch "java\.io\.tmpdir") {
+    $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS -Djava.io.tmpdir=$env:CYBERFUSION_TEMP_DIR"
+}
 
 Set-Location (Join-Path $ProjectRoot "backend")
 mvn "-Dmaven.repo.local=$env:MAVEN_REPO_LOCAL" spring-boot:run

@@ -29,9 +29,13 @@ Assert-DDrivePath -Label "Runtime root" -PathValue $EnvRoot
 $env:CYBERFUSION_ENV_ROOT = $EnvRoot
 $env:PNPM_STORE_DIR = if ([string]::IsNullOrWhiteSpace($env:PNPM_STORE_DIR)) { Join-Path $EnvRoot "caches\pnpm-store" } else { $env:PNPM_STORE_DIR }
 $env:npm_config_cache = if ([string]::IsNullOrWhiteSpace($env:npm_config_cache)) { Join-Path $EnvRoot "caches\npm" } else { $env:npm_config_cache }
+$env:CYBERFUSION_TEMP_DIR = if ([string]::IsNullOrWhiteSpace($env:CYBERFUSION_TEMP_DIR)) { Join-Path $EnvRoot "tmp" } else { $env:CYBERFUSION_TEMP_DIR }
 Assert-DDrivePath -Label "pnpm store" -PathValue $env:PNPM_STORE_DIR
 Assert-DDrivePath -Label "npm cache" -PathValue $env:npm_config_cache
-New-Item -ItemType Directory -Force -Path $env:PNPM_STORE_DIR, $env:npm_config_cache | Out-Null
+Assert-DDrivePath -Label "Temp directory" -PathValue $env:CYBERFUSION_TEMP_DIR
+New-Item -ItemType Directory -Force -Path $env:PNPM_STORE_DIR, $env:npm_config_cache, $env:CYBERFUSION_TEMP_DIR | Out-Null
+$env:TEMP = $env:CYBERFUSION_TEMP_DIR
+$env:TMP = $env:CYBERFUSION_TEMP_DIR
 
 $ServerPort = if ([string]::IsNullOrWhiteSpace($env:SERVER_PORT)) { "18080" } else { $env:SERVER_PORT }
 $FrontendPort = if ([string]::IsNullOrWhiteSpace($env:FRONTEND_PORT)) { "5174" } else { $env:FRONTEND_PORT }

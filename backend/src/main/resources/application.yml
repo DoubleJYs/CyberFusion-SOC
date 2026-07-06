@@ -16,7 +16,7 @@ spring:
 app:
   file:
     storage-type: local
-    base-dir: ${APP_UPLOAD_BASE_DIR:${user.home}/Environment/cyberfusion-platform}
+    base-dir: ${APP_UPLOAD_BASE_DIR:${CYBERFUSION_ENV_ROOT:${user.home}/Environment/cyberfusion-platform}/uploads}
     max-size-mb: 20
     delete-physical-on-delete: false
     allowed-extensions:

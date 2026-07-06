@@ -82,6 +82,7 @@ $RequiredDirs = @(
     (Join-Path $EnvRoot "caches\maven-repository"),
     (Join-Path $EnvRoot "caches\pnpm-store"),
     (Join-Path $EnvRoot "caches\npm"),
+    (Join-Path $EnvRoot "tmp"),
     (Join-Path $EnvRoot "packages"),
     (Join-Path $EnvRoot "package-staging")
 )

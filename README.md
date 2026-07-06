@@ -72,7 +72,7 @@ $env:CYBERFUSION_ENV_ROOT = "D:\CyberFusion\Environment\cyberfusion-platform"
 ```
 
 The Windows entrypoint is the no-Docker path: put the project on D drive, expect local or reachable MySQL 8 and Redis services, use `mysql.exe` to apply `sql/schema.sql`, `sql/data.sql`, and `scripts/sql/apply-latest-menu-and-policy-seed.sql`, then start the Spring Boot backend and Vite frontend. The scripts fail fast when started from `C:`; use `D:\CyberFusion\00-cyberfusion-platform` for source and `D:\CyberFusion\Environment\cyberfusion-platform` for runtime data. See [docs/windows-no-docker.md](docs/windows-no-docker.md) for the full Windows checklist.
-Windows scripts also place Maven, pnpm, and npm caches under `D:\CyberFusion\Environment\cyberfusion-platform\caches` instead of the default user profile on C drive.
+Windows scripts also place Maven, pnpm, and npm caches under `D:\CyberFusion\Environment\cyberfusion-platform\caches`, and set process/Java temporary directories under `D:\CyberFusion\Environment\cyberfusion-platform\tmp` instead of the default user profile on C drive.
 
 Default URLs:
 

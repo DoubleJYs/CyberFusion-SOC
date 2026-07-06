@@ -12,10 +12,18 @@ import java.util.List;
 @ConfigurationProperties(prefix = "app.file")
 public class FileStorageProperties {
     private String storageType = "local";
-    private String baseDir = System.getProperty("user.home") + "/Environment/cyberfusion-platform";
+    private String baseDir = defaultBaseDir();
     private Integer maxSizeMb = 20;
     private Boolean deletePhysicalOnDelete = false;
     private List<String> allowedExtensions = new ArrayList<>(List.of(
             "jpg", "jpeg", "png", "gif", "pdf", "doc", "docx", "xls", "xlsx", "txt", "zip"
     ));
+
+    private static String defaultBaseDir() {
+        String envRoot = System.getenv("CYBERFUSION_ENV_ROOT");
+        if (envRoot != null && !envRoot.isBlank()) {
+            return envRoot + "/uploads";
+        }
+        return System.getProperty("user.home") + "/Environment/cyberfusion-platform/uploads";
+    }
 }
