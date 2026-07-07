@@ -15,6 +15,53 @@ This guide is for running the current `00-cyberfusion-platform` project on a Win
 
 CyberFusion does not start MySQL or Redis in Windows no-Docker mode. Start those two services first, then run the platform scripts.
 
+## No Docker Container Contract
+
+The Windows path is a no-container runtime. It does not require Docker Desktop, does not call `docker`, and does not run `docker compose up`. Every dependency that was previously represented by a container must be configured as a Windows service, a reachable network service, or a local process:
+
+| Capability | No-Docker replacement | Configuration source |
+| --- | --- | --- |
+| MySQL container | Local or reachable MySQL 8 service plus `mysql.exe` and `mysqldump.exe` in `PATH` | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` |
+| Redis container | Local or reachable Redis-compatible service | `REDIS_HOST`, `REDIS_PORT` |
+| Backend container | Local Spring Boot process started by `mvn spring-boot:run` | `SERVER_PORT`, `CYBERFUSION_ENV_ROOT`, database and Redis variables |
+| Frontend container/static service | Local Vite process started by `pnpm dev` | `FRONTEND_PORT`, `VITE_API_PROXY_TARGET` |
+| Docker volumes | Runtime folders under `CYBERFUSION_ENV_ROOT` | Absolute Windows path outside `00-cyberfusion-platform` |
+| Container health checks | PowerShell TCP checks, `/api/health`, and `dev-doctor.ps1` | `prepare-runtime.ps1`, `verify-no-docker.ps1`, `dev-doctor.ps1` |
+
+The Windows scripts create and use only local folders and local processes:
+
+- `uploads`: uploaded evidence and files.
+- `logs\backend`: Spring Boot log output.
+- `caches\maven-repository`: Maven dependency cache, passed as `-Dmaven.repo.local`.
+- `caches\pnpm-store`: pnpm store, passed as `--store-dir`.
+- `caches\npm`: npm cache.
+- `tmp`: process `TEMP`, `TMP`, and Java `java.io.tmpdir`.
+- `backups\runtime`: MySQL dump output and optional Redis dump copy.
+- `validation`: Windows evidence collection output.
+
+All of those folders are derived from `CYBERFUSION_ENV_ROOT`. The drive letter is not fixed. Set the variable to the operator's chosen absolute path before startup, or let the script derive a default next to the project parent folder.
+
+Recommended Windows session setup:
+
+```powershell
+$CyberFusionRoot = "E:\CyberFusion" # Replace with the operator's chosen location.
+cd (Join-Path $CyberFusionRoot "00-cyberfusion-platform")
+
+$env:CYBERFUSION_ENV_ROOT = Join-Path $CyberFusionRoot "Environment\cyberfusion-platform"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:REDIS_HOST = "127.0.0.1"
+$env:REDIS_PORT = "6379"
+$env:SERVER_PORT = "18080"
+$env:FRONTEND_PORT = "5174"
+$env:VITE_API_PROXY_TARGET = "http://127.0.0.1:18080"
+```
+
+Do not put `CYBERFUSION_ENV_ROOT`, MySQL data directories, Redis dumps, logs, uploads, backups, or validation evidence inside the source project.
+
 ## Windows Layout
 
 Use a stable Windows folder chosen by the operator. The examples below use `E:\CyberFusion`; replace it with your own drive and folder:
