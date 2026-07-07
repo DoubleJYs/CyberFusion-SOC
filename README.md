@@ -179,6 +179,66 @@ Windows 脚本会把以下内容放在 `CYBERFUSION_ENV_ROOT` 下。这个目录
 
 脚本会传递 Maven `-Dmaven.repo.local`、pnpm `--store-dir`，并设置 npm cache、`TEMP`、`TMP` 和 Java `java.io.tmpdir`，避免依赖缓存和临时文件落到默认用户目录或源码目录。
 
+## Windows 有 Docker 容器启动
+
+如果目标 Windows 机器已经安装 Docker Desktop，可以使用容器承载 MySQL、Redis 和 Adminer，后端/前端仍按本机进程启动；也可以参考 `deploy\docker-compose.app.example.yml` 构建完整应用容器示例。
+
+### 0. 有 Docker 容器配置说明
+
+| 容器/进程 | 默认配置 | 说明 |
+| --- | --- | --- |
+| MySQL 容器 | `deploy\docker-compose.yml` 的 `mysql` 服务 | 数据卷挂载到 `%CYBERFUSION_ENV_ROOT%\mysql`，端口由 `DB_PORT` 控制 |
+| Redis 容器 | `deploy\docker-compose.yml` 的 `redis` 服务 | 数据卷挂载到 `%CYBERFUSION_ENV_ROOT%\redis`，端口由 `REDIS_PORT` 控制 |
+| Adminer 容器 | `deploy\docker-compose.yml` 的 `adminer` 服务 | 仅本机访问，端口由 `ADMINER_PORT` 控制 |
+| 后端本机进程 | `.\scripts\win\backend-dev.ps1` 或 `.\scripts\win\run-dev.ps1` | 连接 `127.0.0.1:$env:DB_PORT` 和 `127.0.0.1:$env:REDIS_PORT` |
+| 前端本机进程 | `.\scripts\win\frontend-dev.ps1` 或 `.\scripts\win\run-dev.ps1` | 代理到 `VITE_API_PROXY_TARGET` |
+
+Windows Docker volume 路径同样不固定盘符。`CYBERFUSION_ENV_ROOT` 必须由用户设置为源码目录外的绝对路径；在 Docker Compose 中建议使用正斜杠：
+
+```powershell
+$CyberFusionRoot = "E:\CyberFusion" # 替换成用户自己的项目根位置
+cd (Join-Path $CyberFusionRoot "00-cyberfusion-platform")
+
+$env:CYBERFUSION_ENV_ROOT = "E:/CyberFusion/Environment/cyberfusion-platform"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:REDIS_HOST = "127.0.0.1"
+$env:REDIS_PORT = "6379"
+$env:ADMINER_PORT = "8081"
+```
+
+启动容器：
+
+```powershell
+docker compose -f deploy\docker-compose.yml config
+docker compose -f deploy\docker-compose.yml up -d mysql redis adminer
+docker compose -f deploy\docker-compose.yml ps
+```
+
+初始化数据库并启动平台：
+
+```powershell
+.\scripts\win\init-local-db.ps1
+.\scripts\win\run-dev.ps1 -SkipDbInit
+```
+
+验证：
+
+```powershell
+.\scripts\win\dev-doctor.ps1 -BaseUrl http://127.0.0.1:5174 -ApiBaseUrl http://127.0.0.1:18080/api
+```
+
+停止容器不要删除卷：
+
+```powershell
+docker compose -f deploy\docker-compose.yml stop
+```
+
+不要执行 `docker compose down -v`，除非已经明确确认要删除本机 MySQL/Redis 数据。
+
 ## Windows 验证证据
 
 在 Windows 目标机器上设置好 `DB_PASSWORD` 后，可以生成验证证据包：

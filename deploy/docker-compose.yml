@@ -4,13 +4,13 @@ services:
   mysql:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your local environment file under /Users/zhangjiyan/Environment/cyberfusion-platform}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your local environment file under CYBERFUSION_ENV_ROOT}
       MYSQL_DATABASE: ${DB_NAME:-cyberfusion_soc}
       TZ: Asia/Shanghai
     ports:
       - "127.0.0.1:${DB_PORT:-3306}:3306"
     volumes:
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/mysql:/var/lib/mysql
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/mysql:/var/lib/mysql
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
@@ -25,7 +25,7 @@ services:
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/redis:/data
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/redis:/data
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -41,5 +41,6 @@ services:
     ports:
       - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
 
-# Runtime data is intentionally outside /Users/zhangjiyan/Programs.
+# Runtime data is intentionally outside the source project.
+# On Windows, use forward slashes in CYBERFUSION_ENV_ROOT, for example E:/CyberFusion/Environment/cyberfusion-platform.
 # Do not run docker compose down -v unless the user explicitly asks for data removal.

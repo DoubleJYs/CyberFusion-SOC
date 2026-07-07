@@ -52,6 +52,17 @@ macOS/Linux Compose path:
 6. Start frontend on `127.0.0.1:5174`.
 7. Open the app and run the acceptance cases in `docs/user-manual.md`.
 
+Windows Docker container path:
+
+1. Put source under a stable operator-chosen Windows folder, for example `E:\CyberFusion\00-cyberfusion-platform`.
+2. Set `CYBERFUSION_ENV_ROOT` to an absolute path outside source, using forward slashes for Docker Compose, for example `E:/CyberFusion/Environment/cyberfusion-platform`.
+3. Set `DB_PASSWORD`, `DB_PORT`, `REDIS_PORT`, and optional `ADMINER_PORT` in the current PowerShell session or an Environment-managed `.env` file.
+4. Run `docker compose -f deploy\docker-compose.yml config`.
+5. Run `docker compose -f deploy\docker-compose.yml up -d mysql redis adminer`.
+6. Initialize schema with `.\scripts\win\init-local-db.ps1`.
+7. Start backend/frontend with `.\scripts\win\run-dev.ps1 -SkipDbInit`.
+8. Stop containers with `docker compose -f deploy\docker-compose.yml stop`; do not use `down -v` unless deleting local data is explicitly approved.
+
 ## Final Verification Commands
 
 Run from `00-cyberfusion-platform`:
