@@ -114,7 +114,6 @@ networks:
   demo-range:
     driver: bridge
 
-# Runtime logs, ZAP output, Trivy output, caches, and real .env files belong under
-# DEMO_RANGE_RUNTIME_ROOT or another protected runtime path, not in source.
-# On Windows, use forward slashes, for example E:/CyberFusion/Environment/cyberfusion-platform/demo-range.
+# Runtime logs, ZAP output, Trivy output, caches, and real .env files belong under DEMO_RANGE_RUNTIME_ROOT outside source.
+# On Windows, use forward slashes in DEMO_RANGE_RUNTIME_ROOT, for example E:/CyberFusion/Environment/cyberfusion-platform/demo-range.
 # Do not run `docker compose down -v` unless data deletion is explicitly approved.

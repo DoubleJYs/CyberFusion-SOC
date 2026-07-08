@@ -41,6 +41,6 @@ services:
     ports:
       - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
 
-# Runtime data is intentionally outside the source project.
+# Runtime data is intentionally outside the source tree and under CYBERFUSION_ENV_ROOT.
 # On Windows, use forward slashes in CYBERFUSION_ENV_ROOT, for example E:/CyberFusion/Environment/cyberfusion-platform.
 # Do not run docker compose down -v unless the user explicitly asks for data removal.
