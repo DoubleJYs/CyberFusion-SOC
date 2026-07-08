@@ -30,7 +30,7 @@
           <slot :name="column.slot" :row="row" />
         </template>
       </el-table-column>
-      <el-table-column v-if="$slots.operation" label="操作" fixed="right" :width="operationWidth">
+      <el-table-column v-if="$slots.operation" label="操作" :width="operationWidth">
         <template #default="{ row }">
           <slot name="operation" :row="row" />
         </template>

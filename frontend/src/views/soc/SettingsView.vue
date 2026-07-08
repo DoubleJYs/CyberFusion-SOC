@@ -92,7 +92,7 @@
           <el-table-column label="最低等级" width="92"><template #default="{ row }"><SeverityBadge :severity="row.minSeverity" /></template></el-table-column>
           <el-table-column prop="sendMode" label="模式" width="88" />
           <el-table-column label="状态" width="96"><template #default="{ row }"><StatusBadge :status="row.lastStatus || 'READY'" /></template></el-table-column>
-          <el-table-column label="操作" width="96" fixed="right">
+          <el-table-column label="操作" width="96">
             <template #default="{ row }">
               <el-button size="small" :loading="testingId === row.id" @click="test(row.id)">测试</el-button>
             </template>

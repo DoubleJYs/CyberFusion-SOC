@@ -34,7 +34,7 @@
         <el-table-column prop="bizType" label="业务类型" width="130" />
         <el-table-column prop="uploaderName" label="上传人" width="120" />
         <el-table-column prop="createdAt" label="上传时间" width="180" />
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" width="190">
           <template #default="{ row }">
             <el-button v-permission="'system:file:download'" link type="primary" @click="openPreview(row)">预览</el-button>
             <el-button v-permission="'system:file:download'" link type="primary" @click="download(row)">下载</el-button>

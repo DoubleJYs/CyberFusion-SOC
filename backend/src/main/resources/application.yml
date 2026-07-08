@@ -37,7 +37,7 @@ app:
     cors:
       allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
       allowed-methods: ${APP_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,PATCH,OPTIONS}
-      allowed-headers: ${APP_CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With}
+      allowed-headers: ${APP_CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With,X-CyberFusion-Agent-Token}
       exposed-headers: ${APP_CORS_EXPOSED_HEADERS:Authorization}
       allow-credentials: ${APP_CORS_ALLOW_CREDENTIALS:true}
       max-age-seconds: ${APP_CORS_MAX_AGE_SECONDS:3600}

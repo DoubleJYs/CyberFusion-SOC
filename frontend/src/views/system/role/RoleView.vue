@@ -39,7 +39,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="210">
           <template #default="{ row }">
             <el-button v-permission="'system:role:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-permission="'system:role:assign-menu'" link type="primary" @click="openMenu(row)">分配菜单</el-button>

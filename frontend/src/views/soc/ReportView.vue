@@ -33,8 +33,8 @@
           <el-radio-button label="security_validation">安全验证</el-radio-button>
         </el-radio-group>
         <el-input v-if="reportType === 'security_validation'" v-model="batchId" class="batch-input" clearable placeholder="Batch ID" />
-        <el-button :disabled="!selectedReports.length" @click="batchOpenExport('xlsx')">批量 Excel</el-button>
-        <el-button :disabled="!selectedReports.length" @click="batchOpenExport('pdf')">批量 PDF</el-button>
+        <el-button :disabled="!selectedReports.length" :loading="batchDownloading === 'xlsx'" @click="batchDownload('xlsx')">批量下载 Excel</el-button>
+        <el-button :disabled="!selectedReports.length" :loading="batchDownloading === 'pdf'" @click="batchDownload('pdf')">批量下载 PDF</el-button>
         <el-button type="primary" :loading="generating" @click="generate">生成报表</el-button>
       </div>
     </section>
@@ -64,10 +64,28 @@
         </el-table-column>
         <el-table-column label="周期" width="210"><template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template></el-table-column>
         <el-table-column prop="summary" label="摘要" min-width="260" show-overflow-tooltip />
-        <el-table-column label="导出" width="160">
+        <el-table-column label="导出" width="190">
           <template #default="{ row }">
-            <el-button text @click.stop="openExport(row.id, 'xlsx')">Excel</el-button>
-            <el-button text @click.stop="openExport(row.id, 'pdf')">PDF</el-button>
+            <div class="export-cell" @click.stop>
+              <el-dropdown trigger="click" @command="handleExcelCommand(row, $event)">
+                <el-button text>Excel</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="preview">预览 Excel</el-dropdown-item>
+                    <el-dropdown-item command="download">下载 Excel</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-dropdown trigger="click" @command="handlePdfCommand(row, $event)">
+                <el-button text>PDF</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="preview">预览 PDF</el-dropdown-item>
+                    <el-dropdown-item command="download">下载 PDF</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -100,21 +118,54 @@
           <p>{{ currentReport.recommendation }}</p>
         </section>
         <div class="drawer-actions">
-          <el-button @click="openExport(currentReport.id, 'xlsx')">导出 Excel</el-button>
-          <el-button @click="openExport(currentReport.id, 'pdf')">导出 PDF</el-button>
+          <el-button @click="previewExport(currentReport, 'xlsx')">预览 Excel</el-button>
+          <el-button @click="downloadReportExport(currentReport, 'xlsx')">下载 Excel</el-button>
+          <el-button @click="previewExport(currentReport, 'pdf')">预览 PDF</el-button>
+          <el-button @click="downloadReportExport(currentReport, 'pdf')">下载 PDF</el-button>
         </div>
+      </div>
+    </el-drawer>
+    <el-drawer v-model="exportDrawer" :title="exportTitle" size="780px" @closed="releaseExportObjectUrl">
+      <div v-loading="exportLoading" class="export-preview-shell">
+        <template v-if="exportPreview">
+          <div class="export-preview-head">
+            <div>
+              <strong>{{ exportPreview.title }}</strong>
+              <span>{{ exportPreview.filename }}</span>
+            </div>
+            <el-button type="primary" @click="downloadCurrentExport">下载{{ exportPreview.format === 'pdf' ? ' PDF' : ' Excel' }}</el-button>
+          </div>
+          <iframe v-if="exportPreview.format === 'pdf' && exportObjectUrl" class="pdf-preview-frame" :src="exportObjectUrl" title="PDF 预览" />
+          <div v-else-if="exportPreview.format === 'pdf'" class="pdf-fallback">
+            <p v-for="line in exportPreview.lines" :key="line">{{ line }}</p>
+          </div>
+          <el-table v-else :data="excelPreviewRows" border height="520" empty-text="暂无可预览内容">
+            <el-table-column
+              v-for="(header, index) in exportPreview.headers"
+              :key="header"
+              :label="header"
+              min-width="160"
+              show-overflow-tooltip
+            >
+              <template #default="{ row }">{{ row.cells[index] || '-' }}</template>
+            </el-table-column>
+          </el-table>
+        </template>
       </div>
     </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { generateReport, listReports, reportExportUrl, type ReportItem } from '@/api/soc'
+import { exportReportBlob, generateReport, listReports, previewReportExport, type ReportExportPreview, type ReportItem } from '@/api/soc'
+import { saveBlob } from '@/api/file'
 
 const route = useRoute()
+type ExportFormat = 'xlsx' | 'pdf'
+
 const reportType = ref('daily')
 const batchId = ref('')
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', reportType: '' })
@@ -125,7 +176,18 @@ const currentReport = ref<ReportItem>()
 const selectedReports = ref<ReportItem[]>([])
 const loading = ref(false)
 const generating = ref(false)
+const batchDownloading = ref<ExportFormat | ''>('')
 const error = ref('')
+const exportDrawer = ref(false)
+const exportLoading = ref(false)
+const exportPreview = ref<ReportExportPreview | null>(null)
+const exportSourceReport = ref<ReportItem | null>(null)
+const exportObjectUrl = ref('')
+const exportTitle = computed(() => {
+  if (!exportPreview.value) return '导出预览'
+  return `${exportPreview.value.format === 'pdf' ? 'PDF' : 'Excel'} 预览`
+})
+const excelPreviewRows = computed(() => (exportPreview.value?.rows || []).map((cells, index) => ({ id: index, cells })))
 
 watch(
   () => [route.query.keyword, route.query.reportType, route.query.batchId],
@@ -170,13 +232,94 @@ function openReport(row: ReportItem) {
   currentReport.value = row
   drawer.value = true
 }
-function openExport(id: number, format: 'xlsx' | 'pdf') {
-  window.open(reportExportUrl(id, format), '_blank', 'noopener')
+
+function handleExcelCommand(row: ReportItem, command: unknown) {
+  handleExportCommand(row, 'xlsx', command)
 }
-function batchOpenExport(format: 'xlsx' | 'pdf') {
-  selectedReports.value.forEach((report) => openExport(report.id, format))
-  ElMessage.success(`已打开 ${selectedReports.value.length} 个导出任务`)
+
+function handlePdfCommand(row: ReportItem, command: unknown) {
+  handleExportCommand(row, 'pdf', command)
 }
+
+function handleExportCommand(row: ReportItem, format: ExportFormat, command: unknown) {
+  if (command === 'preview') {
+    void previewExport(row, format)
+    return
+  }
+  void downloadReportExport(row, format)
+}
+
+async function previewExport(report: ReportItem, format: ExportFormat) {
+  exportDrawer.value = true
+  exportLoading.value = true
+  exportSourceReport.value = report
+  exportPreview.value = null
+  releaseExportObjectUrl()
+  try {
+    const preview = await previewReportExport(report.id, format)
+    exportPreview.value = preview.data.data
+    if (format === 'pdf') {
+      const response = await exportReportBlob(report.id, 'pdf', 'inline')
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      exportObjectUrl.value = URL.createObjectURL(blob)
+    }
+  } catch {
+    ElMessage.error('导出预览加载失败')
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+async function downloadReportExport(report: ReportItem, format: ExportFormat, filename?: string, showError = true) {
+  try {
+    const preview = filename ? null : await previewReportExport(report.id, format)
+    const response = await exportReportBlob(report.id, format, 'attachment')
+    saveBlob(response.data, filename || preview?.data.data.filename || `soc-report-${report.id}.${format}`)
+  } catch (error) {
+    if (showError) {
+      ElMessage.error('报表下载失败')
+    }
+    throw error
+  }
+}
+
+async function downloadCurrentExport() {
+  if (!exportSourceReport.value || !exportPreview.value) return
+  await downloadReportExport(exportSourceReport.value, exportPreview.value.format, exportPreview.value.filename)
+}
+
+async function batchDownload(format: ExportFormat) {
+  if (!selectedReports.value.length) return
+  batchDownloading.value = format
+  let success = 0
+  let failed = 0
+  try {
+    for (const report of selectedReports.value) {
+      try {
+        await downloadReportExport(report, format, undefined, false)
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    if (failed) {
+      ElMessage.warning(`已下载 ${success} 个，${failed} 个下载失败`)
+    } else {
+      ElMessage.success(`已下载 ${success} 个${format === 'pdf' ? ' PDF' : ' Excel'} 报表`)
+    }
+  } finally {
+    batchDownloading.value = ''
+  }
+}
+
+function releaseExportObjectUrl() {
+  if (exportObjectUrl.value) {
+    URL.revokeObjectURL(exportObjectUrl.value)
+    exportObjectUrl.value = ''
+  }
+}
+
+onBeforeUnmount(releaseExportObjectUrl)
 function reportTypeLabel(type: string) {
   return ({ daily: '日报', weekly: '周报', monthly: '月报', security_validation: '安全验证报告' } as Record<string, string>)[type] || type
 }
@@ -260,6 +403,60 @@ function matchFirst(value: string, pattern: RegExp) {
   display: grid;
   gap: 16px;
 }
+.export-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.export-preview-shell {
+  min-height: 560px;
+}
+.export-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.export-preview-head div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.export-preview-head strong,
+.export-preview-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-preview-head span {
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
+.pdf-preview-frame {
+  width: 100%;
+  height: 620px;
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.pdf-fallback {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--soc-border);
+  border-radius: 8px;
+  color: var(--soc-text-muted);
+  background: rgba(255, 255, 255, 0.62);
+}
+.pdf-fallback p {
+  margin: 0;
+  line-height: 1.7;
+}
 .report-section {
   border-top: 1px solid var(--soc-border);
   padding-top: 14px;
@@ -279,6 +476,13 @@ function matchFirst(value: string, pattern: RegExp) {
   .report-filters .el-select {
     max-width: none;
     width: 100%;
+  }
+  .export-preview-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .pdf-preview-frame {
+    height: 520px;
   }
 }
 </style>

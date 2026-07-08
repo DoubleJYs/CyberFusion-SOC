@@ -282,6 +282,7 @@ import EvidenceDrawer from '@/components/showcase/EvidenceDrawer.vue'
 import RecoverableErrorState from '@/components/showcase/RecoverableErrorState.vue'
 import { LOCAL_DEMO_TOKEN } from '@/stores/auth'
 import { getToken } from '@/utils/storage'
+import { EXPERT_HOME_PATH } from '@/utils/roleExperience'
 import {
   createSecurityValidationReport,
   importShowcaseBatch,
@@ -432,9 +433,9 @@ async function importEvidenceBatch() {
   }
   actionLoading.value = true
   try {
-    const result = await importShowcaseBatch(showcaseData.value?.batchId)
-    ElMessage.success(`已导入批次 ${result.batchId}`)
-    showcaseData.value = await loadLiveShowcaseData(result.batchId)
+    const result = await importShowcaseBatch()
+    ElMessage.success(result.message || `已导入演示数据 ${result.demoRangeBatchId}`)
+    showcaseData.value = await loadLiveShowcaseData(result.demoRangeBatchId)
     activeStep.value = 2
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -477,7 +478,7 @@ function convertToTicket() {
 }
 
 function goExpertMode() {
-  router.push('/soc/demo-range')
+  router.push(EXPERT_HOME_PATH)
 }
 
 function goExternalEvents() {

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import ClientLayout from '@/layouts/ClientLayout.vue'
+import { EXPERT_HOME_PATH } from '@/utils/roleExperience'
 import { ensureMenuRoutes, fallbackProtectedRoutes, firstRoutePathFromMenus, resetMenuRoutes } from './menuRoutes'
 
 const router = createRouter({
@@ -40,7 +41,7 @@ const router = createRouter({
         { path: 'security-logs', name: 'clientSecurityLogs', component: () => import('@/views/client/ClientSecurityLogsView.vue'), meta: { title: '安全日志', requiresAuth: true } },
       ],
     },
-    { path: '/', name: 'adminRoot', component: AdminLayout, redirect: '/showcase', children: fallbackProtectedRoutes },
+    { path: '/', name: 'adminRoot', component: AdminLayout, redirect: EXPERT_HOME_PATH, children: fallbackProtectedRoutes },
     { path: '/:pathMatch(.*)*', name: 'notFound', component: () => import('@/views/error/NotFoundView.vue'), meta: { title: '404', public: true } },
   ],
 })
@@ -108,7 +109,9 @@ function scrollToRouteHash(hash: string) {
   window.scrollTo({ top: Math.max(0, top) })
 }
 
-router.afterEach((to) => {
+router.afterEach((to, from) => {
+  const appStore = useAppStore()
+  appStore.captureReturnRoute(from, to)
   if (!to.hash) return
   void nextTick(() => {
     window.setTimeout(() => scrollToRouteHash(to.hash), 120)

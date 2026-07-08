@@ -53,7 +53,7 @@
           <template #default="{ row }">{{ row.expireAt || '长期有效' }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100"><template #default="{ row }"><StatusTag :value="row.status" :options="statusOptions" /></template></el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button v-permission="'system:notice:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-permission="'system:notice:delete'" link type="danger" @click="remove(row)">删除</el-button>

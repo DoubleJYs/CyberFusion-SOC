@@ -12,6 +12,7 @@ const ADMIN_ROOT_ROUTE_NAME = 'adminRoot'
 const componentRegistry: Record<string, ComponentLoader> = {
   'dashboard/DashboardView': () => import('@/views/dashboard/DashboardView.vue'),
   'soc/DashboardView': () => import('@/views/soc/DashboardView.vue'),
+  'soc/DailyRecommendationView': () => import('@/views/soc/DailyRecommendationView.vue'),
   'soc/CapabilityView': () => import('@/views/soc/CapabilityView.vue'),
   'soc/DemoRangeView': () => import('@/views/soc/DemoRangeView.vue'),
   'soc/AlertCenterView': () => import('@/views/soc/AlertCenterView.vue'),
@@ -25,6 +26,7 @@ const componentRegistry: Record<string, ComponentLoader> = {
   'soc/BaselineView': () => import('@/views/soc/BaselineView.vue'),
   'soc/FileIntegrityView': () => import('@/views/soc/FileIntegrityView.vue'),
   'soc/ExternalEventView': () => import('@/views/soc/ExternalEventView.vue'),
+  'soc/HostAgentView': () => import('@/views/soc/HostAgentView.vue'),
   'soc/TicketView': () => import('@/views/soc/TicketView.vue'),
   'soc/ReportView': () => import('@/views/soc/ReportView.vue'),
   'soc/SettingsView': () => import('@/views/soc/SettingsView.vue'),
@@ -44,9 +46,12 @@ const componentRegistry: Record<string, ComponentLoader> = {
 }
 
 export const fallbackProtectedRoutes: AppRouteRecord[] = [
-  { path: 'soc/dashboard', name: 'socDashboard', component: componentRegistry['soc/DashboardView'], meta: { title: '安全总览', requiresAuth: true, permissions: ['soc:dashboard:view'] } },
+  { path: 'soc/dashboard', name: 'socDashboard', component: componentRegistry['soc/DashboardView'], meta: { title: '安全运营工作台', requiresAuth: true, permissions: ['soc:dashboard:view'] } },
   { path: 'soc/capabilities', name: 'socCapabilities', component: componentRegistry['soc/CapabilityView'], meta: { title: '平台能力说明', requiresAuth: true, permissions: ['soc:dashboard:view'] } },
+  { path: 'soc/capabilities/:capabilityKey', name: 'socCapabilityDetail', component: componentRegistry['soc/CapabilityView'], meta: { title: '能力详情', requiresAuth: true, permissions: ['soc:dashboard:view'] } },
   { path: 'soc/demo-range', name: 'socDemoRange', component: componentRegistry['soc/DemoRangeView'], meta: { title: '安全验证', requiresAuth: true, permissions: ['soc:demo-range:view'] } },
+  { path: 'soc/demo-range/runs/:runId', name: 'socDemoRangeRun', component: componentRegistry['soc/DemoRangeView'], meta: { title: '安全验证工作流', requiresAuth: true, permissions: ['soc:demo-range:view'] } },
+  { path: 'soc/daily-recommendations', name: 'socDailyRecommendations', component: componentRegistry['soc/DailyRecommendationView'], meta: { title: '每日处理', requiresAuth: true, permissions: ['soc:recommendation:view', 'soc:dashboard:view'] } },
   { path: 'soc/alerts', name: 'socAlerts', component: componentRegistry['soc/AlertCenterView'], meta: { title: '告警处置', requiresAuth: true, permissions: ['soc:alert:view'] } },
   { path: 'soc/incidents', name: 'socIncidents', component: componentRegistry['soc/IncidentClusterView'], meta: { title: '安全事件簇', requiresAuth: true, permissions: ['soc:incident:list'] } },
   { path: 'soc/rules', name: 'socRules', component: componentRegistry['soc/RuleCenterView'], meta: { title: '检测规则中心', requiresAuth: true, permissions: ['soc:rules:view', 'soc:external-event:view'] } },
@@ -58,6 +63,7 @@ export const fallbackProtectedRoutes: AppRouteRecord[] = [
   { path: 'soc/baselines', name: 'socBaselines', component: componentRegistry['soc/BaselineView'], meta: { title: '基线核查', requiresAuth: true, permissions: ['soc:baseline:view'] } },
   { path: 'soc/fim', name: 'socFim', component: componentRegistry['soc/FileIntegrityView'], meta: { title: '文件完整性', requiresAuth: true, permissions: ['soc:fim:view'] } },
   { path: 'soc/external-events', name: 'socExternalEvents', component: componentRegistry['soc/ExternalEventView'], meta: { title: '证据中心', requiresAuth: true, permissions: ['soc:external-event:view'] } },
+  { path: 'soc/agents', name: 'socHostAgents', component: componentRegistry['soc/HostAgentView'], meta: { title: 'Agent 管理', requiresAuth: true, permissions: ['soc:agent:view'] } },
   { path: 'soc/tickets', name: 'socTickets', component: componentRegistry['soc/TicketView'], meta: { title: '工单中心', requiresAuth: true, permissions: ['soc:ticket:view'] } },
   { path: 'soc/reports', name: 'socReports', component: componentRegistry['soc/ReportView'], meta: { title: '报告中心', requiresAuth: true, permissions: ['soc:report:view'] } },
   { path: 'soc/settings', name: 'socSettings', component: componentRegistry['soc/SettingsView'], meta: { title: '系统配置', requiresAuth: true, permissions: ['soc:settings:view'] } },

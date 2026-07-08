@@ -976,7 +976,7 @@ CREATE TABLE IF NOT EXISTS soc_incident_evidence (
   cluster_id BIGINT NOT NULL,
   evidence_type VARCHAR(32) NOT NULL COMMENT 'external_event, alert, vulnerability',
   evidence_id BIGINT NOT NULL,
-  evidence_uid VARCHAR(128) NULL,
+  evidence_uid VARCHAR(255) NULL,
   source_type VARCHAR(32) NULL,
   event_type VARCHAR(64) NULL,
   severity VARCHAR(32) NULL,
@@ -1107,4 +1107,74 @@ CREATE TABLE IF NOT EXISTS soc_file_integrity_event (
   KEY idx_soc_fim_asset_path (asset_ip, file_path(128)),
   KEY idx_soc_fim_owner_dept (owner_id, dept_id),
   KEY idx_soc_fim_event_time (event_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_host_agent (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_name VARCHAR(128) NULL,
+  hostname VARCHAR(128) NOT NULL,
+  os_type VARCHAR(32) NOT NULL,
+  os_version VARCHAR(128) NULL,
+  architecture VARCHAR(64) NULL,
+  agent_version VARCHAR(64) NOT NULL,
+  ip_addresses_json JSON NULL,
+  mac_addresses_json JSON NULL,
+  labels_json JSON NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  token_hash VARCHAR(255) NOT NULL,
+  last_ip VARCHAR(64) NULL,
+  queue_depth INT NOT NULL DEFAULT 0,
+  queue_bytes BIGINT NOT NULL DEFAULT 0,
+  collected_count BIGINT NOT NULL DEFAULT 0,
+  sent_count BIGINT NOT NULL DEFAULT 0,
+  failed_count BIGINT NOT NULL DEFAULT 0,
+  first_seen_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL,
+  owner_id BIGINT NULL,
+  dept_id BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_soc_host_agent_id (agent_id),
+  KEY idx_soc_host_agent_os_status (os_type, status),
+  KEY idx_soc_host_agent_last_seen (last_seen_at),
+  KEY idx_soc_host_agent_scope (owner_id, dept_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_ingest_batch (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NOT NULL,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_db_id BIGINT NULL,
+  source_os VARCHAR(32) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  item_count INT NOT NULL DEFAULT 0,
+  accepted_count INT NOT NULL DEFAULT 0,
+  duplicate_count INT NOT NULL DEFAULT 0,
+  rejected_count INT NOT NULL DEFAULT 0,
+  status VARCHAR(32) NOT NULL DEFAULT 'accepted',
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME NULL,
+  error_message VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_ingest_batch_id (batch_id),
+  KEY idx_soc_ingest_batch_agent (agent_id, created_at),
+  KEY idx_soc_ingest_batch_type_status (ingest_type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_ingest_reject_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NULL,
+  agent_id VARCHAR(128) NULL,
+  event_uid VARCHAR(128) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  reason_code VARCHAR(64) NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  payload_json JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_soc_ingest_reject_agent (agent_id, created_at),
+  KEY idx_soc_ingest_reject_batch (batch_id),
+  KEY idx_soc_ingest_reject_reason (reason_code, ingest_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

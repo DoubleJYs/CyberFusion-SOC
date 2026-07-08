@@ -24,6 +24,9 @@ tmp/
 packages/
 package-staging/
 validation/
+agent/bin/
+agent/cyberfusion-agent
+agent/cyberfusion-agent.exe
 *.sqlite
 *.sqlite3
 *.db

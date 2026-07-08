@@ -42,6 +42,72 @@
       </article>
     </section>
 
+    <section v-loading="analyticsLoading" class="soc-panel analyst-workbench-panel">
+      <div class="panel-title">
+        <strong>分析员工作台</strong>
+        <span>围绕员工终端资产做风险评分、告警优先级和事件时间线研判</span>
+      </div>
+      <section class="analyst-grid">
+        <div>
+          <div class="panel-title compact">
+            <strong>资产风险评分</strong>
+            <span>分值来源可解释</span>
+          </div>
+          <div v-for="asset in unifiedAssetRiskRows" :key="asset.ip" class="score-row">
+            <div class="score-head">
+              <div>
+                <strong>{{ asset.hostname }}</strong>
+                <span>{{ asset.ip }} / {{ asset.deptName || '未分配部门' }}</span>
+              </div>
+              <b>{{ asset.score }}</b>
+            </div>
+            <el-progress :percentage="asset.score" :stroke-width="9" />
+            <p>{{ asset.explanation }}</p>
+          </div>
+          <el-empty v-if="!unifiedAssetRiskRows.length" description="暂无资产评分" :image-size="76" />
+        </div>
+
+        <div>
+          <div class="panel-title compact">
+            <strong>告警优先级</strong>
+            <span>等级、资产、IOC、重复次数</span>
+          </div>
+          <div v-for="alert in analytics.alertPriorities" :key="alert.alertUid" class="priority-row">
+            <div class="priority-title">
+              <SeverityBadge :severity="alert.severity" />
+              <strong>{{ alert.score }}</strong>
+            </div>
+            <b>{{ alert.ruleDescription }}</b>
+            <span>{{ alert.assetName }} / {{ alert.assetIp }} / {{ formatTime(alert.eventTime) }}</span>
+            <p>{{ alert.reason }}</p>
+          </div>
+          <el-empty v-if="!analytics.alertPriorities.length" description="暂无告警优先级数据" :image-size="76" />
+        </div>
+      </section>
+
+      <section class="timeline-panel">
+        <div class="panel-title compact">
+          <strong>安全事件时间线</strong>
+          <span>从事件产生到处置关闭</span>
+        </div>
+        <el-timeline>
+          <el-timeline-item
+            v-for="item in analytics.eventTimeline"
+            :key="`${item.type}-${item.occurredAt}-${item.title}`"
+            :timestamp="formatTime(item.occurredAt)"
+            placement="top"
+          >
+            <div class="timeline-item">
+              <SeverityBadge v-if="item.severity" :severity="item.severity" />
+              <strong>{{ item.type }}：{{ item.title }}</strong>
+              <span>{{ item.assetName || item.operatorName || item.status }}</span>
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-if="!analytics.eventTimeline.length" description="暂无事件时间线" :image-size="76" />
+      </section>
+    </section>
+
     <section class="posture-grid">
       <div class="soc-panel">
         <div class="panel-title">
@@ -63,7 +129,7 @@
           <el-table-column label="最近体检" width="155">
             <template #default="{ row }">{{ formatTime(row.latestCheckupAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="176" fixed="right">
+          <el-table-column label="操作" width="176">
             <template #default="{ row }">
               <el-button link size="small" @click="goAsset(row)">资产详情</el-button>
               <el-button link size="small" @click="goClient(row)">员工画像</el-button>
@@ -109,7 +175,7 @@
           <el-table-column label="时间" width="155">
             <template #default="{ row }">{{ formatTime(row.occurredAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="110" fixed="right">
+          <el-table-column label="操作" width="110">
             <template #default="{ row }">
               <el-button link size="small" @click="goEvents(row)">查看证据</el-button>
             </template>
@@ -134,18 +200,41 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import {
+  riskAnalytics,
   clientSecurityPosture,
+  topRiskAssets,
+  type AssetRiskProfile,
   type ClientSecurityHighRiskAsset,
   type ClientSecurityPosture,
   type ClientSecurityReviewRecord,
+  type RiskAnalytics,
 } from '@/api/soc'
 
 const router = useRouter()
 const loading = ref(false)
+const analyticsLoading = ref(false)
 const error = ref('')
+const emptyAnalytics: RiskAnalytics = {
+  assetRisks: [],
+  alertPriorities: [],
+  departmentRisks: [],
+  operationMetrics: {
+    pendingTickets: 0,
+    overdueTickets: 0,
+    closedTickets: 0,
+    slaMetTickets: 0,
+    falsePositiveAlerts: 0,
+    duplicateGroups: 0,
+    slaRate: 100,
+    falsePositiveRate: 0,
+    averageCloseHours: 0,
+  },
+  eventTimeline: [],
+}
 const posture = ref<ClientSecurityPosture>({
   metrics: {
     totalAssets: 0,
@@ -160,13 +249,28 @@ const posture = ref<ClientSecurityPosture>({
   riskDownAssets: [],
   reviewRecords: [],
 })
+const analytics = reactive<RiskAnalytics>(structuredClone(emptyAnalytics))
+const topRiskProfiles = ref<AssetRiskProfile[]>([])
 
 const metrics = computed(() => posture.value.metrics)
+const unifiedAssetRiskRows = computed(() => {
+  if (topRiskProfiles.value.length) {
+    return topRiskProfiles.value.map((profile) => ({
+      hostname: profile.asset.hostname,
+      ip: profile.asset.ip,
+      deptName: profile.asset.deptName,
+      score: profile.snapshot.score,
+      explanation: profile.statusReason || profile.recommendationSummary,
+    }))
+  }
+  return analytics.assetRisks
+})
 
 onMounted(load)
 
 async function load() {
   loading.value = true
+  analyticsLoading.value = true
   error.value = ''
   try {
     const res = await clientSecurityPosture()
@@ -175,6 +279,16 @@ async function load() {
     error.value = '可能是后端未启动、数据库未初始化，或当前账号没有员工终端安全态势权限。'
   } finally {
     loading.value = false
+  }
+  try {
+    const [analyticsRes, topRiskRes] = await Promise.all([riskAnalytics(), topRiskAssets(5)])
+    Object.assign(analytics, analyticsRes.data.data)
+    topRiskProfiles.value = topRiskRes.data.data
+  } catch {
+    Object.assign(analytics, structuredClone(emptyAnalytics))
+    topRiskProfiles.value = []
+  } finally {
+    analyticsLoading.value = false
   }
 }
 
@@ -286,6 +400,30 @@ function eventTypeLabel(value?: string) {
   color: #d97706;
 }
 
+.analyst-workbench-panel {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.analyst-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, .95fr);
+  gap: 16px;
+}
+
+.analyst-grid > div,
+.timeline-panel {
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, .24);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .5);
+  padding: 14px;
+}
+
+.timeline-panel {
+  margin-top: 16px;
+}
+
 .posture-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(320px, .8fr);
@@ -307,6 +445,10 @@ function eventTypeLabel(value?: string) {
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 14px;
+}
+
+.panel-title.compact {
+  margin-bottom: 10px;
 }
 
 .panel-title strong {
@@ -348,6 +490,61 @@ function eventTypeLabel(value?: string) {
   color: #059669;
 }
 
+.score-row,
+.priority-row {
+  border-bottom: 1px solid rgba(148, 163, 184, .22);
+  padding: 12px 0;
+}
+
+.score-row:first-of-type,
+.priority-row:first-of-type {
+  padding-top: 0;
+}
+
+.score-row:last-child,
+.priority-row:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.score-head,
+.priority-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.score-row span,
+.priority-row span,
+.score-row p,
+.priority-row p {
+  display: block;
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.score-head b,
+.priority-title strong {
+  color: #d97706;
+  font-size: 24px;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.timeline-item span {
+  color: #64748b;
+  font-size: 12px;
+}
+
 .action-panel {
   align-self: start;
 }
@@ -368,6 +565,7 @@ function eventTypeLabel(value?: string) {
 
 @media (max-width: 1180px) {
   .kpi-grid,
+  .analyst-grid,
   .posture-grid,
   .posture-grid.secondary {
     grid-template-columns: 1fr;

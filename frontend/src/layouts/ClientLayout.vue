@@ -14,6 +14,7 @@
         <RouterLink :to="clientRoute('/client/data-report')">提交日志</RouterLink>
       </nav>
       <div class="client-actions">
+        <el-button v-if="showReturnButton" :icon="ArrowLeft" @click="returnToOrigin">{{ returnButtonLabel }}</el-button>
         <el-button v-if="canOpenAdmin" :icon="Monitor" @click="openAdmin">管理端</el-button>
         <el-dropdown>
           <el-button text>
@@ -30,18 +31,20 @@
         </el-dropdown>
       </div>
     </header>
-    <main class="client-main">
+    <main class="client-main" @click.capture="captureReturnFocus">
       <RouterView />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Monitor, User } from '@element-plus/icons-vue'
+import { ArrowLeft, Monitor, User } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAppStore } from '@/stores/app'
 import { buildClientDeviceRouteQuery } from '@/composables/useClientDeviceContext'
 import { useClientBackendNavigation } from '@/composables/useClientBackendNavigation'
+import { useReturnFocusNavigation } from '@/composables/useReturnFocusNavigation'
 import { buildInfo } from '@/utils/buildInfo'
 import { defaultRouteForExperience } from '@/utils/roleExperience'
 import { computed } from 'vue'
@@ -49,12 +52,18 @@ import { computed } from 'vue'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const appStore = useAppStore()
 const { canOpenBackendPath, openBackend } = useClientBackendNavigation()
+const { captureReturnFocus } = useReturnFocusNavigation({ route, router, containerSelector: '.client-main' })
 const adminEntryPath = computed(() => defaultRouteForExperience(authStore.roles, authStore.userInfo, authStore.menus))
 const canOpenAdmin = computed(() => {
   const path = adminEntryPath.value
   return (path.startsWith('/soc') || path.startsWith('/system')) && canOpenBackendPath(path)
 })
+const returnTarget = computed(() => appStore.returnRoute)
+const hasReturnTarget = computed(() => Boolean(returnTarget.value && returnTarget.value.fullPath !== route.fullPath))
+const showReturnButton = computed(() => hasReturnTarget.value || route.path !== '/client/workbench')
+const returnButtonLabel = computed(() => hasReturnTarget.value ? '返回原界面' : '返回我的电脑')
 
 function clientRoute(path: string) {
   return {
@@ -69,7 +78,15 @@ function clientRoute(path: string) {
 
 async function logout() {
   await authStore.logout()
+  appStore.clearReturnRoute()
   await router.replace('/login')
+}
+
+async function returnToOrigin() {
+  const target = hasReturnTarget.value ? returnTarget.value?.fullPath : clientRoute('/client/workbench')
+  if (!target) return
+  appStore.beginReturnNavigation()
+  await router.push(target)
 }
 
 function openAdmin() {

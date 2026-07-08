@@ -78,7 +78,7 @@
         <el-table-column label="推荐动作" min-width="150">
           <template #default="{ row }">{{ actionLabel(row) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="220">
           <template #default="{ row }">
             <el-button size="small" @click.stop="open(row)">详情</el-button>
             <el-button v-if="row.ticketId" size="small" type="primary" @click.stop="goTicket(row)">查看工单</el-button>
@@ -281,8 +281,8 @@ const diagnosticText = computed(() => JSON.stringify({
 }, null, 2))
 
 watch(
-  () => route.query.keyword,
-  (keyword) => {
+  () => [route.query.keyword, route.query.openIncidentId],
+  ([keyword]) => {
     query.keyword = typeof keyword === 'string' ? keyword : ''
     query.pageNum = 1
     void load()
@@ -297,6 +297,7 @@ async function load() {
     const { data } = await listIncidents(query)
     rows.value = data.data.records
     total.value = data.data.total
+    void openRouteIncidentIfNeeded()
   } catch {
     error.value = '事件簇加载失败'
     rows.value = []
@@ -325,6 +326,24 @@ async function open(row: IncidentClusterItem) {
   detailError.value = ''
   try {
     const { data } = await incidentDetail(row.id)
+    current.value = data.data
+  } catch {
+    detailError.value = '事件簇详情加载失败'
+  }
+}
+
+async function openRouteIncidentIfNeeded() {
+  const openIncidentId = typeof route.query.openIncidentId === 'string' ? Number(route.query.openIncidentId) : 0
+  if (!openIncidentId || current.value?.id === openIncidentId) return
+  const matched = rows.value.find((item) => item.id === openIncidentId)
+  if (matched) {
+    await open(matched)
+    return
+  }
+  drawer.value = true
+  detailError.value = ''
+  try {
+    const { data } = await incidentDetail(openIncidentId)
     current.value = data.data
   } catch {
     detailError.value = '事件簇详情加载失败'

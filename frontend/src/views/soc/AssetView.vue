@@ -50,7 +50,7 @@
         <el-table-column prop="deptName" label="部门" min-width="140" />
         <el-table-column prop="ownerName" label="负责人" width="120" />
         <el-table-column prop="lastSeenAt" label="最后发现" width="180" />
-        <el-table-column label="用户端操作" width="190" fixed="right">
+        <el-table-column label="用户端操作" width="190">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button size="small" link @click.stop="openClientWorkbench(row)">单机分析</el-button>
@@ -157,9 +157,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AssetRiskTag from '@/components/security/AssetRiskTag.vue'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
@@ -176,6 +176,7 @@ import {
   type TrendAnomalyItem,
 } from '@/api/soc'
 
+const route = useRoute()
 const router = useRouter()
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', riskLevel: '' })
 const rows = ref<AssetItem[]>([])
@@ -201,7 +202,15 @@ const riskRecommendations = computed(() => {
   return items.slice(0, 3)
 })
 
-onMounted(load)
+watch(
+  () => [route.query.keyword, route.query.openAssetId],
+  ([keyword]) => {
+    query.keyword = typeof keyword === 'string' ? keyword : ''
+    query.pageNum = 1
+    void load()
+  },
+  { immediate: true },
+)
 async function load() {
   loading.value = true
   error.value = ''
@@ -209,6 +218,7 @@ async function load() {
     const res = await listAssets(query)
     rows.value = res.data.data.records
     total.value = res.data.data.total
+    openRouteAssetIfNeeded()
   } catch {
     error.value = '资产数据加载失败，请检查网络、权限或后端服务状态。'
   } finally {
@@ -219,6 +229,12 @@ function openAsset(row: AssetItem) {
   currentAsset.value = row
   drawer.value = true
   void loadRiskProfile(row)
+}
+function openRouteAssetIfNeeded() {
+  const openAssetId = typeof route.query.openAssetId === 'string' ? Number(route.query.openAssetId) : 0
+  if (!openAssetId || currentAsset.value?.id === openAssetId) return
+  const matched = rows.value.find((item) => item.id === openAssetId)
+  if (matched) openAsset(matched)
 }
 function openClientWorkbench(row: AssetItem) {
   void router.push({ path: '/client/workbench', query: { ip: row.ip } })

@@ -30,7 +30,8 @@ All endpoints are under `/api`.
 - `POST /soc/tickets/{id}/transition`
 - `GET /soc/reports`
 - `POST /soc/reports/generate`
-- `GET /soc/reports/{id}/export?format=xlsx|pdf`
+- `GET /soc/reports/{id}/preview?format=xlsx|pdf`
+- `GET /soc/reports/{id}/export?format=xlsx|pdf&disposition=inline|attachment`
 - `GET /soc/rules`
 - `GET /soc/rules/hits?sourceType={sourceType}&ruleId={ruleId}`
 - `GET /soc/rules/adapter-mappings`
@@ -322,6 +323,87 @@ Correlation rule APIs:
 - `POST /soc/correlation-rules/{id}/disable`
 
 Rule payloads store structured arrays, thresholds, time windows, severity floors, and descriptions only. Supported `ruleType` values are `event_count`, `value_count`, `frequency`, `temporal`, `temporal_ordered`, and `cross_source_chain`. Backend validation rejects scripts, shell/download/external URL wording, non-array JSON rule lists, and unsafe command/external query semantics.
+
+### Report Preview And Export
+
+Report preview and export use the same report data, so the UI can show content before downloading a file:
+
+- `GET /soc/reports/{id}/preview?format=xlsx`
+- `GET /soc/reports/{id}/preview?format=pdf`
+- `GET /soc/reports/{id}/export?format=xlsx&disposition=attachment`
+- `GET /soc/reports/{id}/export?format=pdf&disposition=inline`
+
+Preview returns metadata plus renderable content:
+
+```json
+{
+  "reportId": 18,
+  "reportNo": "RPT-VALIDATION-20260708183556",
+  "title": "安全验证报告",
+  "format": "xlsx",
+  "filename": "RPT-VALIDATION-20260708183556.xlsx",
+  "headers": ["模块", "指标", "内容"],
+  "rows": [["基础信息", "报表编号", "RPT-VALIDATION-20260708183556"]],
+  "lines": ["报表编号：RPT-VALIDATION-20260708183556"]
+}
+```
+
+`format=xlsx` exports an Office Open XML workbook. `format=pdf` exports a valid browser-previewable PDF byte stream. `disposition=inline` is intended for preview panes, while `disposition=attachment` is intended for explicit download. Export endpoints require `soc:report:export`; preview requires `soc:report:view`.
+
+### Host Agent Ingest v1
+
+Host Agent Ingest v1 is the shared contract for macOS development validation and Windows Docker host collection. The Docker platform receives normalized host facts; the host-side Agent collects operating-system data and sends it to the backend. Backend ingest does not execute commands, scan files, collect file contents, or reach into the host by itself.
+
+Agent registration is an administrator action:
+
+- `POST /soc/agents/register`
+- `GET /soc/agents`
+
+Registration returns `agentToken` once. Store it only in the host Agent local configuration or a protected runtime secret. The backend stores only `tokenHash`.
+
+Agent runtime endpoints use header `X-CyberFusion-Agent-Token` and do not use user JWT:
+
+- `POST /soc/agents/heartbeat`
+- `POST /soc/ingest/host/assets`
+- `POST /soc/ingest/host/events`
+- `POST /soc/ingest/host/fim`
+- `POST /soc/ingest/host/baseline`
+
+Shared request fields:
+
+```json
+{
+  "agentId": "macos-fixture-agent",
+  "batchId": "HOST-macos-fixture-agent-EVENT",
+  "osType": "macos",
+  "collectedAt": "2026-07-07T18:30:00",
+  "events": []
+}
+```
+
+`osType` is one of `macos`, `windows`, or `linux`. The same schema is used for Mac and Windows fixture validation. Event and FIM payloads must provide stable `eventUid` values; repeated `eventUid` submissions are counted as duplicates and not inserted again.
+
+Assets write or update `soc_asset` with source types such as `macos-agent` or `windows-agent`. Host events write `soc_external_event`. FIM writes `soc_file_integrity_event`. Baseline checks write or update `soc_baseline_check`. These rows must not use demo markers such as `batch_id LIKE 'DEMO-%'`, `demo_case_id`, or `source_type='demo'`.
+
+Example host event item:
+
+```json
+{
+  "eventUid": "WIN-FIXTURE-EVENT-0001",
+  "sourceModule": "eventlog",
+  "eventType": "windows_logon_failure",
+  "severity": "high",
+  "ruleId": "WIN-4625",
+  "ruleName": "Windows failed logon",
+  "assetName": "win-docker-host",
+  "assetIp": "192.0.2.20",
+  "action": "review",
+  "raw": { "channel": "Security", "eventId": 4625 },
+  "normalized": { "agentId": "windows-fixture-agent" }
+}
+```
+
+Host Agent ingest accepts only structured metadata needed by the SOC workflow. It must not upload file bodies, passwords, browser cookies, private keys, access tokens, customer documents, or full raw event-log archives.
 
 ### Client Security Keeper Checkup
 

@@ -250,6 +250,65 @@ a {
     rgba(255, 255, 255, 0.54);
 }
 
+.entry-dropdown-popper .el-dropdown-menu {
+  max-height: calc(100vh - 112px);
+  overflow-y: auto;
+}
+
+.return-focus-highlight {
+  position: relative;
+  outline: 3px solid rgba(216, 128, 36, 0.72);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 4px rgba(245, 169, 78, 0.24),
+    0 18px 42px rgba(143, 83, 20, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94) !important;
+  scroll-margin-top: 112px;
+  animation: return-focus-pulse 1.35s ease-in-out infinite;
+}
+
+.return-focus-highlight:not(.el-table__row):not(.el-button)::after {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  padding: 3px 7px;
+  border: 1px solid rgba(216, 128, 36, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 248, 238, 0.96);
+  color: var(--soc-warm-strong);
+  font-size: 11px;
+  font-weight: 760;
+  content: "上一步";
+}
+
+.el-table__row.return-focus-highlight {
+  outline-offset: -3px;
+}
+
+@keyframes return-focus-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 3px rgba(245, 169, 78, 0.24),
+      0 18px 42px rgba(143, 83, 20, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 6px rgba(245, 169, 78, 0.36),
+      0 22px 48px rgba(143, 83, 20, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .return-focus-highlight {
+    animation: none;
+  }
+}
+
 .governance-table-header {
   display: flex;
   align-items: center;

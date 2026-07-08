@@ -18,29 +18,70 @@
         <h1>工作台</h1>
         <p>这个页面帮你快速了解今天的风险、告警、待处理工单和资产风险趋势。</p>
       </div>
-      <div class="soc-page-tags">
-        <el-tag effect="plain">SOC 主线</el-tag>
-        <el-tag effect="plain">多源融合</el-tag>
-        <el-tag effect="plain">处置闭环</el-tag>
+    </section>
+
+    <section class="kpi-grid">
+      <RiskCard label="今日告警" :value="overview.todayAlerts" delta="来自告警处置" tone="medium" />
+      <RiskCard label="高危告警" :value="overview.highAlerts" delta="critical + high 待处置" tone="critical" />
+      <RiskCard label="待处理工单" :value="overview.pendingTickets" delta="未关闭/未归档" tone="high" />
+      <RiskCard label="受管资产" :value="overview.assets" delta="P0 资产视图" tone="low" />
+    </section>
+
+    <section v-loading="agentLoading" class="soc-panel agent-status-panel">
+      <div class="panel-title agent-status-head">
+        <div>
+          <strong>Agent 状态</strong>
+          <span>基础在线状态、队列、采集上报和最后心跳</span>
+        </div>
+        <div class="agent-status-actions">
+          <span>{{ hostAgentsSummary.total }} 个 Agent · 在线 {{ hostAgentsSummary.online }} · 离线 {{ hostAgentsSummary.offline }}</span>
+          <el-button type="primary" plain @click="router.push('/soc/agents')">完整管理</el-button>
+        </div>
+      </div>
+      <el-alert
+        v-if="agentError"
+        :title="agentError"
+        type="warning"
+        show-icon
+        :closable="false"
+      />
+      <div class="agent-status-table">
+        <el-table :data="hostAgentRows" empty-text="暂无 Agent 状态" size="small">
+          <el-table-column label="状态" width="92">
+            <template #default="{ row }">
+              <StatusBadge :status="row.status" />
+            </template>
+          </el-table-column>
+          <el-table-column label="Agent / 主机" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="agent-status-name">
+                <strong>{{ row.agentName || row.hostname || row.agentId }}</strong>
+                <small>{{ row.hostname || row.agentId }}</small>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="系统" min-width="130">
+            <template #default="{ row }">{{ osLabel(row.osType) }}</template>
+          </el-table-column>
+          <el-table-column label="队列" width="130">
+            <template #default="{ row }">{{ row.queueDepth || 0 }} / {{ formatBytes(row.queueBytes) }}</template>
+          </el-table-column>
+          <el-table-column label="采集/上报" width="130">
+            <template #default="{ row }">{{ row.collectedCount || 0 }} / {{ row.sentCount || 0 }}</template>
+          </el-table-column>
+          <el-table-column label="失败" width="86">
+            <template #default="{ row }">
+              <el-tag :type="(row.failedCount || 0) > 0 ? 'warning' : 'success'" effect="plain">
+                {{ row.failedCount || 0 }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="lastSeenAt" label="最后心跳" min-width="170" />
+        </el-table>
       </div>
     </section>
 
-    <section class="source-strip">
-      <span>当前运行模式</span>
-      <DataSourceBadge source="mock" />
-      <strong>运营链路：告警趋势 / 风险分布 / 资产排行 / 工单 SLA / 事件时间线</strong>
-    </section>
-
-    <el-tabs v-model="activeView" class="cockpit-tabs">
-      <el-tab-pane label="管理驾驶舱" name="management">
-        <section class="kpi-grid">
-          <RiskCard label="今日告警" :value="overview.todayAlerts" delta="来自告警处置" tone="medium" />
-          <RiskCard label="高危告警" :value="overview.highAlerts" delta="critical + high 待处置" tone="critical" />
-          <RiskCard label="待处理工单" :value="overview.pendingTickets" delta="未关闭/未归档" tone="high" />
-          <RiskCard label="受管资产" :value="overview.assets" delta="P0 资产视图" tone="low" />
-        </section>
-
-        <section v-if="operations" v-loading="operationsLoading" class="soc-panel operations-panel">
+    <section v-if="operations" v-loading="operationsLoading" class="soc-panel operations-panel">
           <div class="panel-title">
             <strong>运营指标中心</strong>
             <span>事件簇、风险、SLA、推荐动作和员工待办的可解释指标</span>
@@ -147,9 +188,9 @@
               <el-empty v-if="!operations.topTrendSources.length" description="暂无趋势异常" :image-size="52" />
             </div>
           </div>
-        </section>
+    </section>
 
-        <section v-loading="loading" class="dashboard-grid">
+    <section v-loading="loading" class="dashboard-grid">
           <div class="soc-panel chart-panel">
             <div class="panel-title">
               <strong>七日风险趋势</strong>
@@ -170,9 +211,9 @@
             </div>
             <el-empty v-if="!severities.length" description="暂无等级分布" :image-size="76" />
           </div>
-        </section>
+    </section>
 
-        <section v-loading="loading" class="management-grid">
+    <section v-loading="loading" class="management-grid">
           <div class="soc-panel">
             <div class="panel-title">
               <strong>部门风险排行</strong>
@@ -219,9 +260,9 @@
               </div>
             </div>
           </div>
-        </section>
+    </section>
 
-        <section v-loading="loading" class="soc-panel incident-panel">
+    <section v-loading="loading" class="soc-panel incident-panel">
           <div class="panel-title">
             <strong>Top 5 安全事件簇</strong>
             <span>多源证据关联结果</span>
@@ -234,9 +275,9 @@
             <b>{{ incident.score }}</b>
           </div>
           <el-empty v-if="!topIncidents.length" description="暂无事件簇，前往安全事件簇页面执行关联" :image-size="76" />
-        </section>
+    </section>
 
-        <section v-loading="loading" class="soc-panel trend-anomaly-panel">
+    <section v-loading="loading" class="soc-panel trend-anomaly-panel">
           <div class="panel-title">
             <strong>趋势异常 Top 5</strong>
             <span>当前 24 小时窗口对比 7 天均值</span>
@@ -253,87 +294,7 @@
             </div>
           </div>
           <el-empty v-if="!topTrendAnomalyRows.length" description="暂无趋势异常" :image-size="76" />
-        </section>
-
-        <section v-loading="loading" class="soc-panel recommendation-panel">
-          <div class="panel-title">
-            <strong>今日优先处理建议 Top 5</strong>
-            <span>事件簇、漏洞、工单和员工待办综合排序</span>
-          </div>
-          <div v-for="item in topRecommendationRows" :key="item.key" class="recommendation-row" @click="openRecommendation(item)">
-            <div>
-              <el-tag :type="priorityTag(item.priority)" effect="plain">{{ priorityText(item.priority) }}</el-tag>
-              <strong>{{ item.title }}</strong>
-              <span>{{ item.reason }}</span>
-            </div>
-            <p>{{ item.recommendedAction }}</p>
-          </div>
-          <el-empty v-if="!topRecommendationRows.length" description="暂无推荐建议" :image-size="76" />
-        </section>
-      </el-tab-pane>
-
-      <el-tab-pane label="分析员工作台" name="analyst">
-        <section v-loading="loading" class="analyst-grid">
-          <div class="soc-panel">
-            <div class="panel-title">
-              <strong>资产风险评分</strong>
-              <span>分值来源可解释</span>
-            </div>
-            <div v-for="asset in unifiedAssetRiskRows" :key="asset.ip" class="score-row">
-              <div class="score-head">
-                <div>
-                  <strong>{{ asset.hostname }}</strong>
-                  <span>{{ asset.ip }} / {{ asset.deptName || '未分配部门' }}</span>
-                </div>
-                <b>{{ asset.score }}</b>
-              </div>
-              <el-progress :percentage="asset.score" :stroke-width="9" />
-              <p>{{ asset.explanation }}</p>
-            </div>
-            <el-empty v-if="!unifiedAssetRiskRows.length" description="暂无资产评分" :image-size="76" />
-          </div>
-
-          <div class="soc-panel">
-            <div class="panel-title">
-              <strong>告警优先级</strong>
-              <span>等级、资产、IOC、重复次数</span>
-            </div>
-            <div v-for="alert in analytics.alertPriorities" :key="alert.alertUid" class="priority-row">
-              <div class="priority-title">
-                <SeverityBadge :severity="alert.severity" />
-                <strong>{{ alert.score }}</strong>
-              </div>
-              <b>{{ alert.ruleDescription }}</b>
-              <span>{{ alert.assetName }} / {{ alert.assetIp }} / {{ formatTime(alert.eventTime) }}</span>
-              <p>{{ alert.reason }}</p>
-            </div>
-            <el-empty v-if="!analytics.alertPriorities.length" description="暂无告警优先级数据" :image-size="76" />
-          </div>
-        </section>
-
-        <section v-loading="loading" class="soc-panel timeline-panel">
-          <div class="panel-title">
-            <strong>安全事件时间线</strong>
-            <span>从事件产生到处置关闭</span>
-          </div>
-          <el-timeline>
-            <el-timeline-item
-              v-for="item in analytics.eventTimeline"
-              :key="`${item.type}-${item.occurredAt}-${item.title}`"
-              :timestamp="formatTime(item.occurredAt)"
-              placement="top"
-            >
-              <div class="timeline-item">
-                <SeverityBadge v-if="item.severity" :severity="item.severity" />
-                <strong>{{ item.type }}：{{ item.title }}</strong>
-                <span>{{ item.assetName || item.operatorName || item.status }}</span>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
-          <el-empty v-if="!analytics.eventTimeline.length" description="暂无事件时间线" :image-size="76" />
-        </section>
-      </el-tab-pane>
-    </el-tabs>
+    </section>
 
     <section v-loading="loading" class="soc-panel affected-panel">
       <div class="panel-title">
@@ -354,12 +315,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
 import RiskCard from '@/components/security/RiskCard.vue'
 import RiskTrendChart from '@/components/security/RiskTrendChart.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
-import { affectedAssets, alertTrend, dashboardOverview, listIncidents, operationsOverview, riskAnalytics, severityDistribution, topRecommendations, topRiskAssets, topTrendAnomalies } from '@/api/soc'
-import type { AssetRiskProfile, IncidentClusterItem, OperationMetricItem, OperationsOverview, RecommendationItem, RiskAnalytics, TrendAnomalyItem } from '@/api/soc'
+import StatusBadge from '@/components/security/StatusBadge.vue'
+import { affectedAssets, alertTrend, dashboardOverview, hostAgentOverview, listIncidents, operationsOverview, riskAnalytics, severityDistribution, topTrendAnomalies } from '@/api/soc'
+import type { HostAgentItem, HostAgentOverview, IncidentClusterItem, OperationMetricItem, OperationsOverview, RiskAnalytics, TrendAnomalyItem } from '@/api/soc'
 
 const router = useRouter()
 
@@ -381,33 +342,20 @@ const emptyAnalytics: RiskAnalytics = {
   eventTimeline: [],
 }
 
-const activeView = ref('management')
 const overview = reactive({ todayAlerts: 0, highAlerts: 0, pendingTickets: 0, assets: 0, unhandledAlerts: 0 })
 const analytics = reactive<RiskAnalytics>(structuredClone(emptyAnalytics))
 const trend = ref<Array<{ date: string; count: number }>>([])
 const severities = ref<Array<{ name: string; value: number }>>([])
 const assets = ref<Array<{ name: string; value: number }>>([])
-const topRiskProfiles = ref<AssetRiskProfile[]>([])
 const topIncidents = ref<IncidentClusterItem[]>([])
-const topRecommendationRows = ref<RecommendationItem[]>([])
 const topTrendAnomalyRows = ref<TrendAnomalyItem[]>([])
 const operations = ref<OperationsOverview>()
+const hostAgents = ref<HostAgentOverview>()
 const loading = ref(false)
 const operationsLoading = ref(false)
+const agentLoading = ref(false)
 const error = ref('')
-
-const unifiedAssetRiskRows = computed(() => {
-  if (topRiskProfiles.value.length) {
-    return topRiskProfiles.value.map((profile) => ({
-      hostname: profile.asset.hostname,
-      ip: profile.asset.ip,
-      deptName: profile.asset.deptName,
-      score: profile.snapshot.score,
-      explanation: profile.statusReason || profile.recommendationSummary,
-    }))
-  }
-  return analytics.assetRisks
-})
+const agentError = ref('')
 
 const operationHeroMetrics = computed(() => {
   const codes = [
@@ -421,6 +369,19 @@ const operationHeroMetrics = computed(() => {
   return codes
     .map((code) => operations.value?.metrics.find((metric) => metric.metricCode === code))
     .filter(Boolean) as OperationMetricItem[]
+})
+
+const hostAgentsSummary = computed(() => {
+  const data = hostAgents.value
+  return {
+    total: data?.totalAgents || 0,
+    online: data?.onlineAgents || 0,
+    offline: data?.offlineAgents || 0,
+  }
+})
+
+const hostAgentRows = computed<HostAgentItem[]>(() => {
+  return (hostAgents.value?.agents || []).slice(0, 8)
 })
 
 onMounted(load)
@@ -446,22 +407,10 @@ async function load() {
       operationsLoading.value = false
     }
     try {
-      const topRiskRes = await topRiskAssets(5)
-      topRiskProfiles.value = topRiskRes.data.data
-    } catch {
-      topRiskProfiles.value = []
-    }
-    try {
       const incidentRes = await listIncidents({ pageNum: 1, pageSize: 5 })
       topIncidents.value = incidentRes.data.data.records
     } catch {
       topIncidents.value = []
-    }
-    try {
-      const recommendationRes = await topRecommendations(5)
-      topRecommendationRows.value = recommendationRes.data.data
-    } catch {
-      topRecommendationRows.value = []
     }
     try {
       const trendAnomalyRes = await topTrendAnomalies(5)
@@ -469,10 +418,24 @@ async function load() {
     } catch {
       topTrendAnomalyRows.value = []
     }
+    await loadAgentOverview()
   } catch {
     error.value = '安全总览数据加载失败，请检查后端服务或 Wazuh/数据库连接。'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadAgentOverview() {
+  agentLoading.value = true
+  agentError.value = ''
+  try {
+    hostAgents.value = (await hostAgentOverview()).data.data
+  } catch {
+    hostAgents.value = undefined
+    agentError.value = 'Agent 状态加载失败，请检查后端服务或 Agent 上报接口。'
+  } finally {
+    agentLoading.value = false
   }
 }
 
@@ -491,36 +454,6 @@ function incidentSourceLabel(incident: IncidentClusterItem) {
 
 function incidentEvidenceCount(incident: IncidentClusterItem) {
   return incident.evidenceCount ?? ((incident.eventCount || 0) + (incident.alertCount || 0) + (incident.vulnerabilityCount || 0))
-}
-
-function formatTime(value?: string) {
-  if (!value) return '-'
-  return value.replace('T', ' ').slice(0, 16)
-}
-
-function priorityTag(priority: string) {
-  if (priority === 'critical' || priority === 'high') return 'danger'
-  if (priority === 'medium') return 'warning'
-  return 'info'
-}
-
-function priorityText(priority: string) {
-  if (priority === 'critical') return '严重'
-  if (priority === 'high') return '高'
-  if (priority === 'medium') return '中'
-  return '低'
-}
-
-function openRecommendation(item: RecommendationItem) {
-  if (item.relatedBizType === 'incident') {
-    router.push({ path: '/soc/incidents', query: { keyword: String(item.relatedBizId) } })
-  } else if (item.relatedBizType === 'ticket' || item.relatedBizType === 'playbook_task' || item.relatedBizType === 'client_task') {
-    router.push({ path: '/soc/tickets', query: { keyword: item.title } })
-  } else if (item.relatedBizType === 'vulnerability') {
-    router.push({ path: '/soc/vulnerabilities', query: { keyword: item.title } })
-  } else if (item.assetIp) {
-    router.push({ path: '/soc/assets', query: { keyword: item.assetIp } })
-  }
 }
 
 function openTrendAnomaly(item: TrendAnomalyItem) {
@@ -550,16 +483,80 @@ function metricValue(metric: OperationMetricItem) {
 function signedMetric(value: number) {
   return value > 0 ? `+${value}` : String(value)
 }
+
+function osLabel(osType?: string) {
+  const normalized = (osType || '').toLowerCase()
+  if (normalized.includes('mac')) return 'macOS'
+  if (normalized.includes('win')) return 'Windows'
+  if (normalized.includes('linux')) return 'Linux'
+  return osType || '未知系统'
+}
+
+function formatBytes(value?: number) {
+  const bytes = value || 0
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 </script>
 
 <style scoped>
-.cockpit-tabs {
-  --el-border-color-light: var(--soc-border);
-}
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+}
+.agent-status-panel {
+  padding: 16px;
+}
+.agent-status-head {
+  align-items: flex-start;
+}
+.agent-status-head > div:first-child {
+  min-width: 0;
+}
+.agent-status-head strong,
+.agent-status-head span {
+  display: block;
+}
+.agent-status-head span {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.agent-status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.agent-status-actions > span {
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.agent-status-table {
+  overflow-x: auto;
+}
+.agent-status-table :deep(.el-table) {
+  min-width: 880px;
+}
+.agent-status-name {
+  display: grid;
+  gap: 3px;
+}
+.agent-status-name strong {
+  overflow: hidden;
+  color: var(--soc-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-status-name small {
+  overflow: hidden;
+  color: var(--soc-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .operations-panel {
   padding: 16px;
@@ -677,26 +674,8 @@ function signedMetric(value: number) {
   margin-top: 4px;
   color: var(--soc-text-muted);
 }
-.source-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid rgba(190, 183, 171, 0.52);
-  border-radius: var(--soc-radius-card);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 246, 232, 0.64));
-  box-shadow: var(--soc-shadow-soft), var(--soc-glass-highlight);
-  backdrop-filter: blur(18px) saturate(1.12);
-  padding: 10px 14px;
-  color: var(--soc-text-muted);
-  font-size: 13px;
-}
-.source-strip strong {
-  color: var(--soc-text);
-  font-weight: 500;
-}
 .dashboard-grid,
-.management-grid,
-.analyst-grid {
+.management-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
   gap: 14px;
@@ -706,9 +685,7 @@ function signedMetric(value: number) {
 .affected-panel,
 .incident-panel,
 .trend-anomaly-panel,
-.timeline-panel,
-.management-grid .soc-panel,
-.analyst-grid .soc-panel {
+.management-grid .soc-panel {
   padding: 16px;
 }
 .panel-title {
@@ -732,33 +709,23 @@ function signedMetric(value: number) {
 }
 .dept-risk-row,
 .incident-row,
-.trend-anomaly-row,
-.recommendation-row,
-.score-row,
-.priority-row {
+.trend-anomaly-row {
   border-bottom: 1px solid rgba(190, 183, 171, 0.42);
   padding: 12px 0;
 }
 .dept-risk-row:first-of-type,
 .incident-row:first-of-type,
-.trend-anomaly-row:first-of-type,
-.recommendation-row:first-of-type,
-.score-row:first-of-type,
-.priority-row:first-of-type {
+.trend-anomaly-row:first-of-type {
   padding-top: 0;
 }
 .dept-risk-row:last-child,
 .incident-row:last-child,
-.trend-anomaly-row:last-child,
-.recommendation-row:last-child,
-.score-row:last-child,
-.priority-row:last-child {
+.trend-anomaly-row:last-child {
   border-bottom: 0;
   padding-bottom: 0;
 }
 .dept-risk-row > div,
-.incident-row,
-.score-head {
+.incident-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -766,20 +733,14 @@ function signedMetric(value: number) {
   margin-bottom: 8px;
 }
 .dept-risk-row span,
-.incident-row span,
-.score-row span,
-.priority-row span,
-.score-row p,
-.priority-row p {
+.incident-row span {
   display: block;
   margin: 4px 0 0;
   color: var(--soc-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
-.score-head b,
-.incident-row b,
-.priority-title strong {
+.incident-row b {
   font-size: 24px;
   color: var(--soc-high);
 }
@@ -794,9 +755,6 @@ function signedMetric(value: number) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.recommendation-panel {
-  margin-top: 14px;
 }
 .trend-anomaly-panel {
   margin-top: 14px;
@@ -830,40 +788,6 @@ function signedMetric(value: number) {
   color: var(--soc-high);
   font-size: 22px;
 }
-.recommendation-row {
-  display: grid;
-  gap: 8px;
-  cursor: pointer;
-}
-.recommendation-row > div {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 10px;
-  align-items: center;
-}
-.recommendation-row strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.recommendation-row span {
-  grid-column: 1 / -1;
-  color: var(--soc-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.recommendation-row p {
-  margin: 0;
-  color: var(--soc-warm-strong);
-  font-size: 12px;
-  line-height: 1.55;
-}
-.priority-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -887,16 +811,6 @@ function signedMetric(value: number) {
   color: var(--soc-text);
   font-size: 22px;
 }
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 28px;
-}
-.timeline-item span {
-  color: var(--soc-text-muted);
-  font-size: 12px;
-}
 .asset-bars {
   display: grid;
   gap: 10px;
@@ -913,19 +827,21 @@ function signedMetric(value: number) {
   .operation-detail-grid,
   .operation-top-grid,
   .dashboard-grid,
-  .management-grid,
-  .analyst-grid {
+  .management-grid {
     grid-template-columns: 1fr;
-  }
-  .source-strip {
-    align-items: flex-start;
-    flex-direction: column;
   }
   .metric-grid {
     grid-template-columns: 1fr;
   }
   .asset-bar {
     grid-template-columns: 1fr;
+  }
+  .agent-status-head {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .agent-status-actions {
+    justify-content: flex-start;
   }
 }
 </style>

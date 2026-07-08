@@ -7,6 +7,8 @@ import com.zhangjiyan.template.soc.alert.SocAlert;
 import com.zhangjiyan.template.soc.alert.SocAlertMapper;
 import com.zhangjiyan.template.soc.asset.SocAsset;
 import com.zhangjiyan.template.soc.asset.SocAssetMapper;
+import com.zhangjiyan.template.soc.correlation.SocIncidentEvidence;
+import com.zhangjiyan.template.soc.correlation.SocIncidentEvidenceMapper;
 import com.zhangjiyan.template.soc.correlation.SocIncidentCluster;
 import com.zhangjiyan.template.soc.correlation.SocIncidentClusterMapper;
 import com.zhangjiyan.template.soc.keeper.SocClientCheckupMapper;
@@ -39,6 +41,7 @@ class RecommendationServiceTest {
     void setUp() {
         service = new RecommendationService(
                 mapper(SocIncidentClusterMapper.class, fixture.incidents, null, null, fixture),
+                mapper(SocIncidentEvidenceMapper.class, fixture.evidence, null, null, fixture),
                 mapper(SocVulnerabilityMapper.class, fixture.vulnerabilities, null, null, fixture),
                 mapper(SocTicketMapper.class, fixture.tickets, null, null, fixture),
                 mapper(SocTicketTaskMapper.class, fixture.tasks, null, null, fixture),
@@ -54,7 +57,9 @@ class RecommendationServiceTest {
 
     @Test
     void topRecommendationsRankExplainableIncidentVulnerabilityTicketAndTaskActions() {
+        fixture.assets.add(asset());
         fixture.incidents.add(incident());
+        fixture.evidence.add(evidence());
         fixture.vulnerabilities.add(vulnerability());
         fixture.tickets.add(overdueTicket());
         fixture.tasks.add(pendingEmployeeTask());
@@ -79,6 +84,7 @@ class RecommendationServiceTest {
     @Test
     void confirmedRecommendationIsDownRankedButStillAuditable() {
         fixture.incidents.add(incident());
+        fixture.evidence.add(evidence());
         SocClientRecommendationAction action = new SocClientRecommendationAction();
         action.setRecommendationKey("incident-101");
         action.setActionType("confirm");
@@ -98,6 +104,7 @@ class RecommendationServiceTest {
     @Test
     void clientNextActionsUsePlainEmployeeLanguageAndCurrentAssetScope() {
         fixture.assets.add(asset());
+        fixture.tickets.add(overdueTicket());
         fixture.tasks.add(pendingEmployeeTask());
         fixture.alerts.add(alert());
 
@@ -109,6 +116,18 @@ class RecommendationServiceTest {
             assertThat(action.recommendedAction()).doesNotContain("shell", "raw", "JSON");
             assertThat(action.reason()).isNotBlank();
         });
+    }
+
+    @Test
+    void topRecommendationsExcludeRecordsWithoutTraceableUpstreamData() {
+        fixture.incidents.add(incidentWithoutEvidence());
+        fixture.vulnerabilities.add(mockVulnerability());
+        fixture.tickets.add(orphanTicket());
+        fixture.tasks.add(orphanTask());
+
+        List<RecommendationService.RecommendationItem> items = service.topRecommendations(10);
+
+        assertThat(items).isEmpty();
     }
 
     @Test
@@ -137,6 +156,7 @@ class RecommendationServiceTest {
                 case "selectList" -> rows;
                 case "selectOne" -> rows.isEmpty() ? selectOneFallback : rows.getFirst();
                 case "selectById" -> selectById(rows, args == null ? null : args[0]);
+                case "selectCount" -> Long.valueOf(rows.size());
                 case "insert" -> {
                     Object entity = args == null || args.length == 0 ? null : args[0];
                     if (entity instanceof SocClientRecommendationAction action) {
@@ -181,6 +201,7 @@ class RecommendationServiceTest {
         incident.setStatus("open");
         incident.setScore(100);
         incident.setEvidenceCount(5);
+        incident.setSourceTypes("waf,macos-agent");
         incident.setAssetId(15L);
         incident.setAssetIp("10.20.1.15");
         incident.setHostname("prod-app-01");
@@ -188,6 +209,29 @@ class RecommendationServiceTest {
         incident.setDeptId(10L);
         incident.setDeleted(0);
         return incident;
+    }
+
+    private static SocIncidentCluster incidentWithoutEvidence() {
+        SocIncidentCluster incident = incident();
+        incident.setId(102L);
+        incident.setClusterNo("INC-102");
+        incident.setEvidenceCount(0);
+        incident.setSourceTypes(null);
+        return incident;
+    }
+
+    private static SocIncidentEvidence evidence() {
+        SocIncidentEvidence evidence = new SocIncidentEvidence();
+        evidence.setId(701L);
+        evidence.setClusterId(101L);
+        evidence.setEvidenceType("alert");
+        evidence.setEvidenceId(401L);
+        evidence.setEvidenceUid("ALERT-401");
+        evidence.setSourceType("macos-agent");
+        evidence.setAssetIp("10.20.1.15");
+        evidence.setHostname("prod-app-01");
+        evidence.setDeleted(0);
+        return evidence;
     }
 
     private static int incidentRawScore() {
@@ -201,11 +245,19 @@ class RecommendationServiceTest {
         vulnerability.setCveId("CVE-DEMO-0001");
         vulnerability.setSeverity("high");
         vulnerability.setStatus("open");
+        vulnerability.setSourceType("trivy");
         vulnerability.setAssetIp("10.20.1.15");
         vulnerability.setAssetName("prod-app-01");
         vulnerability.setOwnerId(1L);
         vulnerability.setDeptId(10L);
         vulnerability.setDeleted(0);
+        return vulnerability;
+    }
+
+    private static SocVulnerability mockVulnerability() {
+        SocVulnerability vulnerability = vulnerability();
+        vulnerability.setId(202L);
+        vulnerability.setSourceType("mock");
         return vulnerability;
     }
 
@@ -219,6 +271,14 @@ class RecommendationServiceTest {
         ticket.setAssigneeId(1L);
         ticket.setDeptId(10L);
         ticket.setDeleted(0);
+        return ticket;
+    }
+
+    private static SocTicket orphanTicket() {
+        SocTicket ticket = overdueTicket();
+        ticket.setId(302L);
+        ticket.setTicketNo("TICKET-302");
+        ticket.setAlertId(null);
         return ticket;
     }
 
@@ -237,9 +297,19 @@ class RecommendationServiceTest {
         return task;
     }
 
+    private static SocTicketTask orphanTask() {
+        SocTicketTask task = pendingEmployeeTask();
+        task.setId(502L);
+        task.setTicketId(null);
+        task.setAlertId(null);
+        return task;
+    }
+
     private static SocAlert alert() {
         SocAlert alert = new SocAlert();
         alert.setId(401L);
+        alert.setAlertUid("ALERT-401");
+        alert.setSourceType("macos-agent");
         alert.setAssetIp("10.20.1.15");
         alert.setAssetName("prod-app-01");
         alert.setDeleted(0);
@@ -259,6 +329,7 @@ class RecommendationServiceTest {
 
     private static class Fixture {
         private final List<SocIncidentCluster> incidents = new ArrayList<>();
+        private final List<SocIncidentEvidence> evidence = new ArrayList<>();
         private final List<SocVulnerability> vulnerabilities = new ArrayList<>();
         private final List<SocTicket> tickets = new ArrayList<>();
         private final List<SocTicketTask> tasks = new ArrayList<>();

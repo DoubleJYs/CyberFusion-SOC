@@ -57,6 +57,8 @@ public class SecurityConfig {
                                 "/client/lab/local-events",
                                 "/client/local-snapshot/local-run",
                                 "/client/local-terminal/local-run",
+                                "/soc/agents/heartbeat",
+                                "/soc/ingest/host/**",
                                 "/health/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",

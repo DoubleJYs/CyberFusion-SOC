@@ -146,6 +146,31 @@ class CorrelationServiceTest {
     }
 
     @Test
+    void hostAgentEvidenceUidKeepsBatchAgentTrace() {
+        SocCorrelationRule rule = activeRule();
+        rule.setRuleKey("host_agent_event_count");
+        rule.setRuleName("Host Agent 主机事件计数");
+        rule.setRuleType("event_count");
+        rule.setSourceTypesJson("[\"macos-agent\"]");
+        rule.setGroupByJson("[\"assetIp\",\"batchId\"]");
+        rule.setThreshold(2);
+        String agentId = "go-macos-real-closure-test";
+        String batchId = "HOST-" + agentId + "-EVENT";
+        Fixture fixture = fixture(List.of(rule), List.of(
+                event(1L, "macos-agent", "listening_port_observed", "HOST-LISTENING-PORT",
+                        "10.0.0.12", "mac-host", batchId, null, 3)
+        ), List.of(hostAgentAlert(10L, batchId)), List.of(), true);
+
+        CorrelationService.CorrelateResult result = fixture.service().correlate();
+
+        assertThat(result.createdClusters()).isEqualTo(1);
+        assertThat(fixture.evidence()).hasSize(2);
+        assertThat(fixture.evidence())
+                .filteredOn(item -> "macos-agent".equals(item.getSourceType()))
+                .allSatisfy(item -> assertThat(item.getEvidenceUid()).contains(batchId).contains(agentId));
+    }
+
+    @Test
     void deniesIncidentDetailWhenSecurityScopeRejectsAccess() {
         SocIncidentCluster cluster = new SocIncidentCluster();
         cluster.setId(1L);
@@ -421,6 +446,26 @@ class CorrelationServiceTest {
         alert.setBatchId("DEMO-BATCH");
         alert.setDemoCaseId("DEMO-ACCESS-001");
         alert.setEventTime(LocalDateTime.now().minusMinutes(2));
+        alert.setOwnerId(1L);
+        alert.setDeptId(12L);
+        alert.setDeleted(0);
+        return alert;
+    }
+
+    private static SocAlert hostAgentAlert(Long id, String batchId) {
+        SocAlert alert = new SocAlert();
+        alert.setId(id);
+        alert.setAlertUid("HOST-ALERT-" + id);
+        alert.setRawRef("host-agent/CF-HOST-LISTEN-0001");
+        alert.setSourceType("macos-agent");
+        alert.setEventType("listening_port_observed");
+        alert.setSeverity("medium");
+        alert.setRuleId("HOST-LISTENING-PORT");
+        alert.setRuleDescription("Listening port observed by CyberFusion Agent");
+        alert.setAssetIp("10.0.0.12");
+        alert.setAssetName("mac-host");
+        alert.setBatchId(batchId);
+        alert.setEventTime(TEST_NOW.minusMinutes(2));
         alert.setOwnerId(1L);
         alert.setDeptId(12L);
         alert.setDeleted(0);

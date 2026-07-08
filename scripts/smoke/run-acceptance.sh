@@ -333,7 +333,7 @@ api_call GET "/soc/algorithm-center/overview" "$admin_token" "" 200 || fail "adm
 pass "admin can access algorithm governance overview"
 api_call GET "/soc/correlation-rules?pageNum=1&pageSize=20&status=active" "$admin_token" "" 200 || fail "correlation rules"
 assert_json "$last_body" "set(['cross_source_chain','event_count','value_count','frequency','temporal_ordered']).issubset({r['ruleType'] for r in d['data']['records']})" "active correlation rules cover v1 rule types"
-assert_json "$last_body" "set(['same_asset_event_count','demo_batch_chain','waf_zap_wazuh_chain','network_ids_chain']).issubset({r.get('ruleCode') or r.get('ruleKey') for r in d['data']['records']})" "active correlation rules include required default seeds"
+assert_json "$last_body" "set(['same_asset_event_count','demo_batch_chain','waf_zap_wazuh_chain','network_ids_chain','host_agent_event_chain']).issubset({r.get('ruleCode') or r.get('ruleKey') for r in d['data']['records']})" "active correlation rules include required default seeds"
 correlation_rule_id="$(extract_first_id "$last_body")"
 api_call POST "/soc/correlation-rules/${correlation_rule_id}/validate" "$admin_token" "" 200 || fail "validate correlation rule"
 assert_json "$last_body" "d['data']['passed'] is True" "correlation rule validation passes"

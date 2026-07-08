@@ -137,7 +137,7 @@ async function load() {
     const res = await listTickets(query)
     rows.value = res.data.data.records
     total.value = res.data.data.total
-    openRouteTicketIfNeeded()
+    void openRouteTicketIfNeeded()
   } catch {
     error.value = '工单列表加载失败，请检查网络、权限或后端服务状态。'
   } finally {
@@ -153,11 +153,21 @@ async function open(row: TicketItem) {
   drawer.value = true
 }
 
-function openRouteTicketIfNeeded() {
+async function openRouteTicketIfNeeded() {
   const openTicketId = typeof route.query.openTicketId === 'string' ? Number(route.query.openTicketId) : 0
-  if (!openTicketId) return
+  if (!openTicketId || detail.value?.ticket.id === openTicketId) return
   const matched = rows.value.find((item) => item.id === openTicketId)
-  if (matched) void open(matched)
+  if (matched) {
+    await open(matched)
+    return
+  }
+  try {
+    const res = await ticketDetail(openTicketId)
+    detail.value = res.data.data
+    drawer.value = true
+  } catch {
+    error.value = '工单详情加载失败，请检查该推荐动作是否仍指向有效工单。'
+  }
 }
 function nextStatuses(status: string) {
   return ({ 待分派: ['处理中'], 处理中: ['待复核'], 待复核: ['处理中', '已关闭'], 已关闭: ['已归档'], 已归档: [] } as Record<string, string[]>)[status] || []

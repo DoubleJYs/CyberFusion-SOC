@@ -248,7 +248,7 @@ CREATE TABLE IF NOT EXISTS soc_incident_evidence (
   cluster_id BIGINT NOT NULL,
   evidence_type VARCHAR(32) NOT NULL,
   evidence_id BIGINT NOT NULL,
-  evidence_uid VARCHAR(128) NULL,
+  evidence_uid VARCHAR(255) NULL,
   source_type VARCHAR(32) NULL,
   event_type VARCHAR(64) NULL,
   severity VARCHAR(32) NULL,
@@ -488,7 +488,7 @@ VALUES
   (1, 'site.title', '站点标题', 'CyberFusion SOC', 'string', 'site', 1, 1, '前端页面标题和浏览器标题的默认展示文案'),
   (2, 'security.password.minLength', '密码最小长度', '8', 'number', 'security', 1, 1, '本地演示账号和新增用户密码的基础长度提示'),
   (3, 'file.upload.maxSizeMb', '上传文件大小 MB', '20', 'number', 'file', 0, 1, '与 application.yml 中 app.file.max-size-mb 保持一致'),
-  (4, 'feature.demoMode', '演示模式', 'true', 'boolean', 'feature', 1, 1, '用于项目派生时控制演示数据或演示入口')
+  (4, 'feature.demoMode', '演示模式', 'false', 'boolean', 'feature', 1, 1, '用于项目派生时控制演示数据或演示入口')
 ON DUPLICATE KEY UPDATE config_name = VALUES(config_name), config_value = VALUES(config_value), value_type = VALUES(value_type), group_code = VALUES(group_code), editable = VALUES(editable), status = VALUES(status), remark = VALUES(remark);
 
 INSERT INTO sys_notice (id, notice_title, notice_type, notice_content, pinned, publish_at, expire_at, status, remark)
@@ -497,24 +497,6 @@ VALUES
   (2, '本地开发环境维护窗口', 'maintenance', '本地 Docker MySQL、Redis、Adminer 等服务统一放在 Environment 目录管理，避免运行数据进入源码仓库。', 0, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 30 DAY), 1, '开发环境提示'),
   (3, 'v2 基础能力发布', 'release', '新增参数配置、部门岗位和通知公告模块，方便派生项目快速落地常见后台管理能力。', 0, DATE_SUB(NOW(), INTERVAL 2 DAY), NULL, 1, '版本发布演示')
 ON DUPLICATE KEY UPDATE notice_title = VALUES(notice_title), notice_type = VALUES(notice_type), notice_content = VALUES(notice_content), pinned = VALUES(pinned), publish_at = VALUES(publish_at), expire_at = VALUES(expire_at), status = VALUES(status), remark = VALUES(remark);
-
-INSERT INTO sys_login_log (username, ip, user_agent, status, message, created_at)
-VALUES
-  ('admin', '127.0.0.1', 'seed', 'SUCCESS', '演示登录成功', NOW()),
-  ('demo', '127.0.0.1', 'seed', 'SUCCESS', '演示用户登录', DATE_SUB(NOW(), INTERVAL 1 DAY));
-
-INSERT INTO sys_operation_log (username, action, method, path, ip, user_agent, status, message, created_at)
-VALUES
-  ('admin', 'LOGIN', 'POST', '/api/auth/login', '127.0.0.1', 'seed', 'SUCCESS', '管理员登录', NOW()),
-  ('admin', 'USER_PAGE', 'GET', '/api/system/users', '127.0.0.1', 'seed', 'SUCCESS', '查询用户列表', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-  ('admin', 'DASHBOARD_OVERVIEW', 'GET', '/api/dashboard/overview', '127.0.0.1', 'seed', 'SUCCESS', '查看系统概览', DATE_SUB(NOW(), INTERVAL 2 DAY));
-
-INSERT INTO sys_biz_sequence (sequence_code, sequence_name, prefix, date_pattern, current_value, step, length, reset_policy, last_reset_date, enabled, remark)
-VALUES
-  ('ORDER_DEMO', '订单号演示规则', 'ORD', 'yyyyMMdd', 0, 1, 4, 'DAILY', CURDATE(), 1, 'SOC 演示编号规则，不绑定订单模块'),
-  ('APPOINTMENT_DEMO', '预约号演示规则', 'APT', 'yyyyMMdd', 0, 1, 4, 'DAILY', CURDATE(), 1, 'SOC 演示编号规则，不实现预约模块'),
-  ('WORK_ORDER_DEMO', '工单号演示规则', 'WO', 'yyyyMMdd', 0, 1, 4, 'DAILY', CURDATE(), 1, 'SOC 演示编号规则，不实现工单模块')
-ON DUPLICATE KEY UPDATE sequence_name = VALUES(sequence_name), prefix = VALUES(prefix), date_pattern = VALUES(date_pattern), step = VALUES(step), length = VALUES(length), reset_policy = VALUES(reset_policy), enabled = VALUES(enabled), remark = VALUES(remark);
 
 INSERT INTO sys_dept (id, parent_id, dept_name, dept_code, leader, sort, status)
 VALUES
@@ -578,6 +560,7 @@ VALUES
   (2001, 2020, '安全总览', '/soc/dashboard', 'soc/DashboardView', 'DataAnalysis', 'menu', 'soc:dashboard:view', 10, 1, 1),
   (2012, 2020, '产品能力', '/soc/capabilities', 'soc/CapabilityView', 'Grid', 'menu', 'soc:dashboard:view', 15, 1, 1),
   (2013, 2020, '安全验证中心', '/soc/demo-range', 'soc/DemoRangeView', 'Operation', 'menu', 'soc:demo-range:view', 18, 1, 1),
+  (2019, 2020, '每日处理', '/soc/daily-recommendations', 'soc/DailyRecommendationView', 'Calendar', 'menu', 'soc:recommendation:view', 19, 1, 1),
   (2002, 2020, '告警中心', '/soc/alerts', 'soc/AlertCenterView', 'WarningFilled', 'menu', 'soc:alert:view', 20, 1, 1),
   (2017, 2020, '安全事件簇', '/soc/incidents', 'soc/IncidentClusterView', 'Share', 'menu', 'soc:incident:list', 22, 1, 1),
   (2014, 2020, '检测规则中心', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
@@ -589,6 +572,7 @@ VALUES
   (2008, 2021, '基线核查', '/soc/baselines', 'soc/BaselineView', 'Checked', 'menu', 'soc:baseline:view', 30, 1, 1),
   (2009, 2021, '文件完整性', '/soc/fim', 'soc/FileIntegrityView', 'Files', 'menu', 'soc:fim:view', 40, 1, 1),
   (2011, 2022, '外部事件', '/soc/external-events', 'soc/ExternalEventView', 'Connection', 'menu', 'soc:external-event:view', 10, 1, 1),
+  (2018, 0, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 6, 1, 1),
   (2004, 2022, '工单中心', '/soc/tickets', 'soc/TicketView', 'Tickets', 'menu', 'soc:ticket:view', 20, 1, 1),
   (2005, 2022, '报表中心', '/soc/reports', 'soc/ReportView', 'DocumentChecked', 'menu', 'soc:report:view', 30, 1, 1),
   (2006, 2023, '系统配置', '/soc/settings', 'soc/SettingsView', 'Tools', 'menu', 'soc:settings:view', 10, 1, 1),
@@ -609,7 +593,7 @@ VALUES
   (2411, 2010, '白名单保存', NULL, NULL, NULL, 'button', 'soc:alert-noise:save', 12, 0, 1),
   (2412, 2011, '外部事件状态流转', NULL, NULL, NULL, 'button', 'soc:external-event:status', 11, 0, 1),
   (2413, 2011, '安全数据导入', NULL, NULL, NULL, 'button', 'soc:external-event:import', 12, 0, 1),
-  (2414, 2013, '导入演示批次', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
+  (2414, 2013, '导入演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
   (2415, 2015, '策略新增', NULL, NULL, NULL, 'button', 'soc:policy:create', 11, 0, 1),
   (2416, 2015, '策略编辑', NULL, NULL, NULL, 'button', 'soc:policy:update', 12, 0, 1),
   (2417, 2015, '策略发布', NULL, NULL, NULL, 'button', 'soc:policy:publish', 13, 0, 1),
@@ -636,6 +620,9 @@ VALUES
   (2439, 2015, '算法治理查看', NULL, NULL, NULL, 'button', 'soc:algorithm:view', 41, 0, 1),
   (2440, 2015, '算法回放评估', NULL, NULL, NULL, 'button', 'soc:algorithm:replay', 42, 0, 1),
   (2441, 2015, '算法评估记录', NULL, NULL, NULL, 'button', 'soc:algorithm:evaluation', 43, 0, 1),
+  (2450, 2013, '清除演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:clear', 12, 0, 1),
+  (2451, 2018, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
+  (2452, 2018, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
   (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
   (2601, 2600, '我的电脑', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1),
   (2602, 2600, '我的待办', '/client/tasks', 'client/ClientOperationsView', 'Tickets', 'menu', 'client:tasks:view', 20, 1, 1),
@@ -653,15 +640,15 @@ SELECT 3, id FROM sys_menu WHERE id BETWEEN 2000 AND 2499
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 4, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2014, 2002, 2017, 2003, 2016, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2101, 2102, 2103, 2104, 2105, 2201, 2301, 2402, 2403, 2404, 2410, 2411, 2412, 2413, 2414, 2430, 2431, 2432, 2433, 2434)
+SELECT 4, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2017, 2003, 2016, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2018, 2101, 2102, 2103, 2104, 2105, 2201, 2301, 2402, 2403, 2404, 2410, 2411, 2412, 2413, 2414, 2430, 2431, 2432, 2433, 2434, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 5, id FROM sys_menu WHERE id IN (2000, 2021, 2022, 2003, 2004, 2007, 2008, 2009, 2011, 2201, 2402, 2403, 2404)
+SELECT 5, id FROM sys_menu WHERE id IN (2000, 2021, 2022, 2003, 2004, 2007, 2008, 2009, 2011, 2018, 2201, 2402, 2403, 2404, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 6, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2014, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011)
+SELECT 6, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2018, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -674,6 +661,23 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT 3, id FROM sys_menu WHERE id IN (2430, 2431, 2432, 2433, 2434, 2435, 2436, 2437, 2438)
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT role_id, menu_id
+FROM (
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  UNION ALL
+  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+) AS agent_menu_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -725,7 +729,8 @@ VALUES
   (3, 'wazuh_frequency_window', 'wazuh_frequency_window', 'Wazuh 频率窗口', '同一 Wazuh 规则在同一资产短时间多次命中时形成事件簇。', 1, 'active', 1, 'frequency', 15, 50, 3, JSON_ARRAY('assetIp', 'ruleId'), JSON_ARRAY('wazuh'), NULL, JSON_ARRAY('assetIp', 'ruleId'), 3, 900, NULL, 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'sameRuleId', 15, 'withinTimeWindow', 15), '仅按 ruleId 和 assetIp 聚合，不下发主机命令。', 1, CURRENT_TIMESTAMP),
   (4, 'demo_batch_chain', 'demo_batch_chain', '演示批次顺序链路', '按演示批次中的 WAF、ZAP、Trivy、主机和网络证据顺序构建验证链路。', 1, 'active', 1, 'temporal_ordered', 60, 50, 2, JSON_ARRAY('batchId', 'demoCaseId', 'assetIp'), JSON_ARRAY('waf', 'zap', 'trivy', 'wazuh', 'suricata', 'zeek'), NULL, JSON_ARRAY('batchId', 'demoCaseId', 'assetIp'), 2, 3600, JSON_ARRAY('waf', 'zap', 'trivy'), 'low', 'low', JSON_OBJECT('sameBatchOrDemo', 25, 'withinTimeWindow', 15, 'crossSource', 20, 'linkedAlertOrVulnerability', 10), '只读取已导入证据，不触发真实扫描。', 1, CURRENT_TIMESTAMP),
   (5, 'same_asset_value_count', 'same_asset_value_count', '同资产不同规则数量', '同一资产在时间窗口内命中多个不同规则或目标 URL 时形成事件簇。', 1, 'active', 1, 'value_count', 30, 50, 2, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), JSON_ARRAY('waf', 'zap', 'suricata', 'zeek', 'sigma'), NULL, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), 2, 1800, NULL, 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'sameBatchOrDemo', 25, 'sameTargetUrl', 10, 'withinTimeWindow', 15), '仅统计结构化字段的不同值，不执行脚本、查询或扫描。', 1, CURRENT_TIMESTAMP),
-  (6, 'network_ids_chain', 'network_ids_chain', '网络 IDS 证据链路', '将 Suricata、Zeek 和相关主机证据按资产与批次聚合为网络检测事件簇。', 1, 'active', 1, 'cross_source_chain', 30, 55, 2, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), JSON_ARRAY('suricata', 'zeek', 'wazuh'), NULL, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), 2, 1800, JSON_ARRAY('suricata', 'zeek'), 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'sameBatchOrDemo', 25, 'withinTimeWindow', 15, 'crossSource', 20), '只聚合已入库网络检测证据，不连接 IDS 或执行抓包。', 1, CURRENT_TIMESTAMP)
+  (6, 'network_ids_chain', 'network_ids_chain', '网络 IDS 证据链路', '将 Suricata、Zeek 和相关主机证据按资产与批次聚合为网络检测事件簇。', 1, 'active', 1, 'cross_source_chain', 30, 55, 2, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), JSON_ARRAY('suricata', 'zeek', 'wazuh'), NULL, JSON_ARRAY('assetIp', 'batchId', 'demoCaseId'), 2, 1800, JSON_ARRAY('suricata', 'zeek'), 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'sameBatchOrDemo', 25, 'withinTimeWindow', 15, 'crossSource', 20), '只聚合已入库网络检测证据，不连接 IDS 或执行抓包。', 1, CURRENT_TIMESTAMP),
+  (7, 'host_agent_event_chain', 'host_agent_event_chain', 'Host Agent 主机事件链路', '将 Mac 和 Windows Host Agent 上报的同资产主机事件与自动生成告警聚合为真实主机安全事件簇。', 1, 'active', 1, 'event_count', 30, 50, 2, JSON_ARRAY('assetIp'), JSON_ARRAY('macos-agent', 'windows-agent', 'host-agent'), NULL, JSON_ARRAY('assetIp'), 2, 1800, NULL, 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'withinTimeWindow', 15, 'highSeverity', 10, 'linkedAlertOrVulnerability', 10), '仅聚合 Host Agent 已上报的结构化主机事件和统一告警，不下发主机命令。', 1, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE rule_code = VALUES(rule_code), rule_key = VALUES(rule_key), rule_name = VALUES(rule_name), rule_type = VALUES(rule_type), time_window_minutes = VALUES(time_window_minutes), min_score = VALUES(min_score), min_count = VALUES(min_count), group_by_fields_json = VALUES(group_by_fields_json), source_types_json = VALUES(source_types_json), group_by_json = VALUES(group_by_json), threshold = VALUES(threshold), timeframe_seconds = VALUES(timeframe_seconds), sequence_json = VALUES(sequence_json), severity_min = VALUES(severity_min), severity_floor = VALUES(severity_floor), weights_json = VALUES(weights_json), enabled = VALUES(enabled), status = VALUES(status), version = VALUES(version), description = VALUES(description), safety_note = VALUES(safety_note);
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -1049,53 +1054,6 @@ ON DUPLICATE KEY UPDATE
   dedup_key_fields_json = VALUES(dedup_key_fields_json),
   enabled = VALUES(enabled);
 
-INSERT INTO soc_asset (id, hostname, ip, os_type, risk_level, source_type, dept_id, dept_name, owner_id, owner_name, open_alert_count, last_seen_at)
-VALUES
-  (1, 'prod-app-01', '10.20.1.15', 'Linux', 'critical', 'mock', 12, '基础设施运维组', 5, '运维人员', 7, NOW()),
-  (2, 'finance-db-01', '10.20.8.21', 'Linux', 'high', 'mock', 12, '基础设施运维组', 5, '运维人员', 4, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
-  (3, 'office-win-23', '10.30.5.23', 'Windows', 'medium', 'mock', 11, '安全分析组', 4, '安全分析员', 2, DATE_SUB(NOW(), INTERVAL 5 HOUR)),
-  (4, 'mac-build-02', '10.40.2.9', 'macOS', 'low', 'mock', 11, '安全分析组', 4, '安全分析员', 1, DATE_SUB(NOW(), INTERVAL 1 DAY))
-ON DUPLICATE KEY UPDATE hostname = VALUES(hostname), os_type = VALUES(os_type), risk_level = VALUES(risk_level), open_alert_count = VALUES(open_alert_count), last_seen_at = VALUES(last_seen_at);
-
-INSERT INTO soc_alert (id, alert_uid, source_type, level, severity, rule_id, rule_description, asset_name, asset_ip, source_ip, status, tactic, raw_ref, event_time, owner_id, dept_id)
-VALUES
-  (1, 'MOCK-20260527-0001', 'mock', 15, 'critical', '5715', '多次认证失败后出现成功登录，疑似暴力破解成功', 'prod-app-01', '10.20.1.15', '198.51.100.23', 'new', 'Credential Access', 'wazuh-alerts-4.x-2026.05.27/1', NOW(), 4, 11),
-  (2, 'MOCK-20260527-0002', 'mock', 12, 'high', '5502', '关键系统配置文件发生变更，需要复核变更单', 'finance-db-01', '10.20.8.21', '10.10.4.12', 'acknowledged', 'Defense Evasion', 'wazuh-alerts-4.x-2026.05.27/2', DATE_SUB(NOW(), INTERVAL 2 HOUR), 4, 11),
-  (3, 'MOCK-20260526-0003', 'mock', 8, 'medium', '100201', '终端出现异常 PowerShell 命令行行为', 'office-win-23', '10.30.5.23', '10.30.5.23', 'ticketed', 'Execution', 'wazuh-alerts-4.x-2026.05.26/3', DATE_SUB(NOW(), INTERVAL 1 DAY), 5, 12),
-  (4, 'MOCK-20260525-0004', 'mock', 3, 'low', '530', '系统日志轮转记录异常但未触发风险升级', 'mac-build-02', '10.40.2.9', '10.40.2.9', 'closed', 'Collection', 'wazuh-alerts-4.x-2026.05.25/4', DATE_SUB(NOW(), INTERVAL 2 DAY), 5, 12),
-  (5, 'MOCK-20260527-0005', 'mock', 12, 'high', '5502', '关键系统配置文件发生变更，需要复核变更单', 'finance-db-01', '10.20.8.21', '10.10.4.12', 'new', 'Defense Evasion', 'wazuh-alerts-4.x-2026.05.27/5', DATE_SUB(NOW(), INTERVAL 90 MINUTE), 4, 11),
-  (6, 'SURICATA-20260527-0001', 'suricata', 12, 'high', 'ET-SCAN-001', 'Suricata 检测到面向生产应用的异常端口扫描流量', 'prod-app-01', '10.20.1.15', '203.0.113.44', 'new', 'Discovery', 'suricata/eve.json/1', DATE_SUB(NOW(), INTERVAL 35 MINUTE), 4, 11),
-  (7, 'SURICATA-20260527-0002', 'suricata', 10, 'medium', 'ET-POLICY-HTTP', 'Suricata 检测到异常 HTTP User-Agent 访问行为', 'office-win-23', '10.30.5.23', '198.51.100.77', 'acknowledged', 'Command and Control', 'suricata/eve.json/2', DATE_SUB(NOW(), INTERVAL 70 MINUTE), 4, 11)
-ON DUPLICATE KEY UPDATE severity = VALUES(severity), rule_description = VALUES(rule_description), asset_name = VALUES(asset_name), status = VALUES(status), event_time = VALUES(event_time), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id);
-
-INSERT INTO soc_external_event (id, event_uid, source_type, event_type, severity, rule_id, rule_name, src_ip, dest_ip, asset_name, asset_ip, ioc, raw_event, normalized_event, alert_id, status, owner_id, dept_id, event_time)
-VALUES
-  (1, 'EXT-SURICATA-20260527-0001', 'suricata', 'ids_alert', 'high', 'ET-SCAN-001', 'ET SCAN Suspicious inbound port scan', '203.0.113.44', '10.20.1.15', 'prod-app-01', '10.20.1.15', '203.0.113.44', JSON_OBJECT('event_type', 'alert', 'proto', 'TCP', 'src_ip', '203.0.113.44', 'dest_ip', '10.20.1.15', 'dest_port', 443, 'signature', 'ET SCAN Suspicious inbound port scan'), JSON_OBJECT('source', 'suricata', 'event_type', 'ids_alert', 'severity', 'high', 'asset', 'prod-app-01', 'ioc', '203.0.113.44'), 6, 'new', 4, 11, DATE_SUB(NOW(), INTERVAL 35 MINUTE)),
-  (2, 'EXT-SURICATA-20260527-0002', 'suricata', 'http_anomaly', 'medium', 'ET-POLICY-HTTP', 'ET POLICY Unusual HTTP user agent', '198.51.100.77', '10.30.5.23', 'office-win-23', '10.30.5.23', '198.51.100.77', JSON_OBJECT('event_type', 'http', 'src_ip', '198.51.100.77', 'dest_ip', '10.30.5.23', 'hostname', 'intranet.example.local', 'http_user_agent', 'unusual-client'), JSON_OBJECT('source', 'suricata', 'event_type', 'http_anomaly', 'severity', 'medium', 'asset', 'office-win-23', 'ioc', '198.51.100.77'), 7, 'reviewing', 4, 11, DATE_SUB(NOW(), INTERVAL 70 MINUTE))
-ON DUPLICATE KEY UPDATE source_type = VALUES(source_type), event_type = VALUES(event_type), severity = VALUES(severity), rule_id = VALUES(rule_id), rule_name = VALUES(rule_name), src_ip = VALUES(src_ip), dest_ip = VALUES(dest_ip), asset_name = VALUES(asset_name), asset_ip = VALUES(asset_ip), ioc = VALUES(ioc), raw_event = VALUES(raw_event), normalized_event = VALUES(normalized_event), alert_id = VALUES(alert_id), status = VALUES(status), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id), event_time = VALUES(event_time);
-
-INSERT INTO soc_ticket (id, ticket_no, alert_id, title, severity, status, assignee_id, assignee_name, reviewer_id, review_conclusion, resolution, dept_id, due_at, closed_at)
-VALUES
-  (1, 'INC-202605260001', 3, 'MEDIUM 告警处置：异常 PowerShell 命令行行为', 'medium', '处理中', 5, '运维人员', NULL, NULL, '已隔离终端并导出进程列表，等待安全复核。', 12, DATE_ADD(NOW(), INTERVAL 1 DAY), NULL),
-  (2, 'INC-202605250001', 4, 'LOW 告警处置：系统日志轮转异常', 'low', '已关闭', 5, '运维人员', 6, '确认为维护任务触发，允许关闭。', '已补充维护窗口记录并关闭告警。', 12, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 6 HOUR))
-ON DUPLICATE KEY UPDATE title = VALUES(title), status = VALUES(status), assignee_id = VALUES(assignee_id), assignee_name = VALUES(assignee_name), review_conclusion = VALUES(review_conclusion), resolution = VALUES(resolution);
-
-UPDATE soc_alert SET ticket_id = 1 WHERE id = 3;
-UPDATE soc_alert SET ticket_id = 2 WHERE id = 4;
-
-INSERT INTO soc_ticket_timeline (id, ticket_id, action, from_status, to_status, operator_name, remark, created_at)
-VALUES
-  (1, 1, '转工单', NULL, '待分派', 'analyst', '异常命令行需运维核查进程和账号来源。', DATE_SUB(NOW(), INTERVAL 1 DAY)),
-  (2, 1, '状态流转', '待分派', '处理中', 'operator', '已接单处理。', DATE_SUB(NOW(), INTERVAL 20 HOUR)),
-  (3, 2, '转工单', NULL, '待分派', 'analyst', '日志轮转异常，核对维护计划。', DATE_SUB(NOW(), INTERVAL 2 DAY)),
-  (4, 2, '状态流转', '待复核', '已关闭', 'auditor', '复核通过。', DATE_SUB(NOW(), INTERVAL 6 HOUR))
-ON DUPLICATE KEY UPDATE action = VALUES(action), from_status = VALUES(from_status), to_status = VALUES(to_status), operator_name = VALUES(operator_name), remark = VALUES(remark);
-
-INSERT INTO soc_report (id, report_no, report_type, period_start, period_end, title, status, summary, recommendation, generated_at)
-VALUES
-  (1, 'RPT-DAILY-202605270001', 'daily', CURDATE(), CURDATE(), 'CyberFusion 综合安全日报', 'generated', '今日模拟数据中发现 2 条待处理高风险告警，工单闭环正常。', '优先处置 critical/high 告警，复核认证失败来源和配置文件变更。', NOW())
-ON DUPLICATE KEY UPDATE title = VALUES(title), summary = VALUES(summary), recommendation = VALUES(recommendation), generated_at = VALUES(generated_at);
-
 INSERT INTO soc_wazuh_config (id, config_name, manager_url, indexer_url, dashboard_url, auth_mode, enabled, last_status, remark)
 VALUES
   (1, '本地 Wazuh 连接', '${WAZUH_MANAGER_URL}', '${WAZUH_INDEXER_URL}', '${WAZUH_DASHBOARD_URL}', 'env', 1, 'PENDING', '凭据仅从运行环境读取，源码不保存真实密码或证书。')
@@ -1103,7 +1061,7 @@ ON DUPLICATE KEY UPDATE config_name = VALUES(config_name), auth_mode = VALUES(au
 
 INSERT INTO soc_sync_task (id, task_code, task_name, source_type, schedule_cron, enabled, last_status, last_run_at)
 VALUES
-  (1, 'SYNC_WAZUH_ALERTS', '同步 Wazuh 告警索引（可选实时）', 'wazuh-indexer', '0 */5 * * * ?', 0, 'P0 使用模拟数据', NULL),
+  (1, 'SYNC_WAZUH_ALERTS', '同步 Wazuh 告警索引（可选实时）', 'wazuh-indexer', '0 */5 * * * ?', 0, 'PENDING', NULL),
   (2, 'IMPORT_ZEEK_LOGS', '导入 Zeek conn.log / JSON', 'zeek', 'manual', 1, 'READY', NOW()),
   (3, 'IMPORT_SURICATA_EVE', '导入 Suricata eve.json', 'suricata', 'manual', 1, 'READY', NOW()),
   (4, 'IMPORT_TRIVY_JSON', '导入 Trivy JSON 到漏洞中心', 'trivy', 'manual', 1, 'READY', NOW()),
@@ -1111,47 +1069,81 @@ VALUES
   (6, 'IMPORT_ZAP_JSON', '导入 ZAP JSON Web 风险', 'zap', 'manual', 1, 'READY', NOW()),
   (7, 'IMPORT_SIGMA_RULES', '导入 Sigma 检测规则', 'sigma', 'manual', 1, 'P2 规则中心', NULL),
   (8, 'CYBERCHEF_ANALYZE', 'CyberChef 字段分析入口', 'cyberchef', 'on-demand', 1, 'READY', NOW()),
-  (9, 'SHUFFLE_DRY_RUN', 'Shuffle demo workflow 通知', 'shuffle', 'on-demand', 1, 'DRY_RUN', NOW()),
+  (9, 'SHUFFLE_DRY_RUN', 'Shuffle dry-run 通知', 'shuffle', 'on-demand', 1, 'DRY_RUN', NOW()),
   (10, 'IMPORT_OPTIONAL_EXTERNAL', '可选外部接入导入', 'import', 'manual', 0, 'P3 可选', NULL)
 ON DUPLICATE KEY UPDATE task_name = VALUES(task_name), source_type = VALUES(source_type), schedule_cron = VALUES(schedule_cron), enabled = VALUES(enabled), last_status = VALUES(last_status), last_run_at = VALUES(last_run_at);
 
 INSERT INTO soc_notification_channel (id, channel_name, channel_type, target, enabled, min_severity, trigger_event, send_mode, last_status, remark)
 VALUES
-  (1, 'SOC 邮件通知（演示）', 'email', 'soc-team@example.local', 1, 'medium', '*', 'dry_run', 'READY', '演示通道只写通知日志；真实 SMTP 主机、账号和密码必须由运行环境提供，不进入源码。')
+  (1, 'SOC 邮件通知（dry-run）', 'email', 'soc-team@example.local', 1, 'medium', '*', 'dry_run', 'READY', 'dry-run 通道只写通知日志；真实 SMTP 主机、账号和密码必须由运行环境提供，不进入源码。')
 ON DUPLICATE KEY UPDATE channel_name = VALUES(channel_name), channel_type = VALUES(channel_type), target = VALUES(target), enabled = VALUES(enabled), min_severity = VALUES(min_severity), trigger_event = VALUES(trigger_event), send_mode = VALUES(send_mode), last_status = VALUES(last_status), remark = VALUES(remark);
 
-INSERT INTO soc_notification_log (id, channel_id, channel_type, event_type, severity, biz_type, biz_id, title, content, target, status, sent_at)
-VALUES
-  (1, 1, 'email', 'alert_ticketed', 'high', 'alert', 2, '高危告警已转工单', '关键系统配置文件发生变更，已进入工单处置流程。', 'soc-team@example.local', 'DRY_RUN', DATE_SUB(NOW(), INTERVAL 90 MINUTE))
-ON DUPLICATE KEY UPDATE event_type = VALUES(event_type), severity = VALUES(severity), title = VALUES(title), content = VALUES(content), target = VALUES(target), status = VALUES(status), sent_at = VALUES(sent_at);
+CREATE TABLE IF NOT EXISTS soc_host_agent (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_name VARCHAR(128) NULL,
+  hostname VARCHAR(128) NOT NULL,
+  os_type VARCHAR(32) NOT NULL,
+  os_version VARCHAR(128) NULL,
+  architecture VARCHAR(64) NULL,
+  agent_version VARCHAR(64) NOT NULL,
+  ip_addresses_json JSON NULL,
+  mac_addresses_json JSON NULL,
+  labels_json JSON NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  token_hash VARCHAR(255) NOT NULL,
+  last_ip VARCHAR(64) NULL,
+  queue_depth INT NOT NULL DEFAULT 0,
+  queue_bytes BIGINT NOT NULL DEFAULT 0,
+  collected_count BIGINT NOT NULL DEFAULT 0,
+  sent_count BIGINT NOT NULL DEFAULT 0,
+  failed_count BIGINT NOT NULL DEFAULT 0,
+  first_seen_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL,
+  owner_id BIGINT NULL,
+  dept_id BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_soc_host_agent_id (agent_id),
+  KEY idx_soc_host_agent_os_status (os_type, status),
+  KEY idx_soc_host_agent_last_seen (last_seen_at),
+  KEY idx_soc_host_agent_scope (owner_id, dept_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-INSERT INTO soc_alert_whitelist (id, rule_name, rule_id, asset_ip, source_ip, severity, reason, enabled, match_count, last_matched_at, owner_id, dept_id, expires_at)
-VALUES
-  (1, '维护窗口内日志轮转噪声', '530', '10.40.2.9', NULL, 'low', '构建机维护窗口触发的日志轮转记录，保留审计但默认降噪。', 1, 1, DATE_SUB(NOW(), INTERVAL 2 DAY), 4, 11, DATE_ADD(CURDATE(), INTERVAL 30 DAY)),
-  (2, '内部变更单配置调整', '5502', '10.20.8.21', '10.10.4.12', 'high', '已登记变更来源，仅在相同资产、来源和规则下做降噪标记。', 1, 2, DATE_SUB(NOW(), INTERVAL 90 MINUTE), 5, 12, DATE_ADD(CURDATE(), INTERVAL 7 DAY))
-ON DUPLICATE KEY UPDATE rule_name = VALUES(rule_name), rule_id = VALUES(rule_id), asset_ip = VALUES(asset_ip), source_ip = VALUES(source_ip), severity = VALUES(severity), reason = VALUES(reason), enabled = VALUES(enabled), match_count = VALUES(match_count), last_matched_at = VALUES(last_matched_at), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id), expires_at = VALUES(expires_at);
+CREATE TABLE IF NOT EXISTS soc_ingest_batch (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NOT NULL,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_db_id BIGINT NULL,
+  source_os VARCHAR(32) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  item_count INT NOT NULL DEFAULT 0,
+  accepted_count INT NOT NULL DEFAULT 0,
+  duplicate_count INT NOT NULL DEFAULT 0,
+  rejected_count INT NOT NULL DEFAULT 0,
+  status VARCHAR(32) NOT NULL DEFAULT 'accepted',
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME NULL,
+  error_message VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_ingest_batch_id (batch_id),
+  KEY idx_soc_ingest_batch_agent (agent_id, created_at),
+  KEY idx_soc_ingest_batch_type_status (ingest_type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-INSERT INTO soc_vulnerability (id, cve_id, severity, asset_name, asset_ip, software_name, software_version, fix_suggestion, status, source_type, owner_id, dept_id, detected_at, fixed_at)
-VALUES
-  (1, 'CVE-2024-3094', 'critical', 'prod-app-01', '10.20.1.15', 'xz-utils', '5.6.1', '立即回滚到可信版本并核查供应链来源、包仓库和登录痕迹。', 'open', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 3 HOUR), NULL),
-  (2, 'CVE-2023-38408', 'high', 'finance-db-01', '10.20.8.21', 'OpenSSH', '8.9p1', '升级 OpenSSH，禁用 agent forwarding，并复核堡垒机访问策略。', 'fixing', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 1 DAY), NULL),
-  (3, 'CVE-2024-6387', 'high', 'office-win-23', '10.30.5.23', 'OpenSSH for Windows', '9.2', '应用厂商安全补丁，限制管理端口来源并复核登录失败日志。', 'reviewing', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 2 DAY), NULL),
-  (4, 'CVE-2022-22965', 'medium', 'mac-build-02', '10.40.2.9', 'Spring Framework', '5.3.17', '升级 Spring Framework 并复核构建机对外暴露面。', 'fixed', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 5 DAY), DATE_SUB(NOW(), INTERVAL 2 DAY))
-ON DUPLICATE KEY UPDATE severity = VALUES(severity), software_version = VALUES(software_version), fix_suggestion = VALUES(fix_suggestion), status = VALUES(status), source_type = VALUES(source_type), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id), detected_at = VALUES(detected_at), fixed_at = VALUES(fixed_at);
-
-INSERT INTO soc_baseline_check (id, check_code, category, check_item, asset_name, asset_ip, result, severity, pass_rate, remediation, status, source_type, owner_id, dept_id, checked_at, reviewed_at)
-VALUES
-  (1, 'SSH_ROOT_LOGIN', 'SSH', '禁止 root 直接 SSH 登录', 'prod-app-01', '10.20.1.15', 'failed', 'high', 62, '设置 PermitRootLogin no，并通过 sudo 审计管理员操作。', 'failed', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 2 HOUR), NULL),
-  (2, 'PASSWORD_MAX_DAYS', 'PASSWORD', '密码最长有效期不超过 90 天', 'finance-db-01', '10.20.8.21', 'failed', 'medium', 74, '调整 PASS_MAX_DAYS 并对数据库运维账号执行轮换。', 'remediating', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 4 HOUR), NULL),
-  (3, 'FIREWALL_DEFAULT_DENY', 'FIREWALL', '主机防火墙默认拒绝入站访问', 'office-win-23', '10.30.5.23', 'passed', 'low', 96, '保持默认拒绝策略，按变更单开放必要端口。', 'passed', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 6 HOUR), DATE_SUB(NOW(), INTERVAL 5 HOUR)),
-  (4, 'SENSITIVE_FILE_PERMISSION', 'FILE_PERMISSION', '敏感配置文件权限不高于 600', 'mac-build-02', '10.40.2.9', 'failed', 'medium', 68, '收敛构建密钥和配置文件权限，复核构建脚本输出。', 'reviewing', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 1 DAY), NULL),
-  (5, 'UNNEEDED_SERVICE', 'SERVICE', '关闭不必要系统服务', 'prod-app-01', '10.20.1.15', 'failed', 'medium', 71, '关闭未登记的调试服务并补充资产暴露面记录。', 'failed', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 8 HOUR), NULL)
-ON DUPLICATE KEY UPDATE category = VALUES(category), check_item = VALUES(check_item), result = VALUES(result), severity = VALUES(severity), pass_rate = VALUES(pass_rate), remediation = VALUES(remediation), status = VALUES(status), source_type = VALUES(source_type), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id), checked_at = VALUES(checked_at), reviewed_at = VALUES(reviewed_at);
-
-INSERT INTO soc_file_integrity_event (id, event_uid, action, severity, hostname, asset_ip, file_path, rule_name, status, source_type, owner_id, dept_id, event_time, reviewed_at)
-VALUES
-  (1, 'FIM-20260527-0001', 'modified', 'high', 'finance-db-01', '10.20.8.21', '/etc/ssh/sshd_config', '关键 SSH 配置变更', 'new', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 35 MINUTE), NULL),
-  (2, 'FIM-20260527-0002', 'permission', 'medium', 'prod-app-01', '10.20.1.15', '/etc/shadow', '敏感账号文件权限变化', 'reviewing', 'mock', 5, 12, DATE_SUB(NOW(), INTERVAL 90 MINUTE), NULL),
-  (3, 'FIM-20260526-0003', 'created', 'medium', 'office-win-23', '10.30.5.23', 'C:\\ProgramData\\Startup\\debug.ps1', '启动目录新增脚本', 'confirmed', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_SUB(NOW(), INTERVAL 16 HOUR)),
-  (4, 'FIM-20260525-0004', 'deleted', 'low', 'mac-build-02', '10.40.2.9', '/usr/local/build/tmp/token.cache', '构建缓存文件删除', 'ignored', 'import', 4, 11, DATE_SUB(NOW(), INTERVAL 2 DAY), DATE_SUB(NOW(), INTERVAL 1 DAY))
-ON DUPLICATE KEY UPDATE action = VALUES(action), severity = VALUES(severity), hostname = VALUES(hostname), asset_ip = VALUES(asset_ip), file_path = VALUES(file_path), rule_name = VALUES(rule_name), status = VALUES(status), source_type = VALUES(source_type), owner_id = VALUES(owner_id), dept_id = VALUES(dept_id), event_time = VALUES(event_time), reviewed_at = VALUES(reviewed_at);
+CREATE TABLE IF NOT EXISTS soc_ingest_reject_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NULL,
+  agent_id VARCHAR(128) NULL,
+  event_uid VARCHAR(128) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  reason_code VARCHAR(64) NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  payload_json JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_soc_ingest_reject_agent (agent_id, created_at),
+  KEY idx_soc_ingest_reject_batch (batch_id),
+  KEY idx_soc_ingest_reject_reason (reason_code, ingest_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

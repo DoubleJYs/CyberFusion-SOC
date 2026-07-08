@@ -7,6 +7,7 @@ check_command() {
   local label="$1"
   shift
   local executable="$1"
+  shift
 
   printf '\n[%s]\n' "$label"
   if ! command -v "$executable" >/dev/null 2>&1; then

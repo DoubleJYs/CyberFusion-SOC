@@ -36,7 +36,9 @@ public class CorrelationService {
 
     private static final Set<String> RULE_TYPES = Set.of("event_count", "value_count", "frequency", "temporal", "temporal_ordered", "cross_source_chain");
     private static final Set<String> SEVERITIES = Set.of("critical", "high", "medium", "low", "info");
+    private static final Set<String> HOST_AGENT_SOURCE_TYPES = Set.of("macos-agent", "windows-agent", "host-agent");
     private static final Set<String> FORBIDDEN_CONFIG_TOKENS = Set.of("script", "eval", "shell", "curl", "wget", "http://", "https://", "python", "bash", "powershell");
+    private static final Set<String> NON_REAL_SOURCE_TYPES = Set.of("demo", "mock", "local-demo-client", "fixture");
 
     private final SocCorrelationRuleMapper ruleMapper;
     private final SocIncidentClusterMapper clusterMapper;
@@ -51,7 +53,7 @@ public class CorrelationService {
     private final ObjectMapper objectMapper;
 
     public PageResult<SocIncidentCluster> incidents(long pageNum, long pageSize, String status, String severity, String keyword) {
-        LambdaQueryWrapper<SocIncidentCluster> wrapper = scopedClusterWrapper()
+        LambdaQueryWrapper<SocIncidentCluster> wrapper = traceableClusterWrapper(scopedClusterWrapper())
                 .eq(notBlank(status), SocIncidentCluster::getStatus, status)
                 .eq(notBlank(severity), SocIncidentCluster::getSeverity, severity)
                 .and(notBlank(keyword), w -> w.like(SocIncidentCluster::getClusterNo, keyword)
@@ -71,9 +73,17 @@ public class CorrelationService {
             throw new BusinessException("事件簇不存在");
         }
         ensureAccess(cluster.getOwnerId(), cluster.getDeptId(), "无权访问该事件簇");
-        cluster.setEvidence(evidenceMapper.selectList(new LambdaQueryWrapper<SocIncidentEvidence>()
+        List<SocIncidentEvidence> evidence = evidenceMapper.selectList(new LambdaQueryWrapper<SocIncidentEvidence>()
                 .eq(SocIncidentEvidence::getClusterId, id)
-                .orderByAsc(SocIncidentEvidence::getEventTime)));
+                .eq(SocIncidentEvidence::getDeleted, 0)
+                .orderByAsc(SocIncidentEvidence::getEventTime))
+                .stream()
+                .filter(this::isTraceableEvidence)
+                .toList();
+        if (!hasTraceableClusterLineage(cluster) || evidence.isEmpty()) {
+            throw new BusinessException("事件簇缺少有效证据链");
+        }
+        cluster.setEvidence(evidence);
         return cluster;
     }
 
@@ -160,7 +170,7 @@ public class CorrelationService {
         if (clusterIds.isEmpty()) {
             return List.of();
         }
-        return clusterMapper.selectList(scopedClusterWrapper().in(SocIncidentCluster::getId, clusterIds)
+        return clusterMapper.selectList(traceableClusterWrapper(scopedClusterWrapper()).in(SocIncidentCluster::getId, clusterIds)
                 .orderByDesc(SocIncidentCluster::getLastSeenAt));
     }
 
@@ -170,7 +180,7 @@ public class CorrelationService {
             throw new BusinessException("资产不存在");
         }
         ensureAccess(asset.getOwnerId(), asset.getDeptId(), "无权访问该资产事件簇");
-        return clusterMapper.selectList(scopedClusterWrapper()
+        return clusterMapper.selectList(traceableClusterWrapper(scopedClusterWrapper())
                 .eq(SocIncidentCluster::getPrimaryAssetIp, asset.getIp())
                 .orderByDesc(SocIncidentCluster::getLastSeenAt));
     }
@@ -449,7 +459,8 @@ public class CorrelationService {
 
     private EvidenceCandidate fromExternalEvent(SocExternalEvent event) {
         JsonNode json = json(firstNotBlank(event.getNormalizedEvent(), event.getRawEvent()));
-        return new EvidenceCandidate("external_event", event.getId(), event.getEventUid(), event.getSourceType(), event.getEventType(),
+        return new EvidenceCandidate("external_event", event.getId(), traceEvidenceUid(event.getSourceType(), event.getBatchId(), event.getEventUid()),
+                event.getSourceType(), event.getEventType(),
                 event.getSeverity(), event.getRuleId(), event.getAssetIp(), event.getAssetName(), firstNotBlank(event.getTargetUrl(), text(json, "targetUrl"), text(json, "target_url")),
                 firstNotBlank(event.getBatchId(), text(json, "batchId"), text(json, "batch_id")),
                 firstNotBlank(event.getDemoCaseId(), text(json, "demoCaseId"), text(json, "demo_case_id")),
@@ -457,7 +468,8 @@ public class CorrelationService {
     }
 
     private EvidenceCandidate fromAlert(SocAlert alert) {
-        return new EvidenceCandidate("alert", alert.getId(), alert.getAlertUid(), alert.getSourceType(), alert.getEventType(),
+        return new EvidenceCandidate("alert", alert.getId(), traceEvidenceUid(alert.getSourceType(), alert.getBatchId(), firstNotBlank(alert.getRawRef(), alert.getAlertUid())),
+                alert.getSourceType(), alert.getEventType(),
                 alert.getSeverity(), alert.getRuleId(), alert.getAssetIp(), alert.getAssetName(), alert.getTargetUrl(),
                 alert.getBatchId(), alert.getDemoCaseId(), alert.getEventTime(), alert.getOwnerId(), alert.getDeptId());
     }
@@ -628,6 +640,47 @@ public class CorrelationService {
         return wrapper;
     }
 
+    private LambdaQueryWrapper<SocIncidentCluster> traceableClusterWrapper(LambdaQueryWrapper<SocIncidentCluster> wrapper) {
+        return wrapper.gt(SocIncidentCluster::getEvidenceCount, 0)
+                .and(w -> w.isNotNull(SocIncidentCluster::getSourceTypes)
+                        .ne(SocIncidentCluster::getSourceTypes, "")
+                        .notLike(SocIncidentCluster::getSourceTypes, "mock")
+                        .notLike(SocIncidentCluster::getSourceTypes, "local-demo-client")
+                        .notLike(SocIncidentCluster::getSourceTypes, "fixture")
+                        .notLike(SocIncidentCluster::getSourceTypes, "demo"));
+    }
+
+    private boolean hasTraceableClusterLineage(SocIncidentCluster cluster) {
+        return cluster != null
+                && cluster.getId() != null
+                && cluster.getEvidenceCount() != null
+                && cluster.getEvidenceCount() > 0
+                && hasRealSourceList(cluster.getSourceTypes());
+    }
+
+    private boolean isTraceableEvidence(SocIncidentEvidence evidence) {
+        return evidence != null
+                && evidence.getClusterId() != null
+                && evidence.getEvidenceId() != null
+                && notBlank(evidence.getEvidenceType())
+                && hasRealSourceType(evidence.getSourceType())
+                && notBlank(firstNotBlank(evidence.getAssetIp(), evidence.getHostname(), evidence.getEvidenceUid()));
+    }
+
+    private boolean hasRealSourceList(String sourceTypes) {
+        if (!notBlank(sourceTypes)) {
+            return false;
+        }
+        return Arrays.stream(sourceTypes.split(","))
+                .map(value -> value == null ? "" : value.trim().toLowerCase(Locale.ROOT))
+                .filter(CorrelationService::notBlank)
+                .anyMatch(source -> !NON_REAL_SOURCE_TYPES.contains(source));
+    }
+
+    private boolean hasRealSourceType(String sourceType) {
+        return notBlank(sourceType) && !NON_REAL_SOURCE_TYPES.contains(sourceType.trim().toLowerCase(Locale.ROOT));
+    }
+
     private LambdaQueryWrapper<SocAlert> scopedAlertWrapper() {
         LambdaQueryWrapper<SocAlert> wrapper = new LambdaQueryWrapper<SocAlert>().eq(SocAlert::getDeleted, 0);
         securityScope.applyDataScope(wrapper, SocAlert::getOwnerId, SocAlert::getDeptId);
@@ -787,6 +840,17 @@ public class CorrelationService {
             }
         }
         return null;
+    }
+
+    private static String traceEvidenceUid(String sourceType, String batchId, String evidenceUid) {
+        String uid = firstNotBlank(evidenceUid, "unknown");
+        if (!HOST_AGENT_SOURCE_TYPES.contains(String.valueOf(sourceType).toLowerCase(Locale.ROOT)) || !notBlank(batchId)) {
+            return uid;
+        }
+        if (uid.contains(batchId)) {
+            return uid;
+        }
+        return batchId + "/" + uid;
     }
 
     private static boolean notBlank(String value) {

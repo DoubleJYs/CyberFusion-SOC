@@ -64,7 +64,7 @@
         <el-table-column prop="lastHitAt" label="最近命中" width="180">
           <template #default="{ row }">{{ row.lastHitAt || '-' }}</template>
         </el-table-column>
-        <el-table-column label="入口" width="210" fixed="right">
+        <el-table-column label="入口" width="210">
           <template #default="{ row }">
             <el-button text @click.stop="openRule(row)">命中预览</el-button>
             <el-button text @click.stop="goRuleEvents(row)">事件</el-button>

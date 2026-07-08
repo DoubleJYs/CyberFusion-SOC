@@ -2,6 +2,7 @@ import type { MenuItem } from '@/types/system'
 import type { UserInfo } from '@/types/user'
 
 export type ViewMode = 'simple' | 'detail' | 'expert'
+export const EXPERT_HOME_PATH = '/soc/dashboard'
 
 export interface RoleExperience {
   persona: 'super_admin' | 'admin' | 'security_engineer' | 'analyst' | 'employee' | 'customer'
@@ -56,7 +57,7 @@ export function roleExperience(roles: string[] = [], userInfo?: UserInfo | null)
     })
   }
   if (isSecurityEngineer) {
-    return profile('security_engineer', '策略治理视图', 'detail', true, false, false, {
+    return profile('security_engineer', '治理策略视图', 'detail', true, false, false, {
       isSuperAdmin,
       isPlatformAdmin,
       isSecurityEngineer,
@@ -97,7 +98,7 @@ export function roleExperience(roles: string[] = [], userInfo?: UserInfo | null)
 
 export function defaultRouteForExperience(roles: string[] = [], userInfo?: UserInfo | null, menus: MenuItem[] = []) {
   const experience = roleExperience(roles, userInfo)
-  if (experience.isSuperAdmin || experience.isPlatformAdmin) return firstAllowed(menus, ['/soc/dashboard', '/showcase']) || '/showcase'
+  if (experience.isSuperAdmin || experience.isPlatformAdmin) return firstAllowed(menus, [EXPERT_HOME_PATH]) || EXPERT_HOME_PATH
   if (experience.isSecurityEngineer) return firstAllowed(menus, ['/soc/policies', '/soc/rules', '/soc/dashboard']) || '/showcase'
   if (experience.isAnalyst) return firstAllowed(menus, ['/soc/dashboard', '/soc/incidents', '/soc/alerts', '/soc/tickets']) || '/showcase'
   if (experience.isEmployee) return '/client/workbench'

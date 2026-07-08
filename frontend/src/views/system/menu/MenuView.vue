@@ -28,7 +28,7 @@
         <el-table-column prop="permission" label="权限标识" min-width="180" />
         <el-table-column prop="sort" label="排序" width="90" />
         <el-table-column prop="status" label="状态" width="100"><template #default="{ row }"><StatusTag :value="row.status" /></template></el-table-column>
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" width="190">
           <template #default="{ row }">
             <el-button v-permission="'system:menu:create'" link type="primary" @click="openCreate(row)">新增下级</el-button>
             <el-button v-permission="'system:menu:update'" link type="primary" @click="openEdit(row)">编辑</el-button>

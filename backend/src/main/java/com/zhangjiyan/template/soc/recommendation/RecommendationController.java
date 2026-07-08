@@ -21,7 +21,7 @@ public class RecommendationController {
 
     @Operation(summary = "今日优先处理建议")
     @GetMapping("/top")
-    @PreAuthorize("hasRole('admin') or hasAuthority('soc:dashboard:view') or hasAuthority('soc:asset:view') or hasAuthority('soc:ticket:view')")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:recommendation:view') or hasAuthority('soc:dashboard:view') or hasAuthority('soc:asset:view') or hasAuthority('soc:ticket:view')")
     public ApiResult<List<RecommendationService.RecommendationItem>> top(@RequestParam(defaultValue = "5") int limit) {
         return ApiResult.ok(service.topRecommendations(limit));
     }
@@ -29,7 +29,7 @@ public class RecommendationController {
     @Operation(summary = "记录推荐动作采纳")
     @PostMapping("/{key}/record")
     @OperationAudit("SOC_RECOMMENDATION.RECORD")
-    @PreAuthorize("hasRole('admin') or hasAuthority('soc:ticket:transition') or hasAuthority('soc:incident:ticket') or hasAuthority('soc:alert:view')")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:recommendation:view') or hasAuthority('soc:dashboard:view') or hasAuthority('soc:ticket:transition') or hasAuthority('soc:incident:ticket') or hasAuthority('soc:alert:view')")
     public ApiResult<RecommendationService.RecommendationActionRecord> record(@PathVariable String key,
                                                                               @Valid @RequestBody(required = false) RecommendationActionRequest request) {
         return ApiResult.ok(service.recordAction(key, request));

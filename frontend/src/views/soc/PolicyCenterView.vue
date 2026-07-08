@@ -69,7 +69,7 @@
             </el-table-column>
             <el-table-column prop="version" label="版本" width="80" />
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
-            <el-table-column label="操作" width="300" fixed="right">
+            <el-table-column label="操作" width="300">
               <template #default="{ row }">
                 <el-button v-permission="'soc:policy:update'" text :disabled="isFallbackPolicy(row)" @click="openEdit(row)">编辑</el-button>
                 <el-button text :disabled="isFallbackPolicy(row)" @click="precheck(row)">预检</el-button>
@@ -137,7 +137,7 @@
             <el-table-column prop="version" label="版本" width="80" />
             <el-table-column prop="sampleFile" label="样例文件" min-width="230" show-overflow-tooltip />
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
-            <el-table-column label="操作" width="340" fixed="right">
+            <el-table-column label="操作" width="340">
               <template #default="{ row }">
                 <el-button text @click="openAdapterDetail(row)">映射</el-button>
                 <el-button v-permission="'soc:policy:update'" text @click="openAdapterEdit(row)">编辑</el-button>
@@ -198,7 +198,7 @@
             </el-table-column>
             <el-table-column prop="version" label="版本" width="80" />
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
-            <el-table-column label="操作" width="300" fixed="right">
+            <el-table-column label="操作" width="300">
               <template #default="{ row }">
                 <el-button text @click="openPlaybookDetail(row)">详情</el-button>
                 <el-button v-permission="'soc:policy:update'" text @click="openPlaybookEdit(row)">编辑</el-button>
@@ -269,7 +269,7 @@
               </template>
             </el-table-column>
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
-            <el-table-column label="操作" width="260" fixed="right">
+            <el-table-column label="操作" width="260">
               <template #default="{ row }">
                 <el-button v-permission="'soc:correlation-rule:update'" text @click="openCorrelationEdit(row)">编辑</el-button>
                 <el-button text @click="validateCorrelationRow(row)">校验</el-button>
@@ -336,7 +336,7 @@
             <el-table-column prop="overdueTicketWeight" label="超时工单" width="100" />
             <el-table-column prop="maxScore" label="上限" width="80" />
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
-            <el-table-column label="操作" width="300" fixed="right">
+            <el-table-column label="操作" width="300">
               <template #default="{ row }">
                 <el-button v-permission="'soc:risk-policy:update'" text @click="openRiskEdit(row)">编辑</el-button>
                 <el-button text @click="validateRisk(row)">校验</el-button>

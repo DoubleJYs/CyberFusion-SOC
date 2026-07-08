@@ -7,6 +7,8 @@ import com.zhangjiyan.template.soc.alert.SocAlert;
 import com.zhangjiyan.template.soc.alert.SocAlertMapper;
 import com.zhangjiyan.template.soc.asset.SocAsset;
 import com.zhangjiyan.template.soc.asset.SocAssetMapper;
+import com.zhangjiyan.template.soc.correlation.SocIncidentEvidence;
+import com.zhangjiyan.template.soc.correlation.SocIncidentEvidenceMapper;
 import com.zhangjiyan.template.soc.correlation.SocIncidentCluster;
 import com.zhangjiyan.template.soc.correlation.SocIncidentClusterMapper;
 import com.zhangjiyan.template.soc.keeper.SocClientCheckup;
@@ -40,8 +42,10 @@ public class RecommendationService {
     private static final Set<String> COMPLETED_TASK_STATUS = Set.of("completed", "confirmed", "skipped");
     private static final Set<String> DOWNRANK_ACTION_STATUS = Set.of("confirm", "confirmed", "submitted", "note");
     private static final Set<String> ALLOWED_ACTIONS = Set.of("view", "apply_playbook", "ticket", "confirm", "note");
+    private static final Set<String> NON_REAL_SOURCE_TYPES = Set.of("demo", "mock", "local-demo-client", "fixture");
 
     private final SocIncidentClusterMapper incidentMapper;
+    private final SocIncidentEvidenceMapper evidenceMapper;
     private final SocVulnerabilityMapper vulnerabilityMapper;
     private final SocTicketMapper ticketMapper;
     private final SocTicketTaskMapper taskMapper;
@@ -112,7 +116,13 @@ public class RecommendationService {
                 .orderByDesc(SocIncidentCluster::getScore)
                 .orderByDesc(SocIncidentCluster::getUpdatedAt)
                 .last("LIMIT 80");
-        return incidentMapper.selectList(wrapper).stream()
+        List<SocIncidentCluster> incidents = incidentMapper.selectList(wrapper);
+        Map<Long, List<SocIncidentEvidence>> evidenceByClusterId = validEvidenceByClusterIds(incidents.stream()
+                .map(SocIncidentCluster::getId)
+                .filter(Objects::nonNull)
+                .toList());
+        return incidents.stream()
+                .filter(incident -> hasTraceableIncidentLineage(incident, evidenceByClusterId.get(incident.getId())))
                 .map(incident -> {
                     boolean open = !CLOSED_INCIDENT_STATUS.contains(normalize(incident.getStatus()));
                     int score = severityScore(incident.getSeverity()) + nz(incident.getScore()) / 4 + nz(incident.getEvidenceCount());
@@ -134,6 +144,8 @@ public class RecommendationService {
                 .orderByDesc(SocVulnerability::getDetectedAt)
                 .last("LIMIT 80");
         return vulnerabilityMapper.selectList(wrapper).stream()
+                .filter(vulnerability -> isRealSourceType(vulnerability.getSourceType()))
+                .filter(vulnerability -> asset != null || linkedAssetExists(vulnerability.getAssetIp(), vulnerability.getAssetName()))
                 .map(vulnerability -> {
                     boolean open = !CLOSED_VULNERABILITY_STATUS.contains(normalize(vulnerability.getStatus()));
                     int score = severityScore(vulnerability.getSeverity()) - (open ? 0 : 55);
@@ -160,7 +172,9 @@ public class RecommendationService {
             tickets = tickets.stream().filter(ticket -> ticket.getAlertId() != null && assetAlertIds.contains(ticket.getAlertId())).toList();
         }
         LocalDateTime now = LocalDateTime.now();
-        return tickets.stream().map(ticket -> {
+        return tickets.stream()
+                .filter(ticket -> hasTraceableTicketLineage(ticket, alerts.get(ticket.getAlertId())))
+                .map(ticket -> {
             boolean closed = CLOSED_TICKET_STATUS.contains(normalize(ticket.getStatus()));
             boolean overdue = ticket.getDueAt() != null && ticket.getDueAt().isBefore(now) && !closed;
             SocAlert alert = alerts.get(ticket.getAlertId());
@@ -185,22 +199,40 @@ public class RecommendationService {
                     .eq(SocTicketTask::getAssigneeId, securityScope.currentUserId());
         }
         List<SocTicketTask> tasks = taskMapper.selectList(wrapper);
+        Map<Long, SocTicket> tickets = ticketsById(tasks.stream().map(SocTicketTask::getTicketId).filter(Objects::nonNull).toList());
         if (asset != null) {
             Set<Long> assetAlertIds = alertIdsForAsset(asset);
-            tasks = tasks.stream().filter(task -> task.getAlertId() != null && assetAlertIds.contains(task.getAlertId())).toList();
+            tasks = tasks.stream().filter(task -> {
+                SocTicket ticket = tickets.get(task.getTicketId());
+                Long alertId = firstNonNull(task.getAlertId(), ticket == null ? null : ticket.getAlertId());
+                return alertId != null && assetAlertIds.contains(alertId);
+            }).toList();
         } else if (!securityScope.canViewAllData()) {
-            Map<Long, SocTicket> tickets = ticketsById(tasks.stream().map(SocTicketTask::getTicketId).filter(Objects::nonNull).toList());
             tasks = tasks.stream().filter(task -> {
                 SocTicket ticket = tickets.get(task.getTicketId());
                 return ticket != null && securityScope.canAccess(ticket.getAssigneeId(), ticket.getDeptId());
             }).toList();
         }
-        Map<Long, SocAlert> alerts = alertsById(tasks.stream().map(SocTicketTask::getAlertId).filter(Objects::nonNull).toList());
-        return tasks.stream().map(task -> {
+        Set<Long> alertIds = tasks.stream()
+                .map(task -> {
+                    SocTicket ticket = task.getTicketId() == null ? null : tickets.get(task.getTicketId());
+                    return firstNonNull(task.getAlertId(), ticket == null ? null : ticket.getAlertId());
+                })
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Map<Long, SocAlert> alerts = alertsById(alertIds);
+        return tasks.stream()
+                .filter(task -> {
+                    SocTicket ticket = task.getTicketId() == null ? null : tickets.get(task.getTicketId());
+                    SocAlert alert = alerts.get(firstNonNull(task.getAlertId(), ticket == null ? null : ticket.getAlertId()));
+                    return hasTraceableTaskLineage(task, ticket, alert);
+                })
+                .map(task -> {
             boolean done = COMPLETED_TASK_STATUS.contains(normalize(task.getStatus()));
             boolean employee = "employee".equals(task.getAssigneeType());
             int score = (employee ? 82 : 66) - (done ? 52 : 0);
-            SocAlert alert = alerts.get(task.getAlertId());
+            SocTicket ticket = task.getTicketId() == null ? null : tickets.get(task.getTicketId());
+            SocAlert alert = alerts.get(firstNonNull(task.getAlertId(), ticket == null ? null : ticket.getAlertId()));
             String type = employee ? "client_task" : "playbook_task";
             return item(key(type, task.getId()), employee ? "跟进员工待办：" + firstNotBlank(task.getTaskName(), task.getTaskKey()) : "完成剧本任务：" + firstNotBlank(task.getTaskName(), task.getTaskKey()),
                     score, done ? "任务已完成或确认，作为闭环证据保留。" : "处置剧本中仍有未完成任务，当前状态：" + firstNotBlank(task.getStatus(), "pending") + "。",
@@ -402,6 +434,89 @@ public class RecommendationService {
         return ticketMapper.selectList(new LambdaQueryWrapper<SocTicket>().in(SocTicket::getId, ids).eq(SocTicket::getDeleted, 0)).stream()
                 .filter(ticket -> ticket.getId() != null)
                 .collect(java.util.stream.Collectors.toMap(SocTicket::getId, ticket -> ticket, (a, b) -> a, LinkedHashMap::new));
+    }
+
+    private Map<Long, List<SocIncidentEvidence>> validEvidenceByClusterIds(Collection<Long> clusterIds) {
+        if (clusterIds == null || clusterIds.isEmpty()) {
+            return Map.of();
+        }
+        return evidenceMapper.selectList(new LambdaQueryWrapper<SocIncidentEvidence>()
+                        .eq(SocIncidentEvidence::getDeleted, 0)
+                        .in(SocIncidentEvidence::getClusterId, clusterIds))
+                .stream()
+                .filter(this::isTraceableEvidence)
+                .collect(java.util.stream.Collectors.groupingBy(SocIncidentEvidence::getClusterId, LinkedHashMap::new, java.util.stream.Collectors.toList()));
+    }
+
+    private boolean hasTraceableIncidentLineage(SocIncidentCluster incident, List<SocIncidentEvidence> evidence) {
+        return incident != null
+                && incident.getId() != null
+                && nz(incident.getEvidenceCount()) > 0
+                && hasRealSourceList(incident.getSourceTypes())
+                && evidence != null
+                && !evidence.isEmpty();
+    }
+
+    private boolean hasTraceableTicketLineage(SocTicket ticket, SocAlert alert) {
+        return ticket != null
+                && ticket.getId() != null
+                && ticket.getAlertId() != null
+                && alert != null
+                && isTraceableAlert(alert);
+    }
+
+    private boolean hasTraceableTaskLineage(SocTicketTask task, SocTicket ticket, SocAlert alert) {
+        return task != null
+                && task.getId() != null
+                && task.getTicketId() != null
+                && ticket != null
+                && firstNonNull(task.getAlertId(), ticket.getAlertId()) != null
+                && isTraceableAlert(alert);
+    }
+
+    private boolean isTraceableEvidence(SocIncidentEvidence evidence) {
+        return evidence != null
+                && !Objects.equals(evidence.getDeleted(), 1)
+                && evidence.getClusterId() != null
+                && evidence.getEvidenceId() != null
+                && hasText(evidence.getEvidenceType())
+                && isRealSourceType(evidence.getSourceType())
+                && hasText(firstNotBlank(evidence.getAssetIp(), evidence.getHostname(), evidence.getEvidenceUid()));
+    }
+
+    private boolean isTraceableAlert(SocAlert alert) {
+        return alert != null
+                && alert.getId() != null
+                && !Objects.equals(alert.getDeleted(), 1)
+                && isRealSourceType(alert.getSourceType())
+                && hasText(firstNotBlank(alert.getAssetIp(), alert.getAssetName()))
+                && hasText(firstNotBlank(alert.getAlertUid(), alert.getRawRef(), alert.getBatchId()));
+    }
+
+    private boolean linkedAssetExists(String assetIp, String assetName) {
+        if (!hasText(assetIp) && !hasText(assetName)) {
+            return false;
+        }
+        Long count = assetMapper.selectCount(scopedAssetWrapper()
+                .and(w -> w.eq(hasText(assetIp), SocAsset::getIp, assetIp)
+                        .or()
+                        .eq(hasText(assetName), SocAsset::getHostname, assetName)));
+        return count != null && count > 0;
+    }
+
+    private boolean hasRealSourceList(String sourceTypes) {
+        if (!hasText(sourceTypes)) {
+            return false;
+        }
+        return Arrays.stream(sourceTypes.split(","))
+                .map(RecommendationService::normalize)
+                .filter(RecommendationService::hasText)
+                .anyMatch(source -> !NON_REAL_SOURCE_TYPES.contains(source));
+    }
+
+    private boolean isRealSourceType(String sourceType) {
+        String normalized = normalize(sourceType);
+        return hasText(normalized) && !NON_REAL_SOURCE_TYPES.contains(normalized);
     }
 
     private List<RecommendationItem> sorted(List<RecommendationItem> items, int limit) {

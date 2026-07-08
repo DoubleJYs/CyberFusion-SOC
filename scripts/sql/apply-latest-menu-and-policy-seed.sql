@@ -32,9 +32,11 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 INSERT INTO sys_menu (id, parent_id, name, path, component, icon, type, permission, sort, visible, status)
 VALUES
   (2013, 2020, '安全验证中心', '/soc/demo-range', 'soc/DemoRangeView', 'Operation', 'menu', 'soc:demo-range:view', 18, 1, 1),
+  (2019, 2020, '每日处理', '/soc/daily-recommendations', 'soc/DailyRecommendationView', 'Calendar', 'menu', 'soc:recommendation:view', 19, 1, 1),
   (2014, 2020, '检测规则中心', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
   (2015, 2020, '策略与规则中心', '/soc/policies', 'soc/PolicyCenterView', 'SetUp', 'menu', 'soc:policy:list', 28, 1, 1),
-  (2414, 2013, '导入演示批次', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
+  (2018, 0, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 6, 1, 1),
+  (2414, 2013, '导入演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
   (2415, 2015, '策略新增', NULL, NULL, NULL, 'button', 'soc:policy:create', 11, 0, 1),
   (2416, 2015, '策略编辑', NULL, NULL, NULL, 'button', 'soc:policy:update', 12, 0, 1),
   (2417, 2015, '策略发布', NULL, NULL, NULL, 'button', 'soc:policy:publish', 13, 0, 1),
@@ -52,6 +54,9 @@ VALUES
   (2439, 2015, '算法治理查看', NULL, NULL, NULL, 'button', 'soc:algorithm:view', 41, 0, 1),
   (2440, 2015, '算法回放评估', NULL, NULL, NULL, 'button', 'soc:algorithm:replay', 42, 0, 1),
   (2441, 2015, '算法评估记录', NULL, NULL, NULL, 'button', 'soc:algorithm:evaluation', 43, 0, 1),
+  (2450, 2013, '清除演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:clear', 12, 0, 1),
+  (2451, 2018, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
+  (2452, 2018, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
   (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
   (2601, 2600, '我的电脑', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1),
   (2602, 2600, '我的待办', '/client/tasks', 'client/ClientOperationsView', 'Tickets', 'menu', 'client:tasks:view', 20, 1, 1),
@@ -72,7 +77,7 @@ ON DUPLICATE KEY UPDATE
 
 -- admin and security_admin can maintain policy, adapter, and playbook entries.
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 1, id FROM sys_menu WHERE id IN (2013, 2014, 2015, 2414, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441)
+SELECT 1, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -80,7 +85,24 @@ SELECT 7, id FROM sys_menu
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 3, id FROM sys_menu WHERE id IN (2013, 2014, 2015, 2414, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441)
+SELECT 3, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452)
+ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
+
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT role_id, menu_id
+FROM (
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  UNION ALL
+  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  UNION ALL
+  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+) AS latest_agent_permission_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -90,7 +112,7 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 -- security_analyst can operate the demo/alert/ticket/report path and apply playbooks,
 -- but cannot publish policy or adapter definitions.
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 4, id FROM sys_menu WHERE id IN (2013, 2014, 2414, 2420, 2421, 2427, 2428)
+SELECT 4, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2018, 2414, 2420, 2421, 2427, 2428, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -119,6 +141,104 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 DELETE FROM sys_role_menu
 WHERE role_id IN (2, 5, 10, 11)
   AND menu_id NOT BETWEEN 2600 AND 2605;
+
+INSERT INTO soc_correlation_rule
+  (id, rule_code, rule_key, rule_name, description, enabled, status, version, rule_type, time_window_minutes, min_score, min_count, group_by_fields_json, source_types_json, event_types_json, group_by_json, threshold, timeframe_seconds, sequence_json, severity_min, severity_floor, weights_json, safety_note, approved_by, approved_at)
+VALUES
+  (7, 'host_agent_event_chain', 'host_agent_event_chain', 'Host Agent 主机事件链路', '将 Mac 和 Windows Host Agent 上报的同资产主机事件与自动生成告警聚合为真实主机安全事件簇。', 1, 'active', 1, 'event_count', 30, 50, 2, JSON_ARRAY('assetIp'), JSON_ARRAY('macos-agent', 'windows-agent', 'host-agent'), NULL, JSON_ARRAY('assetIp'), 2, 1800, NULL, 'medium', 'medium', JSON_OBJECT('sameAssetIp', 30, 'withinTimeWindow', 15, 'highSeverity', 10, 'linkedAlertOrVulnerability', 10), '仅聚合 Host Agent 已上报的结构化主机事件和统一告警，不下发主机命令。', 1, CURRENT_TIMESTAMP)
+ON DUPLICATE KEY UPDATE
+  rule_code = VALUES(rule_code),
+  rule_key = VALUES(rule_key),
+  rule_name = VALUES(rule_name),
+  description = VALUES(description),
+  enabled = VALUES(enabled),
+  status = VALUES(status),
+  version = VALUES(version),
+  rule_type = VALUES(rule_type),
+  time_window_minutes = VALUES(time_window_minutes),
+  min_score = VALUES(min_score),
+  min_count = VALUES(min_count),
+  group_by_fields_json = VALUES(group_by_fields_json),
+  source_types_json = VALUES(source_types_json),
+  event_types_json = VALUES(event_types_json),
+  group_by_json = VALUES(group_by_json),
+  threshold = VALUES(threshold),
+  timeframe_seconds = VALUES(timeframe_seconds),
+  sequence_json = VALUES(sequence_json),
+  severity_min = VALUES(severity_min),
+  severity_floor = VALUES(severity_floor),
+  weights_json = VALUES(weights_json),
+  safety_note = VALUES(safety_note);
+
+CREATE TABLE IF NOT EXISTS soc_host_agent (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_name VARCHAR(128) NULL,
+  hostname VARCHAR(128) NOT NULL,
+  os_type VARCHAR(32) NOT NULL,
+  os_version VARCHAR(128) NULL,
+  architecture VARCHAR(64) NULL,
+  agent_version VARCHAR(64) NOT NULL,
+  ip_addresses_json JSON NULL,
+  mac_addresses_json JSON NULL,
+  labels_json JSON NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  token_hash VARCHAR(255) NOT NULL,
+  last_ip VARCHAR(64) NULL,
+  queue_depth INT NOT NULL DEFAULT 0,
+  queue_bytes BIGINT NOT NULL DEFAULT 0,
+  collected_count BIGINT NOT NULL DEFAULT 0,
+  sent_count BIGINT NOT NULL DEFAULT 0,
+  failed_count BIGINT NOT NULL DEFAULT 0,
+  first_seen_at DATETIME NOT NULL,
+  last_seen_at DATETIME NULL,
+  owner_id BIGINT NULL,
+  dept_id BIGINT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_soc_host_agent_id (agent_id),
+  KEY idx_soc_host_agent_os_status (os_type, status),
+  KEY idx_soc_host_agent_last_seen (last_seen_at),
+  KEY idx_soc_host_agent_scope (owner_id, dept_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_ingest_batch (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NOT NULL,
+  agent_id VARCHAR(128) NOT NULL,
+  agent_db_id BIGINT NULL,
+  source_os VARCHAR(32) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  item_count INT NOT NULL DEFAULT 0,
+  accepted_count INT NOT NULL DEFAULT 0,
+  duplicate_count INT NOT NULL DEFAULT 0,
+  rejected_count INT NOT NULL DEFAULT 0,
+  status VARCHAR(32) NOT NULL DEFAULT 'accepted',
+  started_at DATETIME NOT NULL,
+  finished_at DATETIME NULL,
+  error_message VARCHAR(1000) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_ingest_batch_id (batch_id),
+  KEY idx_soc_ingest_batch_agent (agent_id, created_at),
+  KEY idx_soc_ingest_batch_type_status (ingest_type, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_ingest_reject_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  batch_id VARCHAR(128) NULL,
+  agent_id VARCHAR(128) NULL,
+  event_uid VARCHAR(128) NULL,
+  ingest_type VARCHAR(32) NOT NULL,
+  reason_code VARCHAR(64) NOT NULL,
+  reason VARCHAR(500) NOT NULL,
+  payload_json JSON NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_soc_ingest_reject_agent (agent_id, created_at),
+  KEY idx_soc_ingest_reject_batch (batch_id),
+  KEY idx_soc_ingest_reject_reason (reason_code, ingest_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS soc_algorithm_evaluation (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

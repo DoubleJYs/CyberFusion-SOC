@@ -1,7 +1,7 @@
 import {
   demoRangeEvidenceChain,
   generateReport,
-  importDemoRangeBatch,
+  importDemoData,
   listAlerts,
   listExternalEvents,
   listIncidents,
@@ -19,7 +19,7 @@ import {
   type ReportItem,
   type TicketItem,
   type VulnerabilityItem,
-  type DemoRangeBatchImportResult,
+  type DemoDataOperationResult,
 } from './soc'
 
 export type ShowcaseDataSource = 'live' | 'offline'
@@ -328,8 +328,8 @@ export function createSecurityValidationReport(batchId: string) {
   return generateReport('security_validation', batchId)
 }
 
-export async function importShowcaseBatch(batchId?: string): Promise<DemoRangeBatchImportResult> {
-  const response = await importDemoRangeBatch({ batchId, linkAlerts: true })
+export async function importShowcaseBatch(): Promise<DemoDataOperationResult> {
+  const response = await importDemoData()
   return response.data.data
 }
 

@@ -49,6 +49,118 @@ export interface AssetItem {
   lastSeenAt: string
 }
 
+export interface HostAgentItem {
+  id: number
+  agentId: string
+  agentName: string
+  hostname: string
+  osType: string
+  osVersion?: string
+  architecture?: string
+  agentVersion?: string
+  ipAddressesJson?: string
+  macAddressesJson?: string
+  labelsJson?: string
+  status: string
+  lastIp?: string
+  queueDepth?: number
+  queueBytes?: number
+  collectedCount?: number
+  sentCount?: number
+  failedCount?: number
+  firstSeenAt?: string
+  lastSeenAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface HostAgentSourceHealth {
+  sourceType: string
+  label: string
+  agentCount: number
+  onlineCount: number
+  assetCount: number
+  eventCount24h: number
+  fimCount24h: number
+  failedBaselineCount: number
+  status: string
+}
+
+export interface HostAgentRecentEvent {
+  id: number
+  eventUid: string
+  sourceType: string
+  eventType: string
+  severity: string
+  ruleName: string
+  assetName: string
+  assetIp: string
+  batchId: string
+  status: string
+  eventTime: string
+}
+
+export interface HostAgentBatchItem {
+  id: number
+  batchId: string
+  ingestType: string
+  itemCount: number
+  acceptedCount: number
+  duplicateCount: number
+  rejectedCount: number
+  status: string
+  finishedAt?: string
+  errorMessage?: string
+}
+
+export interface HostAgentRejectItem {
+  id: number
+  batchId?: string
+  ingestType?: string
+  eventUid?: string
+  reasonCode: string
+  reason: string
+  createdAt: string
+}
+
+export interface HostAgentOverview {
+  totalAgents: number
+  onlineAgents: number
+  offlineAgents: number
+  macosAgents: number
+  windowsAgents: number
+  linuxAgents: number
+  realAssetCount: number
+  events24h: number
+  fim24h: number
+  failedBaselines: number
+  batches24h: number
+  rejects24h: number
+  sources: HostAgentSourceHealth[]
+  agents: HostAgentItem[]
+  recentEvents: HostAgentRecentEvent[]
+}
+
+export interface ReportExportPreview {
+  reportId: number
+  reportNo: string
+  title: string
+  format: 'xlsx' | 'pdf'
+  filename: string
+  mimeType: string
+  headers: string[]
+  rows: string[][]
+  lines: string[]
+}
+
+export interface HostAgentDetail {
+  agent: HostAgentItem
+  source: HostAgentSourceHealth
+  recentBatches: HostAgentBatchItem[]
+  recentEvents: HostAgentRecentEvent[]
+  recentRejects: HostAgentRejectItem[]
+}
+
 export interface AssetRiskSnapshot {
   id?: number
   assetId: number
@@ -822,6 +934,27 @@ export interface DemoRangeBatchImportResult {
   errors: string[]
 }
 
+export interface DemoDataOperationResult {
+  seedBatchId: string
+  demoRangeBatchId: string
+  totalDemoRows: number
+  deletedRowsBeforeImport: number
+  importedRangeEvents: number
+  createdRangeAlerts: number
+  createdRangeVulnerabilities: number
+  updatedRangeEvents: number
+  message: string
+  errors: string[]
+}
+
+export interface DemoDataStatus {
+  seedBatchId: string
+  demoRangeBatchId: string
+  totalDemoRows: number
+  hasDemoData: boolean
+  message: string
+}
+
 export interface DemoRangeChainSummary {
   batchId: string
   eventCount: number
@@ -1497,6 +1630,25 @@ export function listAssets(params: PageQuery) {
   return request.get<ApiResult<PageResult<AssetItem>>>('/soc/assets', { params })
 }
 
+export function hostAgentOverview() {
+  return request.get<ApiResult<HostAgentOverview>>('/soc/agents/overview', {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function hostAgentDetail(id: number) {
+  return request.get<ApiResult<HostAgentDetail>>(`/soc/agents/detail/${id}`, {
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
+export function listHostAgents(params?: { osType?: string; status?: string }) {
+  return request.get<ApiResult<HostAgentItem[]>>('/soc/agents', {
+    params,
+    headers: { 'X-Silent-Error': '1' },
+  })
+}
+
 export function assetRiskProfile(id: number) {
   return request.get<ApiResult<AssetRiskProfile>>(`/soc/assets/${id}/risk-profile`, {
     headers: { 'X-Silent-Error': '1' },
@@ -1620,8 +1772,19 @@ export function generateReport(reportType: string, batchId?: string) {
   return request.post<ApiResult<ReportItem>>('/soc/reports/generate', { reportType, batchId })
 }
 
-export function reportExportUrl(id: number, format: 'xlsx' | 'pdf') {
-  return `/api/soc/reports/${id}/export?format=${format}`
+export function reportExportUrl(id: number, format: 'xlsx' | 'pdf', disposition: 'inline' | 'attachment' = 'attachment') {
+  return `/api/soc/reports/${id}/export?format=${format}&disposition=${disposition}`
+}
+
+export function previewReportExport(id: number, format: 'xlsx' | 'pdf') {
+  return request.get<ApiResult<ReportExportPreview>>(`/soc/reports/${id}/preview`, { params: { format } })
+}
+
+export function exportReportBlob(id: number, format: 'xlsx' | 'pdf', disposition: 'inline' | 'attachment' = 'attachment') {
+  return request.get<Blob>(`/soc/reports/${id}/export`, {
+    params: { format, disposition },
+    responseType: 'blob',
+  })
 }
 
 export function wazuhConfigs() {
@@ -1948,6 +2111,20 @@ export function updateTicketTask(ticketId: number, taskId: number, action: 'star
 
 export function importDemoRangeBatch(data?: DemoRangeBatchImportPayload) {
   return request.post<ApiResult<DemoRangeBatchImportResult>>('/soc/demo-range/batches/import', data || {})
+}
+
+export function importDemoData() {
+  return request.post<ApiResult<DemoDataOperationResult>>('/soc/demo-range/demo-data/import')
+}
+
+export function clearDemoData() {
+  return request.delete<ApiResult<DemoDataOperationResult>>('/soc/demo-range/demo-data')
+}
+
+export function demoDataStatus() {
+  return request.get<ApiResult<DemoDataStatus>>('/soc/demo-range/demo-data/status', {
+    headers: { 'X-Silent-Error': '1' },
+  })
 }
 
 export function demoRangeEvidenceChain(batchId: string) {

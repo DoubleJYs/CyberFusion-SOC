@@ -16,8 +16,10 @@ The package intentionally excludes runtime data, Docker volumes, generated logs,
 | Line endings | `.gitattributes` | Normalizes source/script line endings. |
 | Backend | `backend/` | Spring Boot 3, Java 21. |
 | Frontend | `frontend/` | Vue 3, Vite, TypeScript, Element Plus, Pinia. |
+| Host Agent | `agent/` | Go Host Agent workspace for macOS/Windows shared schema, fixtures, and upload client. |
 | SQL schema and seed | `sql/schema.sql`, `sql/data.sql` | MySQL 8 initialization. |
 | Windows no-Docker guide | `docs/windows-no-docker.md` | User-configured Windows layout, local MySQL/Redis, PowerShell startup. |
+| Host Agent macOS/Windows plan | `docs/host-agent-mac-windows-plan.md` | Shared self-developed Host Agent roadmap, resource budget, and acceptance criteria. |
 | Main deploy templates | `deploy/docker-compose.yml`, `deploy/nginx*.conf` | Local and server deployment examples. |
 | Demo Range deploy templates | `deploy/demo-range/` | Isolated demo target, WAF, ZAP baseline, Trivy, bridge. |
 | API docs | `docs/api.md` | Endpoint summary and request/response examples. |
@@ -146,7 +148,9 @@ Administrators and security engineers maintain delivery-critical demo behavior f
 | Local check policy | `/soc/policies` -> `本机检查策略` | Add/edit/publish only read-only argv command policies. | Employees still submit only `commandKey`; backend validates and uses `ProcessBuilder` argv, not shell strings. |
 | Event adapter mapping | `/soc/policies` -> `事件适配映射` | Maintain WAF/ZAP/Trivy/Wazuh/Suricata/Zeek field mapping, severity mapping, dedup key, and alert-link preview. | No scripts, expressions, SQL, shell commands, external calls, or production WAF/IDS rule push. |
 | Demo data | `/soc/demo-range` or `POST /api/soc/demo-range/batches/import` | Import the fixed offline Demo Range batch for customer demos. | Local static evidence only; no ZAP active scan, no public target, no Docker volume reset. |
-| Reports | `/soc/reports` | Generate `security_validation` report for a batch. | Report uses existing batch data and dry-run notification logs. |
+| Daily recommendations | `/soc/daily-recommendations` | Review ranked incident, ticket, vulnerability, and client-checkup work items and jump into the source record. | Recommendations must remain linked to real source records; no isolated placeholder data. |
+| Host Agent | `/soc/agents` | Review macOS/Windows Agent status, source health, recent events, batches, and reject logs. | Windows fixture data is only for preflight; it must be removed before claiming real Windows host coverage. |
+| Reports | `/soc/reports` | Generate reports, preview Excel/PDF content, and download files. | Report uses existing linked data; `inline` PDF is for preview and `attachment` export is for download. |
 | Notifications | `/soc/settings` notification logs | Verify dry-run notification history. | No real sender is enabled by default; real credentials must stay outside source. |
 
 ## Security Review Checklist

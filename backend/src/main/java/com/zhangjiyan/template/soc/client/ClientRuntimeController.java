@@ -33,6 +33,8 @@ public class ClientRuntimeController {
         String osFamily = osFamily(osName);
         Path sourceRoot = Path.of(System.getProperty("user.dir", ".")).toAbsolutePath().normalize();
         Path dataRoot = Path.of(fileStorageProperties.getBaseDir()).toAbsolutePath().normalize();
+        Path displayRoot = "uploads".equals(dataRoot.getFileName() == null ? "" : dataRoot.getFileName().toString())
+                && dataRoot.getParent() != null ? dataRoot.getParent() : dataRoot;
         boolean dataRootOutsideSource = !dataRoot.startsWith(sourceRoot);
         boolean dataRootUsesEnvironment = dataRoot.toString().contains("Environment");
         String dataRootStatus = dataRootOutsideSource && dataRootUsesEnvironment ? "ready" : "warning";
@@ -83,7 +85,7 @@ public class ClientRuntimeController {
                         dataRootStatus,
                         dataRootUsesEnvironment,
                         dataRootOutsideSource,
-                        dataRoot.getFileName() == null ? "unknown" : dataRoot.getFileName().toString()
+                        displayRoot.getFileName() == null ? "unknown" : displayRoot.getFileName().toString()
                 ),
                 adapterLabel(osFamily),
                 capabilities,

@@ -6,7 +6,7 @@
     </el-table-column>
     <el-table-column prop="uploaderName" label="上传人" width="120" />
     <el-table-column prop="remark" label="备注" min-width="140" />
-    <el-table-column label="操作" width="140" fixed="right">
+    <el-table-column label="操作" width="140">
       <template #default="{ row }">
         <el-button link type="primary" @click="download(row)">下载</el-button>
         <el-button link type="danger" @click="$emit('remove', row)">删除</el-button>

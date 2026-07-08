@@ -36,7 +36,7 @@
         <el-table-column prop="sort" label="排序" width="90" />
         <el-table-column label="状态" width="100"><template #default="{ row }"><StatusTag :value="row.status" /></template></el-table-column>
         <el-table-column prop="remark" label="备注" min-width="180" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button v-permission="'system:post:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-button v-permission="'system:post:delete'" link type="danger" @click="remove(row)">删除</el-button>

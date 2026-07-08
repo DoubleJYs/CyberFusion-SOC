@@ -2,6 +2,7 @@ package com.zhangjiyan.template.soc;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhangjiyan.template.common.dto.PageResult;
 import com.zhangjiyan.template.common.excel.ExcelExportUtils;
 import com.zhangjiyan.template.common.exception.BusinessException;
+import com.zhangjiyan.template.common.pdf.SimplePdfUtils;
 import com.zhangjiyan.template.soc.alert.AlertActionRequest;
 import com.zhangjiyan.template.soc.alert.SocAlert;
 import com.zhangjiyan.template.soc.alert.SocAlertMapper;
@@ -42,6 +44,7 @@ import com.zhangjiyan.template.soc.playbook.SocTicketTask;
 import com.zhangjiyan.template.soc.playbook.SocTicketTaskMapper;
 import com.zhangjiyan.template.soc.operations.SocOperationsService;
 import com.zhangjiyan.template.soc.report.ReportGenerateRequest;
+import com.zhangjiyan.template.soc.report.ReportExportPreview;
 import com.zhangjiyan.template.soc.report.SocReport;
 import com.zhangjiyan.template.soc.report.SocReportMapper;
 import com.zhangjiyan.template.soc.settings.SocSyncTask;
@@ -53,12 +56,18 @@ import com.zhangjiyan.template.soc.trend.TrendAnomalyService;
 import com.zhangjiyan.template.soc.vulnerability.SocVulnerability;
 import com.zhangjiyan.template.soc.vulnerability.SocVulnerabilityMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceUtils;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.sql.Connection;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -71,6 +80,7 @@ import java.util.*;
 import java.util.HexFormat;
 import java.net.URLDecoder;
 import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 
 @Service
 @RequiredArgsConstructor
@@ -100,6 +110,16 @@ public class SocOperationService {
     private final ObjectMapper objectMapper;
 
     private static final String DEFAULT_DEMO_RANGE_BATCH_ID = "DEMO-RANGE-OFFLINE-V1";
+    private static final String DEMO_SEED_BATCH_ID = "DEMO-SEED-BASELINE";
+    private static final String HOST_AGENT_INCIDENT_SMOKE_PREFIX = "HOST-AGENT-INCIDENT-SMOKE-";
+    private static final String DEMO_DATA_IMPORT_SCRIPT = "sql/soc-demo-data-import.sql";
+    private static final String DEMO_DATA_CLEAR_SCRIPT = "sql/soc-demo-data-clear.sql";
+    private static final List<String> NON_REAL_SOURCE_TYPES = List.of("demo", "mock", "local-demo-client", "fixture");
+    private static final String NON_REAL_SOURCE_SQL = "'demo','mock','local-demo-client','fixture'";
+
+    @Autowired(required = false)
+    private JdbcTemplate jdbcTemplate;
+
     private static final List<DemoRangeSourceSample> DEMO_RANGE_SOURCE_SAMPLES = List.of(
             new DemoRangeSourceSample("waf", """
                     {"sourceType":"waf","eventType":"waf_block","severity":"high","assetIp":"10.20.1.15","targetUrl":"https://demo.internal.local/admin","httpMethod":"POST","httpStatus":403,"action":"block","ruleId":"WAF-DEMO-1001","ruleName":"Admin route protected by WAF policy","engine":"CyberFusion Demo Gateway","requestId":"{{batchId}}-waf-0001","demoCaseId":"access-control-risk","batchId":"{{batchId}}","evidenceSummary":"Demo gateway blocked restricted admin access before it reached prod-app-01.","timestamp":"2026-06-18T10:00:00+08:00","sourceIp":"203.0.113.80"}
@@ -186,13 +206,17 @@ public class SocOperationService {
     }
 
     public PageResult<SocAlert> alerts(SocPageRequest request) {
-        LambdaQueryWrapper<SocAlert> wrapper = new LambdaQueryWrapper<SocAlert>()
+        LambdaQueryWrapper<SocAlert> wrapper = scopedAlertWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocAlert::getAlertUid, request.keyword())
                         .or().like(SocAlert::getRuleId, request.keyword())
                         .or().like(SocAlert::getRuleDescription, request.keyword())
                         .or().like(SocAlert::getAssetName, request.keyword())
                         .or().like(SocAlert::getAssetIp, request.keyword())
                         .or().like(SocAlert::getSourceIp, request.keyword())
+                        .or().like(SocAlert::getEventType, request.keyword())
+                        .or().like(SocAlert::getEvidenceSummary, request.keyword())
+                        .or().like(SocAlert::getBatchId, request.keyword())
+                        .or().like(SocAlert::getCorrelationKey, request.keyword())
                         .or().like(SocAlert::getRawRef, request.keyword()))
                 .and("wazuh".equalsIgnoreCase(String.valueOf(request.sourceType())),
                         w -> w.eq(SocAlert::getSourceType, "wazuh")
@@ -201,7 +225,6 @@ public class SocOperationService {
                 .eq(notBlank(request.severity()), SocAlert::getSeverity, request.severity())
                 .eq(notBlank(request.status()), SocAlert::getStatus, request.status())
                 .orderByDesc(SocAlert::getEventTime);
-        securityScope.applyDataScope(wrapper, SocAlert::getOwnerId, SocAlert::getDeptId);
         Page<SocAlert> page = alertMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper);
         annotateAlertNoise(page.getRecords());
         return PageResult.from(page);
@@ -268,12 +291,11 @@ public class SocOperationService {
     }
 
     public PageResult<SocAsset> assets(SocPageRequest request) {
-        LambdaQueryWrapper<SocAsset> wrapper = new LambdaQueryWrapper<SocAsset>()
+        LambdaQueryWrapper<SocAsset> wrapper = scopedAssetWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocAsset::getHostname, request.keyword()).or().like(SocAsset::getIp, request.keyword()))
                 .eq(notBlank(request.riskLevel()), SocAsset::getRiskLevel, request.riskLevel())
                 .orderByDesc(SocAsset::getOpenAlertCount)
                 .orderByDesc(SocAsset::getLastSeenAt);
-        securityScope.applyDataScope(wrapper, SocAsset::getOwnerId, SocAsset::getDeptId);
         return PageResult.from(assetMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -655,12 +677,11 @@ public class SocOperationService {
     }
 
     public PageResult<SocTicket> tickets(SocPageRequest request) {
-        LambdaQueryWrapper<SocTicket> wrapper = new LambdaQueryWrapper<SocTicket>()
+        LambdaQueryWrapper<SocTicket> wrapper = scopedTicketWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocTicket::getTicketNo, request.keyword()).or().like(SocTicket::getTitle, request.keyword()))
                 .eq(notBlank(request.status()), SocTicket::getStatus, request.status())
                 .eq(notBlank(request.severity()), SocTicket::getSeverity, request.severity())
                 .orderByDesc(SocTicket::getCreatedAt);
-        securityScope.applyDataScope(wrapper, SocTicket::getAssigneeId, SocTicket::getDeptId);
         return PageResult.from(ticketMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -728,6 +749,7 @@ public class SocOperationService {
 
     public PageResult<SocReport> reports(SocPageRequest request) {
         LambdaQueryWrapper<SocReport> wrapper = new LambdaQueryWrapper<SocReport>()
+                .eq(SocReport::getDeleted, 0)
                 .and(notBlank(request.keyword()), w -> w.like(SocReport::getReportNo, request.keyword())
                         .or().like(SocReport::getTitle, request.keyword())
                         .or().like(SocReport::getSummary, request.keyword())
@@ -821,14 +843,29 @@ public class SocOperationService {
     }
 
     public byte[] exportReport(Long id, String format) {
-        SocReport report = reportMapper.selectById(id);
-        if (report == null) {
-            throw new BusinessException("报表不存在");
-        }
+        SocReport report = reportById(id);
         if ("pdf".equalsIgnoreCase(format)) {
-            return pseudoPdf(report);
+            return SimplePdfUtils.writeDocument(report.getTitle(), reportPreviewLines(report));
         }
         return ExcelExportUtils.export("SOC报表", List.of("模块", "指标", "内容"), reportRows(report));
+    }
+
+    public ReportExportPreview reportExportPreview(Long id, String format) {
+        SocReport report = reportById(id);
+        String normalizedFormat = "pdf".equalsIgnoreCase(format) ? "pdf" : "xlsx";
+        return new ReportExportPreview(
+                report.getId(),
+                report.getReportNo(),
+                report.getTitle(),
+                normalizedFormat,
+                reportExportFilename(report, normalizedFormat),
+                "pdf".equals(normalizedFormat)
+                        ? "application/pdf"
+                        : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                List.of("模块", "指标", "内容"),
+                reportRows(report),
+                reportPreviewLines(report)
+        );
     }
 
     public List<SocWazuhConfig> wazuhConfigs() {
@@ -840,7 +877,7 @@ public class SocOperationService {
     }
 
     public PageResult<SocVulnerability> vulnerabilities(SocPageRequest request) {
-        LambdaQueryWrapper<SocVulnerability> wrapper = new LambdaQueryWrapper<SocVulnerability>()
+        LambdaQueryWrapper<SocVulnerability> wrapper = scopedVulnerabilityWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocVulnerability::getCveId, request.keyword())
                         .or().like(SocVulnerability::getAssetName, request.keyword())
                         .or().like(SocVulnerability::getAssetIp, request.keyword())
@@ -850,7 +887,6 @@ public class SocOperationService {
                 .eq(notBlank(request.severity()), SocVulnerability::getSeverity, request.severity())
                 .eq(notBlank(request.status()), SocVulnerability::getStatus, request.status())
                 .orderByDesc(SocVulnerability::getDetectedAt);
-        securityScope.applyDataScope(wrapper, SocVulnerability::getOwnerId, SocVulnerability::getDeptId);
         return PageResult.from(vulnerabilityMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -882,7 +918,7 @@ public class SocOperationService {
     }
 
     public PageResult<SocBaselineCheck> baselines(SocPageRequest request) {
-        LambdaQueryWrapper<SocBaselineCheck> wrapper = new LambdaQueryWrapper<SocBaselineCheck>()
+        LambdaQueryWrapper<SocBaselineCheck> wrapper = scopedBaselineWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocBaselineCheck::getCheckCode, request.keyword())
                         .or().like(SocBaselineCheck::getCheckItem, request.keyword())
                         .or().like(SocBaselineCheck::getAssetName, request.keyword())
@@ -892,7 +928,6 @@ public class SocOperationService {
                 .eq(notBlank(request.status()), SocBaselineCheck::getStatus, request.status())
                 .orderByAsc(SocBaselineCheck::getResult)
                 .orderByDesc(SocBaselineCheck::getCheckedAt);
-        securityScope.applyDataScope(wrapper, SocBaselineCheck::getOwnerId, SocBaselineCheck::getDeptId);
         return PageResult.from(baselineMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -924,7 +959,7 @@ public class SocOperationService {
     }
 
     public PageResult<SocFileIntegrityEvent> fileIntegrityEvents(SocPageRequest request) {
-        LambdaQueryWrapper<SocFileIntegrityEvent> wrapper = new LambdaQueryWrapper<SocFileIntegrityEvent>()
+        LambdaQueryWrapper<SocFileIntegrityEvent> wrapper = scopedFileIntegrityWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocFileIntegrityEvent::getEventUid, request.keyword())
                         .or().like(SocFileIntegrityEvent::getHostname, request.keyword())
                         .or().like(SocFileIntegrityEvent::getAssetIp, request.keyword())
@@ -933,7 +968,6 @@ public class SocOperationService {
                 .eq(notBlank(request.severity()), SocFileIntegrityEvent::getSeverity, request.severity())
                 .eq(notBlank(request.status()), SocFileIntegrityEvent::getStatus, request.status())
                 .orderByDesc(SocFileIntegrityEvent::getEventTime);
-        securityScope.applyDataScope(wrapper, SocFileIntegrityEvent::getOwnerId, SocFileIntegrityEvent::getDeptId);
         return PageResult.from(fileIntegrityMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -965,13 +999,17 @@ public class SocOperationService {
     }
 
     public PageResult<SocExternalEvent> externalEvents(SocPageRequest request) {
-        LambdaQueryWrapper<SocExternalEvent> wrapper = new LambdaQueryWrapper<SocExternalEvent>()
+        LambdaQueryWrapper<SocExternalEvent> wrapper = scopedExternalEventWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocExternalEvent::getEventUid, request.keyword())
+                        .or().like(SocExternalEvent::getEventType, request.keyword())
+                        .or().like(SocExternalEvent::getRuleId, request.keyword())
                         .or().like(SocExternalEvent::getRuleName, request.keyword())
                         .or().like(SocExternalEvent::getAssetName, request.keyword())
                         .or().like(SocExternalEvent::getAssetIp, request.keyword())
                         .or().like(SocExternalEvent::getSrcIp, request.keyword())
                         .or().like(SocExternalEvent::getDestIp, request.keyword())
+                        .or().like(SocExternalEvent::getBatchId, request.keyword())
+                        .or().like(SocExternalEvent::getCorrelationKey, request.keyword())
                         .or().like(SocExternalEvent::getIoc, request.keyword())
                         .or().like(SocExternalEvent::getRawEvent, request.keyword())
                         .or().like(SocExternalEvent::getNormalizedEvent, request.keyword()))
@@ -980,7 +1018,6 @@ public class SocOperationService {
                 .eq(notBlank(request.severity()), SocExternalEvent::getSeverity, request.severity())
                 .eq(notBlank(request.status()), SocExternalEvent::getStatus, request.status())
                 .orderByDesc(SocExternalEvent::getEventTime);
-        securityScope.applyDataScope(wrapper, SocExternalEvent::getOwnerId, SocExternalEvent::getDeptId);
         return PageResult.from(externalEventMapper.selectPage(new Page<>(request.pageNum(), request.pageSize()), wrapper));
     }
 
@@ -1279,6 +1316,702 @@ public class SocOperationService {
             }
         }
         return Arrays.asList(content.split("\\R"));
+    }
+
+    @Transactional
+    public DemoDataOperationResult importDemoData() {
+        int deletedRows = clearDemoDataRows();
+        runClasspathSql(DEMO_DATA_IMPORT_SCRIPT);
+        DemoRangeBatchImportResult rangeResult = importDemoRangeBatch(new DemoRangeBatchImportRequest(DEFAULT_DEMO_RANGE_BATCH_ID, true));
+        int totalRows = countDemoDataRows();
+        return new DemoDataOperationResult(
+                DEMO_SEED_BATCH_ID,
+                rangeResult.batchId(),
+                totalRows,
+                deletedRows,
+                rangeResult.importedEvents(),
+                rangeResult.createdAlerts(),
+                rangeResult.createdVulnerabilities(),
+                rangeResult.updatedEvents(),
+                "演示数据已导入：启动默认数据保持为空，本次仅写入手动演示批次和离线证据链。",
+                rangeResult.errors()
+        );
+    }
+
+    @Transactional
+    public DemoDataOperationResult clearDemoData() {
+        int deletedRows = clearDemoDataRows();
+        return new DemoDataOperationResult(
+                DEMO_SEED_BATCH_ID,
+                DEFAULT_DEMO_RANGE_BATCH_ID,
+                countDemoDataRows(),
+                deletedRows,
+                0,
+                0,
+                0,
+                0,
+                deletedRows == 0 ? "当前没有可清除的演示数据。" : "演示数据已清除，真实本机数据保留。",
+                List.of()
+        );
+    }
+
+    @Transactional
+    public DemoDataOperationResult clearHostAgentSmokeData(String batchId) {
+        String normalizedBatchId = normalizeHostAgentSmokeBatchId(batchId);
+        int deletedRows = clearHostAgentSmokeRows(normalizedBatchId);
+        return new DemoDataOperationResult(
+                DEMO_SEED_BATCH_ID,
+                DEFAULT_DEMO_RANGE_BATCH_ID,
+                countDemoDataRows(),
+                deletedRows,
+                0,
+                0,
+                0,
+                0,
+                deletedRows == 0 ? "当前没有 Host Agent 验收 fixture 数据。" : "Host Agent 验收 fixture 数据已清理，真实主机数据保留。",
+                List.of()
+        );
+    }
+
+    public DemoDataStatus demoDataStatus() {
+        int totalRows = countDemoDataRows();
+        return new DemoDataStatus(
+                DEMO_SEED_BATCH_ID,
+                DEFAULT_DEMO_RANGE_BATCH_ID,
+                totalRows,
+                totalRows > 0,
+                totalRows > 0 ? "当前存在演示数据，可通过左侧按钮清除。" : "当前无演示数据，页面会展示本机真实数据。"
+        );
+    }
+
+    private int clearDemoDataRows() {
+        int rowsBeforeClear = countDemoDataRows();
+        runClasspathSql(DEMO_DATA_CLEAR_SCRIPT);
+        clearHostAgentSmokeRows(null);
+        clearHostAgentFixtureRows();
+        return rowsBeforeClear;
+    }
+
+    private int clearHostAgentFixtureRows() {
+        JdbcTemplate jdbc = demoJdbc();
+        int rows = 0;
+        rows += jdbc.update("""
+                DELETE FROM soc_playbook_match_log
+                WHERE alert_id IN (
+                  SELECT id FROM soc_alert
+                  WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                    AND (
+                      asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                      OR asset_ip LIKE '192.0.2.%'
+                      OR asset_ip LIKE '198.18.%'
+                      OR asset_ip LIKE '198.19.%'
+                      OR alert_uid LIKE '%FIXTURE%'
+                      OR raw_ref LIKE '%fixture%'
+                      OR rule_description LIKE '%fixture%'
+                      OR rule_description LIKE '%Fixture%'
+                    )
+                )
+                   OR ticket_id IN (
+                     SELECT id FROM soc_ticket
+                     WHERE title LIKE '%mac-dev-host%'
+                        OR title LIKE '%win-docker-host%'
+                        OR title LIKE '%mac-incident-host%'
+                        OR title LIKE '%win-incident-host%'
+                        OR title LIKE '%192.0.2.%'
+                        OR title LIKE '%198.18.%'
+                        OR title LIKE '%198.19.%'
+                   )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket_task
+                WHERE ticket_id IN (
+                  SELECT id FROM soc_ticket
+                  WHERE title LIKE '%mac-dev-host%'
+                     OR title LIKE '%win-docker-host%'
+                     OR title LIKE '%mac-incident-host%'
+                     OR title LIKE '%win-incident-host%'
+                     OR title LIKE '%192.0.2.%'
+                     OR title LIKE '%198.18.%'
+                     OR title LIKE '%198.19.%'
+                )
+                   OR alert_id IN (
+                     SELECT id FROM soc_alert
+                     WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                       AND (
+                         asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                         OR asset_ip LIKE '192.0.2.%'
+                         OR asset_ip LIKE '198.18.%'
+                         OR asset_ip LIKE '198.19.%'
+                       )
+                   )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket_timeline
+                WHERE ticket_id IN (
+                  SELECT id FROM soc_ticket
+                  WHERE title LIKE '%mac-dev-host%'
+                     OR title LIKE '%win-docker-host%'
+                     OR title LIKE '%mac-incident-host%'
+                     OR title LIKE '%win-incident-host%'
+                     OR title LIKE '%192.0.2.%'
+                     OR title LIKE '%198.18.%'
+                     OR title LIKE '%198.19.%'
+                )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_incident_evidence
+                WHERE asset_ip LIKE '192.0.2.%'
+                   OR asset_ip LIKE '198.18.%'
+                   OR asset_ip LIKE '198.19.%'
+                   OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                   OR evidence_uid LIKE '%FIXTURE%'
+                   OR cluster_id IN (
+                     SELECT id FROM soc_incident_cluster
+                     WHERE hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                        OR primary_hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                        OR asset_ip LIKE '192.0.2.%'
+                        OR primary_asset_ip LIKE '192.0.2.%'
+                        OR asset_ip LIKE '198.18.%'
+                        OR primary_asset_ip LIKE '198.18.%'
+                        OR asset_ip LIKE '198.19.%'
+                        OR primary_asset_ip LIKE '198.19.%'
+                        OR title LIKE '%fixture%'
+                        OR title LIKE '%Fixture%'
+                        OR summary LIKE '%fixture%'
+                   )
+                   OR (evidence_type = 'external_event' AND evidence_id IN (
+                     SELECT id FROM soc_external_event
+                     WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                       AND (
+                         asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                         OR asset_ip LIKE '192.0.2.%'
+                         OR asset_ip LIKE '198.18.%'
+                         OR asset_ip LIKE '198.19.%'
+                         OR event_uid LIKE '%FIXTURE%'
+                         OR CAST(raw_event AS CHAR) LIKE '%"fixture": true%'
+                         OR CAST(normalized_event AS CHAR) LIKE '%"fixture": true%'
+                       )
+                   ))
+                   OR (evidence_type = 'alert' AND evidence_id IN (
+                     SELECT id FROM soc_alert
+                     WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                       AND (
+                         asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                         OR asset_ip LIKE '192.0.2.%'
+                         OR asset_ip LIKE '198.18.%'
+                         OR asset_ip LIKE '198.19.%'
+                         OR alert_uid LIKE '%FIXTURE%'
+                       )
+                   ))
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket
+                WHERE title LIKE '%mac-dev-host%'
+                   OR title LIKE '%win-docker-host%'
+                   OR title LIKE '%mac-incident-host%'
+                   OR title LIKE '%win-incident-host%'
+                   OR title LIKE '%192.0.2.%'
+                   OR title LIKE '%198.18.%'
+                   OR title LIKE '%198.19.%'
+                   OR alert_id IN (
+                     SELECT id FROM soc_alert
+                     WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                       AND (
+                         asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                         OR asset_ip LIKE '192.0.2.%'
+                         OR asset_ip LIKE '198.18.%'
+                         OR asset_ip LIKE '198.19.%'
+                       )
+                   )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_incident_cluster
+                WHERE hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                   OR primary_hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                   OR asset_ip LIKE '192.0.2.%'
+                   OR primary_asset_ip LIKE '192.0.2.%'
+                   OR asset_ip LIKE '198.18.%'
+                   OR primary_asset_ip LIKE '198.18.%'
+                   OR asset_ip LIKE '198.19.%'
+                   OR primary_asset_ip LIKE '198.19.%'
+                   OR title LIKE '%fixture%'
+                   OR title LIKE '%Fixture%'
+                   OR summary LIKE '%fixture%'
+                """);
+        rows += jdbc.update("""
+                DELETE factor FROM soc_asset_risk_factor factor
+                JOIN soc_asset_risk_snapshot snapshot ON factor.snapshot_id = snapshot.id
+                WHERE snapshot.asset_ip LIKE '192.0.2.%'
+                   OR snapshot.asset_ip LIKE '198.18.%'
+                   OR snapshot.asset_ip LIKE '198.19.%'
+                   OR snapshot.hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_asset_risk_snapshot
+                WHERE asset_ip LIKE '192.0.2.%'
+                   OR asset_ip LIKE '198.18.%'
+                   OR asset_ip LIKE '198.19.%'
+                   OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_external_event
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND (
+                    asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                    OR asset_ip LIKE '192.0.2.%'
+                    OR asset_ip LIKE '198.18.%'
+                    OR asset_ip LIKE '198.19.%'
+                    OR batch_id LIKE 'HOST-%fixture-agent-%'
+                    OR event_uid LIKE '%FIXTURE%'
+                    OR CAST(raw_event AS CHAR) LIKE '%"fixture": true%'
+                    OR CAST(normalized_event AS CHAR) LIKE '%"fixture": true%'
+                  )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_alert
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND (
+                    asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                    OR asset_ip LIKE '192.0.2.%'
+                    OR asset_ip LIKE '198.18.%'
+                    OR asset_ip LIKE '198.19.%'
+                    OR batch_id LIKE 'HOST-%fixture-agent-%'
+                    OR alert_uid LIKE '%FIXTURE%'
+                    OR raw_ref LIKE '%fixture%'
+                    OR rule_description LIKE '%fixture%'
+                    OR rule_description LIKE '%Fixture%'
+                    OR evidence_summary LIKE '%fixture%'
+                  )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_file_integrity_event
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND (
+                    hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                    OR asset_ip LIKE '192.0.2.%'
+                    OR asset_ip LIKE '198.18.%'
+                    OR asset_ip LIKE '198.19.%'
+                    OR event_uid LIKE '%FIXTURE%'
+                    OR rule_name LIKE '%Fixture%'
+                    OR rule_name LIKE '%fixture%'
+                  )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_baseline_check
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND (
+                    asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                    OR asset_ip LIKE '192.0.2.%'
+                    OR asset_ip LIKE '198.18.%'
+                    OR asset_ip LIKE '198.19.%'
+                    OR check_code LIKE '%fixture%'
+                    OR check_code LIKE '%FIXTURE%'
+                    OR check_item LIKE '%Fixture%'
+                    OR check_item LIKE '%fixture%'
+                  )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_asset
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND (
+                    hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                    OR ip LIKE '192.0.2.%'
+                    OR ip LIKE '198.18.%'
+                    OR ip LIKE '198.19.%'
+                  )
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ingest_reject_log
+	                WHERE agent_id LIKE '%fixture-agent%'
+	                   OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                   OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                   OR batch_id LIKE 'HOST-%fixture-agent-%'
+	                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ingest_batch
+	                WHERE agent_id LIKE '%fixture-agent%'
+	                   OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                   OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                   OR batch_id LIKE 'HOST-%fixture-agent-%'
+	                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_host_agent
+	                WHERE agent_id LIKE '%fixture-agent%'
+	                   OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                   OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                   OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                   OR CAST(ip_addresses_json AS CHAR) LIKE '%192.0.2.%'
+                   OR CAST(ip_addresses_json AS CHAR) LIKE '%198.18.%'
+                   OR CAST(ip_addresses_json AS CHAR) LIKE '%198.19.%'
+                   OR CAST(labels_json AS CHAR) LIKE '%"fixture": "true"%'
+	                   OR CAST(labels_json AS CHAR) LIKE '%"fixture":"true"%'
+	                   OR CAST(labels_json AS CHAR) LIKE '%queue-replay%'
+	                   OR CAST(labels_json AS CHAR) LIKE '%queue-pressure%'
+	                """);
+        return rows;
+    }
+
+    private int clearHostAgentSmokeRows(String batchId) {
+        JdbcTemplate jdbc = demoJdbc();
+        String batchLike = notBlank(batchId) ? batchId + "%" : HOST_AGENT_INCIDENT_SMOKE_PREFIX + "%";
+        String containsLike = notBlank(batchId) ? "%" + batchId + "%" : "%" + HOST_AGENT_INCIDENT_SMOKE_PREFIX + "%";
+        int rows = 0;
+        rows += jdbc.update("""
+                DELETE FROM soc_playbook_match_log
+                WHERE alert_id IN (
+                  SELECT id FROM soc_alert
+                  WHERE batch_id LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                )
+                   OR ticket_id IN (
+                     SELECT id FROM soc_ticket
+                     WHERE alert_id IN (
+                       SELECT id FROM soc_alert
+                       WHERE batch_id LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                     )
+                        OR id IN (
+                          SELECT ticket_id FROM soc_incident_cluster
+                          WHERE ticket_id IS NOT NULL
+                            AND (batch_id LIKE ? OR correlation_key LIKE ? OR title LIKE ? OR summary LIKE ?)
+                        )
+                        OR title LIKE '%mac-incident-host%'
+                        OR title LIKE '%win-incident-host%'
+                        OR title LIKE '%198.18.%'
+                        OR title LIKE '%198.19.%'
+                   )
+                """, batchLike, containsLike, containsLike, batchLike, containsLike, containsLike,
+                batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket_task
+                WHERE ticket_id IN (
+                  SELECT id FROM soc_ticket
+                  WHERE alert_id IN (
+                    SELECT id FROM soc_alert
+                    WHERE batch_id LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                  )
+                     OR id IN (
+                       SELECT ticket_id FROM soc_incident_cluster
+                       WHERE ticket_id IS NOT NULL
+                         AND (batch_id LIKE ? OR correlation_key LIKE ? OR title LIKE ? OR summary LIKE ?)
+                     )
+                     OR title LIKE '%mac-incident-host%'
+                     OR title LIKE '%win-incident-host%'
+                     OR title LIKE '%198.18.%'
+                     OR title LIKE '%198.19.%'
+                )
+                """, batchLike, containsLike, containsLike, batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket_timeline
+                WHERE ticket_id IN (
+                  SELECT id FROM soc_ticket
+                  WHERE alert_id IN (
+                    SELECT id FROM soc_alert
+                    WHERE batch_id LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                  )
+                     OR id IN (
+                       SELECT ticket_id FROM soc_incident_cluster
+                       WHERE ticket_id IS NOT NULL
+                         AND (batch_id LIKE ? OR correlation_key LIKE ? OR title LIKE ? OR summary LIKE ?)
+                     )
+                     OR title LIKE '%mac-incident-host%'
+                     OR title LIKE '%win-incident-host%'
+                     OR title LIKE '%198.18.%'
+                     OR title LIKE '%198.19.%'
+                )
+                """, batchLike, containsLike, containsLike, batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_incident_evidence
+                WHERE batch_id LIKE ?
+                   OR evidence_uid LIKE ?
+                   OR cluster_id IN (
+                     SELECT id FROM soc_incident_cluster
+                     WHERE batch_id LIKE ? OR correlation_key LIKE ? OR title LIKE ? OR summary LIKE ?
+                   )
+                   OR (evidence_type = 'external_event' AND evidence_id IN (
+                     SELECT id FROM soc_external_event
+                     WHERE batch_id LIKE ? OR event_uid LIKE ? OR CAST(raw_event AS CHAR) LIKE ? OR CAST(normalized_event AS CHAR) LIKE ?
+                   ))
+                   OR (evidence_type = 'alert' AND evidence_id IN (
+                     SELECT id FROM soc_alert
+                     WHERE batch_id LIKE ? OR alert_uid LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                   ))
+                """, batchLike, containsLike, batchLike, containsLike, containsLike, containsLike,
+                batchLike, containsLike, containsLike, containsLike,
+                batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_ticket
+                WHERE alert_id IN (
+                  SELECT id FROM soc_alert
+                  WHERE batch_id LIKE ? OR raw_ref LIKE ? OR rule_description LIKE ?
+                )
+                   OR id IN (
+                     SELECT ticket_id FROM soc_incident_cluster
+                     WHERE ticket_id IS NOT NULL
+                       AND (batch_id LIKE ? OR correlation_key LIKE ? OR title LIKE ? OR summary LIKE ?)
+                   )
+                   OR title LIKE ?
+                   OR title LIKE '%mac-incident-host%'
+                   OR title LIKE '%win-incident-host%'
+                   OR title LIKE '%198.18.%'
+                   OR title LIKE '%198.19.%'
+                """, batchLike, containsLike, containsLike, batchLike, containsLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_incident_cluster
+                WHERE batch_id LIKE ?
+                   OR correlation_key LIKE ?
+                   OR title LIKE ?
+                   OR summary LIKE ?
+                """, batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_external_event
+                WHERE batch_id LIKE ?
+                   OR event_uid LIKE ?
+                   OR CAST(raw_event AS CHAR) LIKE ?
+                   OR CAST(normalized_event AS CHAR) LIKE ?
+                """, batchLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_alert
+                WHERE batch_id LIKE ?
+                   OR alert_uid LIKE ?
+                   OR raw_ref LIKE ?
+                   OR rule_description LIKE ?
+                   OR evidence_summary LIKE ?
+                """, batchLike, containsLike, containsLike, containsLike, containsLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_asset
+                WHERE source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                  AND hostname IN ('mac-incident-host', 'win-incident-host')
+                  AND (ip LIKE '198.18.%' OR ip LIKE '198.19.%')
+                """);
+        rows += jdbc.update("""
+                DELETE FROM soc_ingest_reject_log
+                WHERE batch_id LIKE ?
+                   OR agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+                """, batchLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_ingest_batch
+                WHERE batch_id LIKE ?
+                   OR agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+                """, batchLike);
+        rows += jdbc.update("""
+                DELETE FROM soc_host_agent
+                WHERE agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+                   OR CAST(labels_json AS CHAR) LIKE '%"scope": "incident-chain"%'
+                   OR CAST(labels_json AS CHAR) LIKE '%"scope":"incident-chain"%'
+                """);
+        return rows;
+    }
+
+    private String normalizeHostAgentSmokeBatchId(String batchId) {
+        if (!notBlank(batchId)) {
+            throw new BusinessException("Host Agent smoke batchId is required");
+        }
+        String normalized = batchId.trim();
+        if (!normalized.startsWith(HOST_AGENT_INCIDENT_SMOKE_PREFIX) || !normalized.matches("[A-Za-z0-9.:-]+")) {
+            throw new BusinessException("只能清理 HOST-AGENT-INCIDENT-SMOKE-* 验收批次");
+        }
+        return normalized;
+    }
+
+    private int countDemoDataRows() {
+        Integer count = demoJdbc().queryForObject("""
+                SELECT COALESCE(SUM(cnt), 0)
+                FROM (
+                  SELECT COUNT(*) cnt FROM soc_asset
+                    WHERE source_type IN ('demo', 'mock', 'local-demo-client')
+                       OR (ip IN ('10.20.1.15','10.20.8.21','10.30.5.23','10.40.2.9')
+                           AND hostname IN ('prod-app-01','finance-db-01','office-win-23','mac-build-02'))
+                       OR (source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                           AND (hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                                OR ip LIKE '192.0.2.%'
+                                OR ip LIKE '198.18.%'
+                                OR ip LIKE '198.19.%'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_alert
+                    WHERE batch_id LIKE 'DEMO-%'
+                       OR batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR demo_case_id IS NOT NULL
+                       OR source_type IN ('demo', 'mock', 'local-demo-client')
+                       OR alert_uid IN ('MOCK-20260527-0001','MOCK-20260527-0002','MOCK-20260526-0003','MOCK-20260525-0004',
+                                        'MOCK-20260527-0005','SURICATA-20260527-0001','SURICATA-20260527-0002')
+                       OR raw_ref LIKE '%DEMO-%'
+                       OR raw_ref LIKE '%HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR (source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                           AND (asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                                OR asset_ip LIKE '192.0.2.%'
+                                OR asset_ip LIKE '198.18.%'
+                                OR asset_ip LIKE '198.19.%'
+                                OR batch_id LIKE 'HOST-%fixture-agent-%'
+                                OR alert_uid LIKE '%FIXTURE%'
+                                OR raw_ref LIKE '%fixture%'
+                                OR rule_description LIKE '%fixture%'
+                                OR rule_description LIKE '%Fixture%'
+                                OR evidence_summary LIKE '%fixture%'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_external_event
+                    WHERE batch_id LIKE 'DEMO-%'
+                       OR batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR demo_case_id IS NOT NULL
+                       OR source_type IN ('demo', 'mock', 'local-demo-client')
+                       OR event_uid IN ('EXT-SURICATA-20260527-0001','EXT-SURICATA-20260527-0002')
+                       OR event_uid LIKE '%HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR (source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                           AND (asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                                OR asset_ip LIKE '192.0.2.%'
+                                OR asset_ip LIKE '198.18.%'
+                                OR asset_ip LIKE '198.19.%'
+                                OR batch_id LIKE 'HOST-%fixture-agent-%'
+                                OR event_uid LIKE '%FIXTURE%'
+                                OR CAST(raw_event AS CHAR) LIKE '%"fixture": true%'
+                                OR CAST(normalized_event AS CHAR) LIKE '%"fixture": true%'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_ticket
+                    WHERE ticket_no IN ('INC-202605260001','INC-202605250001')
+                       OR title LIKE '%DEMO-%'
+                       OR title LIKE '%演示数据%'
+                       OR title LIKE '%mac-dev-host%'
+                       OR title LIKE '%win-docker-host%'
+                       OR title LIKE '%mac-incident-host%'
+                       OR title LIKE '%win-incident-host%'
+                       OR title LIKE '%192.0.2.%'
+                       OR title LIKE '%198.18.%'
+                       OR title LIKE '%198.19.%'
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_report
+                    WHERE report_no = 'RPT-DAILY-202605270001'
+                       OR report_no LIKE 'RPT-VALIDATION-%'
+                       OR title LIKE '%DEMO-%'
+                       OR summary LIKE '%DEMO-%'
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_notification_log
+                    WHERE event_type = 'demo_range_batch_imported'
+                       OR title LIKE '%DEMO-%'
+                       OR content LIKE '%DEMO-%'
+                       OR content LIKE '%演示数据%'
+                       OR (title = '高危告警已转工单'
+                           AND content = '关键系统配置文件发生变更，已进入工单处置流程。'
+                           AND target = 'soc-team@example.local')
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_alert_whitelist
+                    WHERE (asset_ip IN ('10.20.1.15','10.20.8.21','10.30.5.23','10.40.2.9')
+                           AND (reason LIKE '%演示%' OR rule_id IN ('530','5502','WAF-DEMO-1001','WAF-DEMO-2001')))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_vulnerability
+                    WHERE source_type IN ('demo', 'mock')
+                       OR cve_id LIKE 'CVE-2026-DEMO-RANGE-%'
+                       OR (cve_id IN ('CVE-2024-3094','CVE-2023-38408','CVE-2024-6387','CVE-2022-22965')
+                           AND asset_ip IN ('10.20.1.15','10.20.8.21','10.30.5.23','10.40.2.9'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_baseline_check
+                    WHERE source_type IN ('demo', 'mock')
+                       OR (check_code IN ('SSH_ROOT_LOGIN','PASSWORD_MAX_DAYS','FIREWALL_DEFAULT_DENY','SENSITIVE_FILE_PERMISSION','UNNEEDED_SERVICE')
+                           AND asset_ip IN ('10.20.1.15','10.20.8.21','10.30.5.23','10.40.2.9'))
+                       OR (source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                           AND (asset_name IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                                OR asset_ip LIKE '192.0.2.%'
+                                OR asset_ip LIKE '198.18.%'
+                                OR asset_ip LIKE '198.19.%'
+                                OR check_code LIKE '%fixture%'
+                                OR check_code LIKE '%FIXTURE%'
+                                OR check_item LIKE '%Fixture%'
+                                OR check_item LIKE '%fixture%'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_file_integrity_event
+                    WHERE source_type IN ('demo', 'mock')
+                       OR event_uid IN ('FIM-20260527-0001','FIM-20260527-0002','FIM-20260526-0003','FIM-20260525-0004')
+                       OR (source_type IN ('macos-agent', 'windows-agent', 'host-agent')
+                           AND (hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                                OR asset_ip LIKE '192.0.2.%'
+                                OR asset_ip LIKE '198.18.%'
+                                OR asset_ip LIKE '198.19.%'
+                                OR event_uid LIKE '%FIXTURE%'
+                                OR rule_name LIKE '%Fixture%'
+                                OR rule_name LIKE '%fixture%'))
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_incident_cluster
+                    WHERE batch_id LIKE 'DEMO-%'
+                       OR batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR demo_case_id IS NOT NULL
+                       OR correlation_key LIKE '%DEMO-%'
+                       OR correlation_key LIKE '%HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR title LIKE '%HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                       OR primary_hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                       OR asset_ip LIKE '192.0.2.%'
+                       OR primary_asset_ip LIKE '192.0.2.%'
+                       OR asset_ip LIKE '198.18.%'
+                       OR primary_asset_ip LIKE '198.18.%'
+                       OR asset_ip LIKE '198.19.%'
+                       OR primary_asset_ip LIKE '198.19.%'
+                       OR title LIKE '%fixture%'
+                       OR title LIKE '%Fixture%'
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_incident_evidence
+                    WHERE batch_id LIKE 'DEMO-%'
+                       OR batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR demo_case_id IS NOT NULL
+                       OR evidence_uid LIKE '%DEMO-%'
+                       OR evidence_uid LIKE '%HOST-AGENT-INCIDENT-SMOKE-%'
+                       OR evidence_uid LIKE '%FIXTURE%'
+                       OR asset_ip LIKE '192.0.2.%'
+                       OR asset_ip LIKE '198.18.%'
+                       OR asset_ip LIKE '198.19.%'
+                       OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_algorithm_evaluation
+                    WHERE batch_id LIKE 'DEMO-%'
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_host_agent
+                    WHERE agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+	                       OR agent_id LIKE '%fixture-agent%'
+	                       OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                       OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                       OR hostname IN ('mac-dev-host', 'win-docker-host', 'mac-incident-host', 'win-incident-host')
+                       OR CAST(ip_addresses_json AS CHAR) LIKE '%192.0.2.%'
+                       OR CAST(ip_addresses_json AS CHAR) LIKE '%198.18.%'
+                       OR CAST(ip_addresses_json AS CHAR) LIKE '%198.19.%'
+                       OR CAST(labels_json AS CHAR) LIKE '%"fixture": "true"%'
+                       OR CAST(labels_json AS CHAR) LIKE '%"fixture":"true"%'
+	                       OR CAST(labels_json AS CHAR) LIKE '%incident-chain%'
+	                       OR CAST(labels_json AS CHAR) LIKE '%queue-replay%'
+	                       OR CAST(labels_json AS CHAR) LIKE '%queue-pressure%'
+	                  UNION ALL
+                  SELECT COUNT(*) FROM soc_ingest_batch
+                    WHERE batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+	                       OR agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+	                       OR agent_id LIKE '%fixture-agent%'
+	                       OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                       OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                       OR batch_id LIKE 'HOST-%fixture-agent-%'
+                  UNION ALL
+                  SELECT COUNT(*) FROM soc_ingest_reject_log
+                    WHERE batch_id LIKE 'HOST-AGENT-INCIDENT-SMOKE-%'
+	                       OR agent_id IN ('incident-macos-agent', 'incident-windows-agent')
+	                       OR agent_id LIKE '%fixture-agent%'
+	                       OR agent_id LIKE 'queue-replay-macos-agent-%'
+	                       OR agent_id LIKE 'queue-pressure-macos-agent-%'
+	                       OR batch_id LIKE 'HOST-%fixture-agent-%'
+                ) AS demo_counts
+                """, Integer.class);
+        return count == null ? 0 : count;
+    }
+
+    private JdbcTemplate demoJdbc() {
+        if (jdbcTemplate == null || jdbcTemplate.getDataSource() == null) {
+            throw new BusinessException("演示数据管理需要可用的数据库连接");
+        }
+        return jdbcTemplate;
+    }
+
+    private void runClasspathSql(String location) {
+        DataSource dataSource = Objects.requireNonNull(demoJdbc().getDataSource());
+        Connection connection = DataSourceUtils.getConnection(dataSource);
+        try {
+            ScriptUtils.executeSqlScript(connection, new ClassPathResource(location));
+        } catch (RuntimeException ex) {
+            throw new BusinessException("执行演示数据脚本失败：" + limit(firstNotBlank(ex.getMessage(), location), 220));
+        } finally {
+            DataSourceUtils.releaseConnection(connection, dataSource);
+        }
     }
 
     @Transactional
@@ -2755,51 +3488,89 @@ public class SocOperationService {
     }
 
     private LambdaQueryWrapper<SocAlert> scopedAlertWrapper() {
-        LambdaQueryWrapper<SocAlert> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocAlert> wrapper = new LambdaQueryWrapper<SocAlert>()
+                .eq(SocAlert::getDeleted, 0)
+                .and(w -> w.isNotNull(SocAlert::getAssetIp).ne(SocAlert::getAssetIp, "")
+                        .or().isNotNull(SocAlert::getAssetName).ne(SocAlert::getAssetName, ""))
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+        applyRealSource(wrapper, SocAlert::getSourceType);
         securityScope.applyDataScope(wrapper, SocAlert::getOwnerId, SocAlert::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocAsset> scopedAssetWrapper() {
-        LambdaQueryWrapper<SocAsset> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocAsset> wrapper = new LambdaQueryWrapper<SocAsset>()
+                .eq(SocAsset::getDeleted, 0)
+                .and(w -> w.isNotNull(SocAsset::getIp).ne(SocAsset::getIp, "")
+                        .or().isNotNull(SocAsset::getHostname).ne(SocAsset::getHostname, ""));
+        applyRealSource(wrapper, SocAsset::getSourceType);
         securityScope.applyDataScope(wrapper, SocAsset::getOwnerId, SocAsset::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocTicket> scopedTicketWrapper() {
-        LambdaQueryWrapper<SocTicket> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocTicket> wrapper = new LambdaQueryWrapper<SocTicket>()
+                .eq(SocTicket::getDeleted, 0)
+                .isNotNull(SocTicket::getAlertId)
+                .apply("EXISTS (SELECT 1 FROM soc_alert a WHERE a.deleted = 0 AND a.id = alert_id AND a.source_type IS NOT NULL AND a.source_type NOT IN (" + NON_REAL_SOURCE_SQL + "))");
         securityScope.applyDataScope(wrapper, SocTicket::getAssigneeId, SocTicket::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocVulnerability> scopedVulnerabilityWrapper() {
-        LambdaQueryWrapper<SocVulnerability> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocVulnerability> wrapper = new LambdaQueryWrapper<SocVulnerability>()
+                .eq(SocVulnerability::getDeleted, 0)
+                .and(w -> w.isNotNull(SocVulnerability::getAssetIp).ne(SocVulnerability::getAssetIp, "")
+                        .or().isNotNull(SocVulnerability::getAssetName).ne(SocVulnerability::getAssetName, ""))
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+        applyRealSource(wrapper, SocVulnerability::getSourceType);
         securityScope.applyDataScope(wrapper, SocVulnerability::getOwnerId, SocVulnerability::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocBaselineCheck> scopedBaselineWrapper() {
-        LambdaQueryWrapper<SocBaselineCheck> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocBaselineCheck> wrapper = new LambdaQueryWrapper<SocBaselineCheck>()
+                .eq(SocBaselineCheck::getDeleted, 0)
+                .and(w -> w.isNotNull(SocBaselineCheck::getAssetIp).ne(SocBaselineCheck::getAssetIp, "")
+                        .or().isNotNull(SocBaselineCheck::getAssetName).ne(SocBaselineCheck::getAssetName, ""))
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+        applyRealSource(wrapper, SocBaselineCheck::getSourceType);
         securityScope.applyDataScope(wrapper, SocBaselineCheck::getOwnerId, SocBaselineCheck::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocFileIntegrityEvent> scopedFileIntegrityWrapper() {
-        LambdaQueryWrapper<SocFileIntegrityEvent> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocFileIntegrityEvent> wrapper = new LambdaQueryWrapper<SocFileIntegrityEvent>()
+                .eq(SocFileIntegrityEvent::getDeleted, 0)
+                .and(w -> w.isNotNull(SocFileIntegrityEvent::getAssetIp).ne(SocFileIntegrityEvent::getAssetIp, "")
+                        .or().isNotNull(SocFileIntegrityEvent::getHostname).ne(SocFileIntegrityEvent::getHostname, ""))
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = hostname))");
+        applyRealSource(wrapper, SocFileIntegrityEvent::getSourceType);
         securityScope.applyDataScope(wrapper, SocFileIntegrityEvent::getOwnerId, SocFileIntegrityEvent::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocExternalEvent> scopedExternalEventWrapper() {
-        LambdaQueryWrapper<SocExternalEvent> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocExternalEvent> wrapper = new LambdaQueryWrapper<SocExternalEvent>()
+                .eq(SocExternalEvent::getDeleted, 0)
+                .and(w -> w.isNotNull(SocExternalEvent::getAssetIp).ne(SocExternalEvent::getAssetIp, "")
+                        .or().isNotNull(SocExternalEvent::getAssetName).ne(SocExternalEvent::getAssetName, "")
+                        .or().isNotNull(SocExternalEvent::getDestIp).ne(SocExternalEvent::getDestIp, ""))
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name OR s.ip = dest_ip))");
+        applyRealSource(wrapper, SocExternalEvent::getSourceType);
         securityScope.applyDataScope(wrapper, SocExternalEvent::getOwnerId, SocExternalEvent::getDeptId);
         return wrapper;
     }
 
     private LambdaQueryWrapper<SocAlertWhitelist> scopedWhitelistWrapper() {
-        LambdaQueryWrapper<SocAlertWhitelist> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<SocAlertWhitelist> wrapper = new LambdaQueryWrapper<SocAlertWhitelist>()
+                .eq(SocAlertWhitelist::getDeleted, 0);
         securityScope.applyDataScope(wrapper, SocAlertWhitelist::getOwnerId, SocAlertWhitelist::getDeptId);
         return wrapper;
+    }
+
+    private <T> void applyRealSource(LambdaQueryWrapper<T> wrapper, SFunction<T, String> sourceColumn) {
+        wrapper.isNotNull(sourceColumn).notIn(sourceColumn, NON_REAL_SOURCE_TYPES);
     }
 
     private void ensureAlertAccess(SocAlert alert) {
@@ -2840,13 +3611,6 @@ public class SocOperationService {
             case "monthly" -> "月报";
             default -> "日报";
         };
-    }
-
-    private byte[] pseudoPdf(SocReport report) {
-        String text = report.getTitle() + "\n\n" + report.getSummary() + "\n\n整改建议\n" + report.getRecommendation();
-        byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
-        String body = "%%PDF-1.4\n1 0 obj<<>>endobj\n2 0 obj<< /Length %d >>stream\n%s\nendstream\nendobj\ntrailer<<>>\n%%%%EOF";
-        return body.formatted(textBytes.length, text).getBytes(StandardCharsets.UTF_8);
     }
 
     private ReportMetrics reportMetrics(LocalDate start, LocalDate end) {
@@ -3044,6 +3808,35 @@ public class SocOperationService {
             rows.add(List.of("整改建议", "建议", line));
         }
         return rows;
+    }
+
+    private List<String> reportPreviewLines(SocReport report) {
+        List<String> lines = new ArrayList<>();
+        lines.add("报表编号：" + report.getReportNo());
+        lines.add("报表类型：" + report.getReportType());
+        lines.add("统计周期：" + report.getPeriodStart() + " ~ " + report.getPeriodEnd());
+        lines.add("生成时间：" + (report.getGeneratedAt() == null ? "-" : report.getGeneratedAt()));
+        lines.add("状态：" + firstNotBlank(report.getStatus(), "-"));
+        lines.add("摘要：");
+        lines.addAll(splitReportText(report.getSummary()));
+        lines.add("整改建议：");
+        lines.addAll(splitReportText(report.getRecommendation()));
+        return lines;
+    }
+
+    public String reportExportFilename(SocReport report, String format) {
+        String extension = "pdf".equalsIgnoreCase(format) ? "pdf" : "xlsx";
+        String no = firstNotBlank(report.getReportNo(), "report-" + report.getId())
+                .replaceAll("[^A-Za-z0-9._-]", "-");
+        return no + "." + extension;
+    }
+
+    private SocReport reportById(Long id) {
+        SocReport report = reportMapper.selectById(id);
+        if (report == null || Integer.valueOf(1).equals(report.getDeleted())) {
+            throw new BusinessException("报表不存在");
+        }
+        return report;
     }
 
     private List<String> splitReportText(String value) {
@@ -3385,6 +4178,16 @@ public class SocOperationService {
                                              int createdVulnerabilities, int skippedItems, int failedItems,
                                              int updatedEvents, List<DemoRangeSourceImportResult> sources,
                                              String dedupRule, List<String> errors) {
+    }
+
+    public record DemoDataOperationResult(String seedBatchId, String demoRangeBatchId, int totalDemoRows,
+                                          int deletedRowsBeforeImport, int importedRangeEvents,
+                                          int createdRangeAlerts, int createdRangeVulnerabilities,
+                                          int updatedRangeEvents, String message, List<String> errors) {
+    }
+
+    public record DemoDataStatus(String seedBatchId, String demoRangeBatchId, int totalDemoRows,
+                                 boolean hasDemoData, String message) {
     }
 
     public record DemoRangeSourceImportResult(String sourceType, int importedEvents, int createdEvents,
