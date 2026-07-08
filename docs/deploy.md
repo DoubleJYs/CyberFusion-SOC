@@ -70,7 +70,7 @@ Container responsibilities in this Windows Docker path:
 | Backend | Local Maven/Spring Boot process by default | `CYBERFUSION_ENV_ROOT\uploads`, `CYBERFUSION_ENV_ROOT\logs\backend` |
 | Frontend | Local pnpm/Vite process by default | No persistent data |
 
-`deploy\docker-compose.app.example.yml` shows the optional full-container application layout for backend and frontend. It uses the same `CYBERFUSION_ENV_ROOT` rule for uploads, logs, MySQL, and Redis. Keep real `.env` files and all mounted folders outside source. Stop with `docker compose stop`; do not run `docker compose down -v` unless local data deletion is explicitly approved.
+`deploy\docker-compose.app.example.yml` shows the optional full-container application layout for backend and frontend. It uses the same `CYBERFUSION_ENV_ROOT` rule for uploads, logs, MySQL, and Redis. Keep real `.env` files and all mounted folders outside source. Stop with `docker compose stop`; do not run `docker compose down -v` unless local data deletion is explicitly approved. See `docs/windows-docker.md` for the complete Windows Docker checklist.
 
 To reuse an already verified machine without rebuilding every time:
 
