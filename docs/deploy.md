@@ -27,6 +27,51 @@ $env:DB_PASSWORD = "replace-with-local-db-password"
 
 The macOS/Linux entrypoint uses Docker Compose for local MySQL/Redis. The Windows entrypoint is the no-Docker path: put the project under a stable operator-chosen folder such as `E:\CyberFusion\00-cyberfusion-platform`, start MySQL 8 and Redis-compatible services first, make sure `mysql.exe` is in `PATH`, then run `scripts\win\start-no-docker.ps1`. The Windows entrypoint prepares the configured runtime folders, runs pre-start verification, starts the backend and frontend, then runs post-start verification. If `CYBERFUSION_ENV_ROOT` is not set, runtime data and dependency caches default to an `Environment\cyberfusion-platform` folder next to the project parent. Use `scripts\win\run-dev.ps1` only for phased troubleshooting.
 
+Windows no-Docker means there are no MySQL, Redis, backend, frontend, Adminer, or auxiliary Docker containers in the Windows startup path. Configure these pieces explicitly:
+
+| Component | Windows no-Docker configuration |
+| --- | --- |
+| MySQL | Install/start MySQL 8 locally or point `DB_HOST`/`DB_PORT` to a reachable MySQL 8 service; keep `mysql.exe` and `mysqldump.exe` in `PATH`. |
+| Redis | Install/start a Redis-compatible Windows service or point `REDIS_HOST`/`REDIS_PORT` to a reachable service. |
+| Backend | Run as a local Java/Maven process through `scripts\win\backend-dev.ps1` or `scripts\win\run-dev.ps1`; default API port is `18080`. |
+| Frontend | Run as a local Vite process through `scripts\win\frontend-dev.ps1` or `scripts\win\run-dev.ps1`; default port is `5174`. |
+| Runtime files | Put uploads, logs, caches, backups, temp files, and validation evidence under `CYBERFUSION_ENV_ROOT`; the operator chooses the drive and folder. |
+| Verification | Use `prepare-runtime.ps1`, `verify-no-docker.ps1`, and `collect-windows-evidence.ps1`; Docker health is not a Windows acceptance signal. |
+
+Windows with Docker containers is also supported for local MySQL/Redis/Adminer. The drive letter is still operator-configured; use forward slashes for Compose-mounted Windows paths:
+
+```powershell
+$CyberFusionRoot = "E:\CyberFusion"
+cd (Join-Path $CyberFusionRoot "00-cyberfusion-platform")
+
+$env:CYBERFUSION_ENV_ROOT = "E:/CyberFusion/Environment/cyberfusion-platform"
+$env:DB_HOST = "127.0.0.1"
+$env:DB_PORT = "3306"
+$env:DB_NAME = "cyberfusion_soc"
+$env:DB_USERNAME = "root"
+$env:DB_PASSWORD = "replace-with-local-db-password"
+$env:REDIS_HOST = "127.0.0.1"
+$env:REDIS_PORT = "6379"
+$env:ADMINER_PORT = "8081"
+
+docker compose -f deploy\docker-compose.yml config
+docker compose -f deploy\docker-compose.yml up -d mysql redis adminer
+.\scripts\win\init-local-db.ps1
+.\scripts\win\run-dev.ps1 -SkipDbInit
+```
+
+Container responsibilities in this Windows Docker path:
+
+| Component | Container/process | Runtime path |
+| --- | --- | --- |
+| MySQL | Docker container `mysql` | `${CYBERFUSION_ENV_ROOT}/mysql:/var/lib/mysql` |
+| Redis | Docker container `redis` | `${CYBERFUSION_ENV_ROOT}/redis:/data` |
+| Adminer | Docker container `adminer` | No persistent data |
+| Backend | Local Maven/Spring Boot process by default | `CYBERFUSION_ENV_ROOT\uploads`, `CYBERFUSION_ENV_ROOT\logs\backend` |
+| Frontend | Local pnpm/Vite process by default | No persistent data |
+
+`deploy\docker-compose.app.example.yml` shows the optional full-container application layout for backend and frontend. It uses the same `CYBERFUSION_ENV_ROOT` rule for uploads, logs, MySQL, and Redis. Keep real `.env` files and all mounted folders outside source. Stop with `docker compose stop`; do not run `docker compose down -v` unless local data deletion is explicitly approved. See `docs/windows-docker.md` for the complete Windows Docker checklist.
+
 To reuse an already verified machine without rebuilding every time:
 
 ```sh

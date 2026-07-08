@@ -10,7 +10,7 @@ services:
     ports:
       - "127.0.0.1:${DB_PORT:-33306}:3306"
     volumes:
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/mysql:/var/lib/mysql
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/mysql:/var/lib/mysql
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
@@ -22,7 +22,7 @@ services:
     ports:
       - "127.0.0.1:${REDIS_PORT:-36379}:6379"
     volumes:
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/redis:/data
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/redis:/data
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -56,8 +56,8 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-18080}:8080"
     volumes:
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/uploads:/data/uploads
-      - /Users/zhangjiyan/Environment/cyberfusion-platform/logs/backend:/app/logs
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/uploads:/data/uploads
+      - ${CYBERFUSION_ENV_ROOT:?Set CYBERFUSION_ENV_ROOT to an absolute runtime directory outside source}/logs/backend:/app/logs
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/health/readiness"]
       interval: 30s
@@ -65,4 +65,5 @@ services:
       start_period: 60s
       retries: 5
 
-# Example values only. Put real .env, certs, logs, and volumes under /Users/zhangjiyan/Environment/cyberfusion-platform.
+# Example values only. Put real .env, certs, logs, and volumes under CYBERFUSION_ENV_ROOT outside source.
+# On Windows, use forward slashes in CYBERFUSION_ENV_ROOT, for example E:/CyberFusion/Environment/cyberfusion-platform.
