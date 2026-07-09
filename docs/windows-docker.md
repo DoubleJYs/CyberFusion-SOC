@@ -213,7 +213,140 @@ http://127.0.0.1:8081
 admin / Admin@123456
 ```
 
-## 7. 验证命令
+## 7. Windows Docker 下的 Host Agent 配置
+
+Windows Docker 模式下，平台服务和 Host Agent 必须分开部署：
+
+| 部分 | 运行位置 | 原因 |
+| --- | --- | --- |
+| MySQL / Redis / Adminer | Docker 容器 | 保存平台数据和依赖服务 |
+| Spring Boot / Vue | 默认本机进程；也可使用完整应用容器示例 | 提供平台 API 和页面 |
+| Windows Host Agent | Windows 宿主机 Service 或前台诊断进程 | 只有宿主机进程才能读取 EventLog、Defender、Sysmon、服务、端口、FIM 等真实主机信息 |
+
+不要把 Windows Host Agent 放进 Linux 容器里。Linux 容器看到的是容器文件系统和容器进程，不能代表 Windows 宿主机真实安全状态。
+
+### 7.1 Agent 运行目录
+
+Host Agent 仍使用 `CYBERFUSION_ENV_ROOT`，但写入独立子目录：
+
+```text
+%CYBERFUSION_ENV_ROOT%\agent\<agentId>\
+  bin\cyberfusion-agent.exe
+  config\agent.env
+  runtime\
+    queue\
+    logs\
+    state.json
+```
+
+`agent.env` 会保存 `CYBERFUSION_AGENT_TOKEN`，权限应限制给 `SYSTEM`、`Administrators` 和当前安装用户。该文件、运行日志、pending 队列和本机证据都不能进入 Git。
+
+### 7.2 必填变量
+
+在平台后端已经可访问后，设置 Agent 相关变量：
+
+```powershell
+$env:CYBERFUSION_ENV_ROOT = "E:/CyberFusion/Environment/cyberfusion-platform"
+$env:CYBERFUSION_API_BASE = "http://127.0.0.1:18080/api"
+$env:CYBERFUSION_AGENT_ID = "windows-host-agent"
+$env:CYBERFUSION_AGENT_TOKEN = "replace-with-local-agent-token"
+```
+
+变量说明：
+
+| 变量 | 必填 | 说明 |
+| --- | --- | --- |
+| `CYBERFUSION_ENV_ROOT` | 是 | 与平台 Docker 使用同一个源码外运行根目录 |
+| `CYBERFUSION_API_BASE` | 是 | 后端 API 地址；默认本机后端是 `http://127.0.0.1:18080/api` |
+| `CYBERFUSION_AGENT_ID` | 建议设置 | 稳定 Agent ID，一台 Windows 主机固定一个 ID |
+| `CYBERFUSION_AGENT_TOKEN` | 是 | Agent 注册后获得的一次性明文 token；服务端只保存 hash |
+| `CYBERFUSION_ADMIN_ACCESS_TOKEN` | 可选 | 如不手动提供 Agent token，安装脚本可用管理员 access token 调 `/soc/agents/register` 自动注册 |
+
+如果使用 `deploy\docker-compose.app.example.yml` 将后端也放进容器，确认 `BACKEND_PORT` 对宿主机暴露，例如：
+
+```powershell
+$env:BACKEND_PORT = "18080"
+docker compose -f deploy\docker-compose.app.example.yml config
+```
+
+Agent 仍从 Windows 宿主机访问：
+
+```text
+http://127.0.0.1:18080/api
+```
+
+### 7.3 获取 Agent token
+
+推荐在页面 `/soc/agents` 中注册 Windows Agent，并只复制一次 `agentToken`。也可以用管理员 JWT 调接口注册；下面示例中的 access token 只能放在本机临时会话里，不要写入源码：
+
+```powershell
+$env:CYBERFUSION_ADMIN_ACCESS_TOKEN = "replace-with-local-admin-access-token"
+.\scripts\win\install-agent.ps1 `
+  -AgentId "windows-host-agent" `
+  -AdminAccessToken $env:CYBERFUSION_ADMIN_ACCESS_TOKEN
+```
+
+如果已经从页面拿到了 Agent token，则直接传入：
+
+```powershell
+$env:CYBERFUSION_AGENT_TOKEN = "replace-with-local-agent-token"
+.\scripts\win\install-agent.ps1 -AgentId "windows-host-agent"
+```
+
+安装脚本会构建或复制 `cyberfusion-agent.exe`，生成本地 `agent.env`，并默认创建 `CyberFusionHostAgent` Windows Service。
+
+### 7.4 启动与验证
+
+启动服务：
+
+```powershell
+.\scripts\win\start-agent.ps1 -AgentId "windows-host-agent"
+```
+
+一次性真实上报验证：
+
+```powershell
+.\scripts\win\verify-agent.ps1 -AgentId "windows-host-agent" -UploadOnce
+```
+
+验证通过后，应在平台中看到：
+
+- `/soc/agents` 出现 `windows-host-agent`。
+- `soc_asset` 中出现 `source_type=windows-agent` 的真实 Windows 主机资产。
+- `soc_external_event` 出现 Windows EventLog / Defender / 服务 / 端口 / 补丁摘要等主机事件。
+- `soc_file_integrity_event` 出现 FIM hash 元数据。
+- `soc_baseline_check` 出现 Windows Defender、防火墙等基线状态。
+
+### 7.5 队列、停机和卸载
+
+当后端容器或本机后端不可达时，Agent 不应丢弃数据；pending 上传会留在：
+
+```text
+%CYBERFUSION_ENV_ROOT%\agent\<agentId>\runtime\queue
+```
+
+后端恢复后，Agent 下一轮采集会重试队列，并通过心跳回写 `queueDepth`、`queueBytes`、`sentCount` 和 `failedCount`。
+
+卸载服务：
+
+```powershell
+.\scripts\win\uninstall-agent.ps1 -AgentId "windows-host-agent"
+```
+
+卸载脚本默认移除服务、二进制和本地 token 配置，不连接平台数据库；pending 队列默认保留，避免升级或故障处理时丢失未上传事件。
+
+### 7.6 当前验收边界
+
+没有真实 Windows 主机时，只能验证 Windows Agent 交叉构建、fixture 协议回放、安装脚本和页面展示。不能宣称以下能力已经完成：
+
+- 真实 Windows EventLog / Defender / Sysmon 采集。
+- Windows Service 重启自恢复。
+- 宿主机重启后自动心跳和补传。
+- Docker 后端停机 30 分钟后的真实队列积压与恢复补传。
+
+Windows fixture 数据只允许在 smoke 执行窗口内短暂出现；清理门禁通过后，业务页面不应保留伪造 Windows 主机、告警、事件簇、工单或报表。
+
+## 8. 验证命令
 
 启动后执行：
 
@@ -245,7 +378,7 @@ mysql --default-character-set=utf8mb4 `
 %CYBERFUSION_ENV_ROOT%\validation
 ```
 
-## 8. 停止与重启
+## 9. 停止与重启
 
 停止后端和前端时，关闭对应 PowerShell 窗口或停止脚本进程。
 
@@ -269,7 +402,7 @@ docker compose -f deploy\docker-compose.yml down -v
 
 `down -v` 会删除本机 Docker 数据卷，只有在明确确认要清空本地 MySQL/Redis 数据时才能使用。
 
-## 9. 完整应用容器示例
+## 10. 完整应用容器示例
 
 如果要把后端和前端也容器化，参考：
 
@@ -292,7 +425,7 @@ docker compose -f deploy\docker-compose.app.example.yml config
 
 完整应用容器模式适合打包演示或封闭环境验证。日常开发仍建议使用“数据库/缓存容器 + 后端/前端本机进程”的方式。
 
-## 10. Demo Range Docker 配置
+## 11. Demo Range Docker 配置
 
 Demo Range 是独立靶场，不使用主系统的 `CYBERFUSION_ENV_ROOT` 作为根目录，而是使用：
 
@@ -329,7 +462,7 @@ http://127.0.0.1:18081
 
 Demo Range 只用于本机或受控内网演示，不要暴露到公网，不要扫描第三方目标。
 
-## 11. 常见问题
+## 12. 常见问题
 
 | 问题 | 处理方式 |
 | --- | --- |
@@ -341,8 +474,10 @@ Demo Range 只用于本机或受控内网演示，不要暴露到公网，不要
 | 数据库表不存在 | 执行 `.\scripts\win\init-local-db.ps1` |
 | 前端 500 或接口失败 | 先看 `http://127.0.0.1:18080/api/health`，再运行 `dev-doctor.ps1` |
 | Docker volume 写到源码目录 | 立刻停止容器，修正 `CYBERFUSION_ENV_ROOT` 到源码外路径后重新 `config` |
+| Agent 页面没有 Windows 数据 | 先确认 Host Agent 是 Windows 宿主机 Service，不是容器内进程；再运行 `verify-agent.ps1 -UploadOnce` |
+| Agent token 泄露或误提交 | 立即停用对应 Agent，重新注册 token，并确认 `agent.env`、日志、队列没有进入 Git |
 
-## 12. 最小验收清单
+## 13. 最小验收清单
 
 交付或汇报前至少确认：
 
@@ -353,4 +488,6 @@ Demo Range 只用于本机或受控内网演示，不要暴露到公网，不要
 - `http://127.0.0.1:18080/api/health` 返回正常。
 - `http://127.0.0.1:5174` 可以登录。
 - 运行数据位于 `CYBERFUSION_ENV_ROOT`，不在源码目录。
+- Windows Host Agent 运行在宿主机，`verify-agent.ps1 -UploadOnce` 可以完成真实上报。
+- Agent 队列、日志、token 配置位于 `%CYBERFUSION_ENV_ROOT%\agent`，不在源码目录。
 - 没有真实密码、Token、证书、数据库文件、日志或 Docker 卷进入 Git。
