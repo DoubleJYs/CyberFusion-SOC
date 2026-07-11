@@ -18,8 +18,20 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  applyWorkspaceOwner(config)
   return config
 })
+
+function applyWorkspaceOwner(config: InternalAxiosRequestConfig) {
+  const url = config.url || ''
+  if (!url.startsWith('/soc/') || url.startsWith('/soc/user-workspaces')) return
+  const ownerId = router.currentRoute.value.query.ownerId
+  if (typeof ownerId !== 'string' || !/^\d+$/.test(ownerId)) return
+  const params = (config.params && typeof config.params === 'object' ? config.params : {}) as Record<string, unknown>
+  if (params.ownerId == null) {
+    config.params = { ...params, ownerId }
+  }
+}
 
 request.interceptors.response.use(
   (response) => {

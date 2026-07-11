@@ -12,7 +12,7 @@ This directory contains the self-developed Host Agent. The first implementation 
 - Current-host asset collection using Go standard library network interfaces.
 - macOS listening port, process summary, launchd startup item summary, bounded system log summary, firewall, remote login, and watched-file permission metadata.
 - Windows EventLog summaries for Security/System/Application, PowerShell Operational, Defender Operational, optional Sysmon, patch summary, service summary, listening port summary, startup summary, Defender service baseline, and firewall baseline.
-- Optional FIM hash metadata for one configured file path.
+- Platform-published, host-bound FIM directories for logs, audit paths, and selected business files. The Agent stores a local metadata baseline and then reports created, modified, deleted, and permission changes without uploading file content.
 - No long-running PowerShell collector, no remote command execution, no file body upload.
 
 ## Local Dry Run
@@ -27,6 +27,12 @@ go run ./cmd/cyberfusion-agent --mode collect --dry-run --fim-path ./README.md
 ## Daemon Mode
 
 Service wrappers should run the same binary in bounded-interval daemon mode. Upload failures do not stop the process; pending JSON operations remain in the local runtime queue and are retried on the next cycle. If all dedupe keys in a new asset/event/FIM/baseline operation already exist in the pending queue, the duplicate operation is skipped locally instead of growing the outage queue. After a successful flush, the agent sends a second heartbeat with the current queue depth and sent/failed counters so the platform can show replay status.
+
+### FIM Directory Authorization
+
+For a real host, configure monitored directories in the platform under `策略与规则中心 -> 文件监控授权`, then publish the authorization. Every authorization is bound to one hostname and OS family, has a recursion and entry-count limit, and is fetched by the Agent with its own token at the beginning of each collection cycle. The Agent rejects no paths locally, but the platform refuses filesystem roots, wildcards, and traversal input before publication. The Agent skips symlinks, reads no file bodies, and keeps `fim-state.json` in its runtime directory so the first scan is a baseline and later scans carry only changes.
+
+`--fim-path` / `CYBERFUSION_AGENT_FIM_PATH` remains a single-path compatibility option for local diagnostics. Do not use it for production directory policy.
 
 ```bash
 go run ./cmd/cyberfusion-agent \
@@ -97,7 +103,19 @@ The Windows zip proves cross-build and package layout on macOS. It does not repl
 
 ## Upload With an Existing Agent Token
 
-Register the agent from the platform first, then keep the token in the local environment or protected config. Do not commit it.
+Register the agent from the platform first, then keep the token in the local environment or protected config. Do not commit it. The recommended UI path is `Agent Center -> Agent 安装命令设置与建立` (`/soc/agents/install`): the page detects the backend host OS and fills the real runtime directories automatically. `在本机安装并校验` creates the local token, runs the fixed installer, starts the Agent, and uploads one real collection batch. Manual command installation remains available for another host of the same OS. The management page (`/soc/agents`) is for online state, queues, batches, rejects, and runtime start/stop.
+
+### Collection Profiles
+
+Set `CYBERFUSION_AGENT_VERSION` to the deployed software version and `CYBERFUSION_AGENT_PROFILE` to one of the following profiles. Both values are stored in the local protected Agent configuration; the version is sent in the registration and heartbeat metadata.
+
+| Profile | Collected evidence |
+| --- | --- |
+| `full` | Assets, host logs, patrol observations, FIM, and baseline checks. |
+| `host-log` | Assets and host security logs only. |
+| `patrol-audit` | Assets, ports, processes, startup items, and audit observations; no FIM. |
+| `file-integrity` | Assets, FIM evidence, and related baseline checks; no host logs. |
+| `baseline-audit` | Assets and baseline checks only. |
 
 ```bash
 cd agent
@@ -107,6 +125,8 @@ go run ./cmd/cyberfusion-agent \
   --agent-id macos-dev-agent \
   --runtime-dir /private/tmp/cyberfusion-agent-macos-dev-agent \
   --mode collect \
+  --agent-version 0.1.0-dev \
+  --profile patrol-audit \
   --fim-path ./README.md
 ```
 

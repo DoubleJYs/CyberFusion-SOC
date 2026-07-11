@@ -41,9 +41,8 @@ C2 answers: "How do different tool outputs become one SOC evidence model?"
 | --- | --- | --- |
 | Unified event model | Normalizes `sourceType`, `eventType`, `severity`, `assetIp`, `eventTime`, `ruleId`, `batchId`, `demoCaseId`, `correlationKey`, and source-specific fields. | `SocOperationService`, `soc_external_event`, `soc_alert` |
 | Adapter mapping | Maintains source-to-normalized field mappings, severity mappings, dedup keys, and alert title templates. | `/soc/policies`, `soc_event_adapter_profile`, `soc_event_field_mapping`, `soc_event_severity_mapping`, `soc_event_alert_link_rule` |
-| Rule catalog | Shows built-in safe rule catalog plus live event/alert hits; no separate online rule-execution table is required for the current phase. | `/soc/rules`, `GET /api/soc/rules`, `GET /api/soc/rules/adapter-mappings` |
+| Detection content settings | Maintains platform-side detection content, severity, release state and alert promotion for ingested source rules. | `/soc/rules`, `soc_detection_rule_policy`, `GET /api/soc/rules`, `POST /api/soc/rules/configs` |
 | Hit preview | Lets analysts see which evidence and alerts matched one source/rule pair. | `GET /api/soc/rules/hits?sourceType=...&ruleId=...` |
-| Alert noise control | Supports whitelist, ignored/false-positive handling, adapter transparency, and noise-reduction visibility. | `/soc/alert-noise`, `soc_alert_whitelist`, `soc_alert` |
 | Evidence center | Provides the analyst-facing list/detail/status surface for all imported security evidence. | `/soc/external-events`, `GET /api/soc/external-events`, `GET /api/soc/external-events/{id}` |
 
 This layer is the bridge between tool-specific data and platform-level SOC operations. It is also where the system explains mapping failures and keeps safe fallback behavior when an active adapter is missing.

@@ -54,6 +54,21 @@ public class SocIncidentController {
         return ApiResult.ok(service.createTicket(id, request));
     }
 
+    @Operation(summary = "开始事件簇研判")
+    @PostMapping("/{id}/investigate")
+    @OperationAudit("SOC_INCIDENT.INVESTIGATE")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:incident:ticket') or hasAuthority('soc:incident:close')")
+    public ApiResult<SocIncidentCluster> investigate(@PathVariable Long id, @RequestBody(required = false) IncidentActionRequest request) {
+        return ApiResult.ok(service.startInvestigation(id, request));
+    }
+
+    @Operation(summary = "检查事件簇是否满足闭环条件")
+    @GetMapping("/{id}/closure-readiness")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:incident:view') or hasAuthority('soc:incident:list')")
+    public ApiResult<CorrelationService.ClosureReadiness> closureReadiness(@PathVariable Long id) {
+        return ApiResult.ok(service.closureReadiness(id));
+    }
+
     @Operation(summary = "关闭事件簇")
     @PostMapping("/{id}/close")
     @OperationAudit("SOC_INCIDENT.CLOSE")

@@ -10,13 +10,14 @@ This manual is for customer demos, internal acceptance, and operator handoff of 
 2. Sign in with the local demo administrator account created by `sql/data.sql`.
 3. For customer-facing demos, open `/showcase` first. This page is the guided 5-step customer demo shell.
 4. Use `SOC 专家后台` only when the audience needs operator-level details:
+   - `/soc/user-workspaces`: 先选择普通用户及其主机工作区，再进入对应业务页面；管理员可从系统用户管理跳转到指定用户。
    - `/soc/dashboard`: 安全总览.
    - `/soc/demo-range`: 安全验证.
    - `/soc/external-events`: 证据中心.
    - `/soc/alerts`: 告警处置.
    - `/soc/tickets`: 工单中心.
    - `/soc/reports`: 报告中心.
-   - `/soc/rules`: 检测规则.
+   - `/soc/rules`: 检测内容规则设置.
    - `/soc/policies`: 策略与规则中心.
 5. Use `系统管理` only for administrator handoff. System management pages are not part of the customer demo path.
 
@@ -45,6 +46,14 @@ B1 keeps every compatible route, but changes the default navigation density by r
 `expert` mode shows diagnostics, raw evidence, relation reasons, adapter mapping entries, policy version, and audit entry points. `simple` mode keeps conclusion, next action, and key metrics on the first screen, with technical details kept in drawers.
 
 Backend permissions remain authoritative. Employee and customer-class roles do not receive effective `soc:*`, `system:*`, or `dashboard:view` permissions even if an old local database still contains stale menu rows.
+
+## 用户工作区与验证数据
+
+“安全运营工作台”保持全局驾驶舱，不显示用户卡片。Agent 安装直接进入原有安装页；Agent 管理可在“全局 Agent 管理”和“按用户查看”之间切换。
+
+管理员进入安全运营的具体业务页时，会看到与目标页面对应的用户卡片，例如事件簇卡片显示开放/高危事件簇。处置闭环的工单中心和报告中心默认保留原有全局总览，并可切换到“按用户查看”；两类卡片分别显示工单或报告专属指标和按钮。选择用户后，各业务数据按该用户的 `ownerId` 过滤。用户选择页是业务中转页，不在侧栏提供独立菜单。
+
+张彥是当前开发机的真实采集用户。松松、老曹、刘哥用于权限和闭环验证，页面会明确显示“预置验证数据”，不应被解释为实际远程设备或生产告警。管理员可以在 `系统管理 -> 用户管理` 的“安全工作区”入口直接检查指定用户。
 
 ## Project Structure And Function Architecture
 
@@ -97,15 +106,14 @@ CyberFusion SOC is organized into five frontend experiences and one backend data
 | `/soc/demo-range` | 安全验证 | Offline demo batch import, batch status, topology, evidence chain, incident chain, ticket/report/notification entries. | Demo Range import API, evidence chain API, report API, notification dry-run log. |
 | `/soc/alerts` | 告警处置 | Alert list, filters, detail drawer, related incident clusters, playbook suggestions, convert to ticket, false-positive/close handling. | `soc_alert`, `soc_incident_cluster`, `soc_response_playbook`, `soc_ticket`. |
 | `/soc/incidents` | 安全事件簇 | Correlation execution, cluster list, evidence timeline, relation reasons, ticket conversion, close workflow. | `soc_incident_cluster`, `soc_incident_evidence`, `soc_correlation_rule`, ticket APIs. |
-| `/soc/rules` | 检测规则中心 | Rule inventory, recent hits, source adapter mapping explanation, jump to events or alerts. | Existing event/alert tables plus built-in rule catalog. |
-| `/soc/policies` | 策略与规则中心 | Maintains local check policies, event adapter mappings, response playbooks, risk scoring policies, correlation rules, algorithm governance, and audit views. | Policy tables, adapter tables, playbook tables, risk/correlation/algorithm APIs. |
-| `/soc/alert-noise` | 告警降噪 | Noise suppression, whitelist-style review, false-positive tracking, close/ignore support. | `soc_alert` status and review fields. |
+| `/soc/rules` | 检测内容规则设置 | Configure unified detection content, severity, publish state and hit preview for ingested source rules. | Existing event/alert tables, built-in rule catalog, and `soc_detection_rule_policy`. |
+| `/soc/policies` | 策略与规则中心 | Maintains host checks, event field mappings, manual response templates, and audit views. | Policy tables, adapter tables, playbook tables, and audit APIs. |
 | `/soc/assets` | 资产视图 | Asset inventory, risk level, risk profile drawer, single-asset recalculation, linked incidents and recommendations. | `soc_asset`, `soc_asset_risk_snapshot`, alert/vulnerability/ticket factors. |
 | `/soc/client-security` | 员工终端安全态势 | Employee Security Keeper coverage, high-risk computers, pending tasks, local-check submissions. | Client checkups, tasks, assets, risk profile, ticket/task APIs. |
 | `/soc/vulnerabilities` | 漏洞中心 | Vulnerability list, severity filters, Trivy demo evidence, asset linkage. | `soc_vulnerability`. |
 | `/soc/baselines` | 基线核查 | Baseline failure and pass records, asset baseline posture. | Baseline records from existing SOC data. |
 | `/soc/fim` | 文件完整性 | File-change evidence and review state. | FIM-style external evidence and normalized fields. |
-| `/soc/external-events` | 证据中心 | Multi-source evidence list, structured fields, raw JSON drawer, batch/demo case filtering, alert/event drilldown. | `soc_external_event`, adapter normalized fields. |
+| `/soc/external-events` | 外部事件 | 外部访问、主机外联、外部扫描和 IOC 情报风险。 | Zeek、Suricata、WAF、ZAP、Trivy、MISP、OpenCTI 的规范化风险记录与告警联动。 |
 | `/soc/tickets` | 工单中心 | Ticket list, ticket timeline, playbook tasks, employee task state, report linkage. | `soc_ticket`, `soc_ticket_timeline`, `soc_ticket_task`. |
 | `/soc/reports` | 报告中心 | Security validation report generation, readable report detail sections, dry-run notification boundary display. | `soc_report`, report generation API, notification dry-run logs. |
 | `/soc/settings` | 系统配置 | Data source and notification settings, integration catalog, dry-run sender state. | Integration settings, notification logs, config APIs. |
@@ -315,7 +323,6 @@ Full screenshot inventory:
 | SOC | `20-soc-policies-correlation.png` | `/soc/policies` -> `事件关联规则` | Correlation rule tab. |
 | SOC | `21-soc-policies-algorithm.png` | `/soc/policies` -> `算法治理` | Algorithm governance and replay tab. |
 | SOC | `22-soc-policies-audit.png` | `/soc/policies` -> `变更审计` | Policy change audit tab. |
-| SOC | `23-soc-alert-noise.png` | `/soc/alert-noise` | Alert noise reduction. |
 | SOC | `24-soc-assets.png` | `/soc/assets` | Asset risk view. |
 | SOC | `25-soc-client-security.png` | `/soc/client-security` | Employee endpoint security posture. |
 | SOC | `26-soc-vulnerabilities.png` | `/soc/vulnerabilities` | Vulnerability center. |
@@ -399,9 +406,11 @@ Full screenshot inventory:
 
 ![安全事件簇](screenshots/14-soc-incidents.png)
 
-#### 检测规则中心
+从“每日处理”进入事件簇后，按以下顺序推进闭环：先点击“开始研判”记录核查范围；高危和严重事件必须转为处置工单；在工单中完成处置任务、填写复核结论并关闭或归档工单；返回事件簇查看“闭环检查”，补齐证据链和阻塞项后提交不少于 12 个字符的最终结论。满足条件才允许关闭事件簇，关闭后仍保留证据链和工单时间线。
 
-![检测规则中心](screenshots/15-soc-rules.png)
+#### 检测内容规则设置
+
+![检测内容规则设置](screenshots/15-soc-rules.png)
 
 #### 策略与规则中心：本机检查策略
 
@@ -461,10 +470,6 @@ Full screenshot inventory:
 - 分析员只能查看评估结果，不能执行回放。
 - 员工端账号不能访问算法治理接口。
 
-#### 告警降噪
-
-![告警降噪](screenshots/23-soc-alert-noise.png)
-
 #### 资产视图
 
 ![资产视图](screenshots/24-soc-assets.png)
@@ -486,6 +491,8 @@ Full screenshot inventory:
 #### 文件完整性
 
 ![文件完整性](screenshots/28-soc-fim.png)
+
+文件完整性页面只展示已授权主机目录的元数据变化。要新增监控对象，进入 `策略与规则中心 -> 文件监控授权`，选择已登记的主机、操作系统、明确目录、用途和递归上限，保存并发布。Agent 在下一次采集周期读取授权，首次创建基线，后续记录新增、修改、删除和权限变化。文件内容不会上传；根目录、通配符和路径穿越不允许发布。
 
 #### 证据中心
 

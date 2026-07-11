@@ -41,9 +41,9 @@
         <small>推荐排序分</small>
       </article>
       <article>
-        <span>待处理状态</span>
-        <strong>{{ openStatusCount }}</strong>
-        <small>open / pending / ticketed</small>
+        <span>今日待办</span>
+        <strong>{{ todoRows.length }}</strong>
+        <small>事件簇 / 漏洞 / 工单 / 员工待办</small>
       </article>
     </section>
 
@@ -109,38 +109,102 @@
             <span>建议动作</span>
             <strong>{{ item.recommendedAction }}</strong>
             <div class="recommendation-buttons">
-              <el-button size="small" @click.stop="recordView(item)">记录查看</el-button>
-              <el-button size="small" type="primary" @click.stop="openRecommendation(item)">进入处理</el-button>
+              <el-button size="small" @click.stop="recordView(item)">查看处理记录</el-button>
+              <el-button size="small" type="primary" @click.stop="openRecommendation(item)">开始处理</el-button>
             </div>
           </div>
         </button>
       </div>
       <el-empty v-else description="暂无匹配建议" :image-size="76" />
     </section>
+
+    <section v-loading="todoLoading" class="soc-panel daily-todo-worklist">
+      <div class="panel-title todo-panel-head">
+        <div>
+          <strong>今日待办</strong>
+          <span>所有尚未闭环的事件簇、漏洞、工单和员工待办，按当前权限范围实时汇总。</span>
+        </div>
+        <span>{{ filteredTodoRows.length }} 条匹配 / {{ todoRows.length }} 条待办</span>
+      </div>
+      <el-radio-group v-model="todoTypeFilter" class="todo-type-filter">
+        <el-radio-button label="all">全部</el-radio-button>
+        <el-radio-button label="incident">事件簇</el-radio-button>
+        <el-radio-button label="vulnerability">漏洞</el-radio-button>
+        <el-radio-button label="ticket">工单</el-radio-button>
+        <el-radio-button label="employee_task">员工待办</el-radio-button>
+      </el-radio-group>
+      <el-table :data="pagedTodoRows" empty-text="当前没有待办" size="small" class="daily-todo-table">
+        <el-table-column label="类型" width="104">
+          <template #default="{ row }"><el-tag size="small" effect="plain">{{ todoTypeText(row.type) }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="优先级" width="98">
+          <template #default="{ row }"><el-tag size="small" :type="priorityTag(row.priority)" effect="plain">{{ priorityText(row.priority) }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="待办内容" min-width="270" show-overflow-tooltip>
+          <template #default="{ row }"><strong>{{ row.title }}</strong><small>{{ row.detail }}</small></template>
+        </el-table-column>
+        <el-table-column label="资产" min-width="170" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.asset || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">{{ recommendationStatusText(row.status) }}</template>
+        </el-table-column>
+        <el-table-column label="时间 / 截止" min-width="156">
+          <template #default="{ row }">{{ row.time || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="96">
+          <template #default="{ row }"><el-button link type="primary" @click="openTodo(row)">开始处理</el-button></template>
+        </el-table-column>
+      </el-table>
+      <div class="todo-pagination">
+        <span>共 {{ filteredTodoRows.length }} 条</span>
+        <el-pagination v-model:current-page="todoPage" :page-size="todoPageSize" layout="prev, pager, next" :total="filteredTodoRows.length" />
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataAnalysis, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { recordRecommendationAction, topRecommendations } from '@/api/soc'
-import type { RecommendationItem } from '@/api/soc'
+import { listAlerts, listClientTasks, listIncidents, listTickets, listVulnerabilities, recordRecommendationAction, topRecommendations } from '@/api/soc'
+import type { AlertItem, IncidentClusterItem, RecommendationItem, TicketItem, TicketTaskItem, VulnerabilityItem } from '@/api/soc'
 
 const router = useRouter()
 const rows = ref<RecommendationItem[]>([])
 const loading = ref(false)
+const todoLoading = ref(false)
 const error = ref('')
 const keyword = ref('')
 const priorityFilter = ref('')
 const sourceFilter = ref('')
 const limit = ref(20)
+const todoRows = ref<DailyTodoItem[]>([])
+const todoTypeFilter = ref('all')
+const todoPage = ref(1)
+const todoPageSize = 12
+
+interface DailyTodoItem {
+  id: number
+  type: 'incident' | 'vulnerability' | 'ticket' | 'employee_task'
+  priority: string
+  title: string
+  detail: string
+  asset?: string
+  status: string
+  time?: string
+}
 
 const sourceCount = computed(() => new Set(rows.value.map((item) => item.relatedBizType).filter(Boolean)).size)
 const urgentCount = computed(() => rows.value.filter((item) => item.priority === 'critical' || item.priority === 'high').length)
 const highestScore = computed(() => rows.value.length ? Math.max(...rows.value.map((item) => item.priorityScore || 0)) : 0)
-const openStatusCount = computed(() => rows.value.filter((item) => ['open', 'pending', 'todo', 'ticketed', 'in_progress', 'processing'].includes((item.status || '').toLowerCase())).length)
+const filteredTodoRows = computed(() => todoRows.value.filter((item) => todoTypeFilter.value === 'all' || item.type === todoTypeFilter.value))
+const pagedTodoRows = computed(() => {
+  const start = (todoPage.value - 1) * todoPageSize
+  return filteredTodoRows.value.slice(start, start + todoPageSize)
+})
 
 const sourceOptions = computed(() => {
   const types = Array.from(new Set(rows.value.map((item) => item.relatedBizType).filter(Boolean)))
@@ -165,6 +229,12 @@ const filteredRows = computed(() => {
   })
 })
 
+watch(todoTypeFilter, () => { todoPage.value = 1 })
+watch(filteredTodoRows, (items) => {
+  const lastPage = Math.max(1, Math.ceil(items.length / todoPageSize))
+  if (todoPage.value > lastPage) todoPage.value = lastPage
+})
+
 onMounted(load)
 
 async function load() {
@@ -172,12 +242,78 @@ async function load() {
   error.value = ''
   try {
     rows.value = (await topRecommendations(limit.value)).data.data
+    await loadTodos()
   } catch {
     rows.value = []
     error.value = '每日处理建议加载失败，请检查后端推荐动作接口。'
   } finally {
     loading.value = false
   }
+}
+
+async function loadTodos() {
+  todoLoading.value = true
+  try {
+    const results = await Promise.allSettled([
+      listIncidents({ pageNum: 1, pageSize: 100 }),
+      listVulnerabilities({ pageNum: 1, pageSize: 100 }),
+      listTickets({ pageNum: 1, pageSize: 100 }),
+      listClientTasks(),
+      listAlerts({ pageNum: 1, pageSize: 100 }),
+    ])
+    const incidents = recordsFrom<IncidentClusterItem>(results[0])
+    const vulnerabilities = recordsFrom<VulnerabilityItem>(results[1])
+    const tickets = recordsFrom<TicketItem>(results[2])
+    const tasks = valuesFrom<TicketTaskItem>(results[3])
+    const alertById = new Map(recordsFrom<AlertItem>(results[4]).map((item) => [item.id, item]))
+    todoRows.value = [
+      ...incidents.filter((item) => !['closed', 'ignored', 'archived'].includes((item.status || '').toLowerCase())).map(toIncidentTodo),
+      ...vulnerabilities.filter((item) => !['fixed', 'accepted', 'closed'].includes((item.status || '').toLowerCase())).map(toVulnerabilityTodo),
+      ...tickets.filter((item) => !['已关闭', '已归档', 'closed', 'resolved'].includes((item.status || '').toLowerCase())).map(toTicketTodo),
+      ...tasks.filter((item) => !['completed', 'confirmed', 'skipped'].includes((item.status || '').toLowerCase())).map((item) => toEmployeeTaskTodo(item, alertById.get(item.alertId || 0))),
+    ].sort((left, right) => todoPriority(right.priority) - todoPriority(left.priority))
+  } finally {
+    todoLoading.value = false
+  }
+}
+
+function recordsFrom<T>(result: PromiseSettledResult<{ data: { data: { records: T[] } } }>) {
+  return result.status === 'fulfilled' ? result.value.data.data.records : []
+}
+
+function valuesFrom<T>(result: PromiseSettledResult<{ data: { data: T[] } }>) {
+  return result.status === 'fulfilled' ? result.value.data.data : []
+}
+
+function toIncidentTodo(item: IncidentClusterItem): DailyTodoItem {
+  return { id: item.id, type: 'incident', priority: item.severity, title: item.title || item.clusterNo, detail: item.summary || item.recommendation || '核对事件证据并推动处置。', asset: item.hostname || item.assetIp || item.primaryHostname || item.primaryAssetIp, status: item.status, time: item.lastSeenAt || item.firstSeenAt }
+}
+
+function toVulnerabilityTodo(item: VulnerabilityItem): DailyTodoItem {
+  return { id: item.id, type: 'vulnerability', priority: item.severity, title: `${item.cveId || '漏洞'} ${item.softwareName || ''}`.trim(), detail: item.fixSuggestion || '核对影响范围并安排修复。', asset: item.assetName || item.assetIp, status: item.status, time: item.detectedAt }
+}
+
+function toTicketTodo(item: TicketItem): DailyTodoItem {
+  return { id: item.id, type: 'ticket', priority: item.severity, title: item.title || item.ticketNo, detail: item.reviewConclusion || item.resolution || '补充处置进展或完成复核。', status: item.status, time: item.dueAt }
+}
+
+function toEmployeeTaskTodo(item: TicketTaskItem, alert?: AlertItem): DailyTodoItem {
+  return { id: item.id, type: 'employee_task', priority: alert?.severity || 'medium', title: item.taskName || item.taskKey, detail: item.instruction || item.expectedEvidence || '提交说明或完成本机检查。', asset: alert?.assetName || alert?.assetIp, status: item.status, time: item.updatedAt || item.createdAt }
+}
+
+function openTodo(item: DailyTodoItem) {
+  if (item.type === 'incident') router.push({ path: '/soc/incidents', query: { openIncidentId: item.id } })
+  else if (item.type === 'vulnerability') router.push({ path: '/soc/vulnerabilities', query: { openVulnerabilityId: item.id } })
+  else if (item.type === 'ticket') router.push({ path: '/soc/tickets', query: { openTicketId: item.id } })
+  else router.push({ path: '/client/tasks', query: { openTaskId: item.id } })
+}
+
+function todoTypeText(type: DailyTodoItem['type']) {
+  return ({ incident: '事件簇', vulnerability: '漏洞', ticket: '工单', employee_task: '员工待办' })[type]
+}
+
+function todoPriority(priority: string) {
+  return ({ critical: 4, high: 3, medium: 2, low: 1 } as Record<string, number>)[priority] || 0
 }
 
 async function recordView(item: RecommendationItem, silent = false) {
@@ -198,29 +334,27 @@ async function recordView(item: RecommendationItem, silent = false) {
 
 async function openRecommendation(item: RecommendationItem) {
   await recordView(item, true)
-  const keyword = recommendationKeyword(item)
-  if (item.relatedBizType === 'incident') {
-    router.push({ path: '/soc/incidents', query: { keyword, openIncidentId: item.relatedBizId } })
-  } else if (item.relatedBizType === 'ticket' || item.relatedBizType === 'playbook_task' || item.relatedBizType === 'client_task') {
-    const ticketQuery: Record<string, string | number | undefined> = { keyword: ticketKeyword(item) }
-    if (item.relatedBizType === 'ticket') ticketQuery.openTicketId = item.relatedBizId
-    router.push({ path: '/soc/tickets', query: ticketQuery })
-  } else if (item.relatedBizType === 'vulnerability') {
-    router.push({ path: '/soc/vulnerabilities', query: { keyword, openVulnerabilityId: item.relatedBizId } })
-  } else if (item.relatedBizType === 'client_checkup' && (item.assetIp || item.assetName)) {
+  const targetType = item.navigationBizType || item.relatedBizType
+  const targetId = item.navigationBizId || item.relatedBizId
+  if (targetType === 'incident') {
+    router.push({ path: '/soc/incidents', query: { openIncidentId: targetId, fromRecommendation: item.key } })
+  } else if (targetType === 'ticket') {
+    router.push({ path: '/soc/tickets', query: { openTicketId: targetId, fromRecommendation: item.key } })
+  } else if (targetType === 'vulnerability') {
+    router.push({ path: '/soc/vulnerabilities', query: { openVulnerabilityId: targetId, fromRecommendation: item.key } })
+  } else if (targetType === 'client_checkup' && (item.assetIp || item.assetName)) {
     router.push({ path: '/client/workbench', query: { ip: item.assetIp || item.assetName } })
-  } else if (item.assetIp || item.assetName) {
-    router.push({ path: '/soc/assets', query: { keyword, openAssetId: item.assetId } })
+  } else if (targetType === 'asset' || item.assetId || item.assetIp || item.assetName) {
+    const query: Record<string, string | number | undefined> = { fromRecommendation: item.key }
+    if (targetType === 'asset' && targetId) query.openAssetId = targetId
+    else if (item.assetId) query.openAssetId = item.assetId
+    else query.keyword = recommendationKeyword(item)
+    router.push({ path: '/soc/assets', query })
   }
 }
 
 function recommendationKeyword(item: RecommendationItem) {
   return item.assetIp || item.assetName || normalizedRecommendationTitle(item) || String(item.relatedBizId || '')
-}
-
-function ticketKeyword(item: RecommendationItem) {
-  const match = /INC-[A-Za-z0-9_-]+/.exec(item.title || '')
-  return match?.[0] || recommendationKeyword(item)
 }
 
 function normalizedRecommendationTitle(item: RecommendationItem) {
@@ -421,6 +555,37 @@ function recommendationStatusText(status: string) {
   flex-wrap: wrap;
   margin-top: 10px;
 }
+.daily-todo-worklist {
+  padding: 16px;
+}
+.todo-panel-head > span {
+  margin-top: 0;
+  white-space: nowrap;
+}
+.todo-type-filter {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+.daily-todo-table :deep(.cell) {
+  color: var(--soc-text);
+}
+.daily-todo-table :deep(.cell small) {
+  display: block;
+  margin-top: 3px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.todo-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
+}
 @media (max-width: 980px) {
   .daily-hero,
   .panel-title {
@@ -440,6 +605,10 @@ function recommendationStatusText(status: string) {
     border-left: 0;
     padding-top: 10px;
     padding-left: 0;
+  }
+  .todo-pagination {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

@@ -1,0 +1,106 @@
+[
+  {
+    "filename": "01-soc-dashboard-current.png",
+    "route": "/soc/dashboard",
+    "status": 200,
+    "title": "安全运营工作台 - CyberFusion SOC",
+    "chars": 3923,
+    "finalUrl": "http://127.0.0.1:5174/soc/dashboard"
+  },
+  {
+    "filename": "02-policy-algorithm-current.png",
+    "route": "/soc/policies",
+    "status": 200,
+    "title": "策略与规则中心 - CyberFusion SOC",
+    "chars": 1797,
+    "finalUrl": "http://127.0.0.1:5174/soc/policies"
+  },
+  {
+    "filename": "03-role-current.png",
+    "route": "/system/role",
+    "status": 200,
+    "title": "角色管理 - CyberFusion SOC",
+    "chars": 1068,
+    "finalUrl": "http://127.0.0.1:5174/system/role"
+  },
+  {
+    "filename": "04-external-events-current.png",
+    "route": "/soc/external-events",
+    "status": 200,
+    "title": "证据中心 - CyberFusion SOC",
+    "chars": 588,
+    "finalUrl": "http://127.0.0.1:5174/soc/external-events?ownerId=7"
+  },
+  {
+    "filename": "05-vulnerabilities-current.png",
+    "route": "/soc/vulnerabilities",
+    "status": 200,
+    "title": "漏洞中心 - CyberFusion SOC",
+    "chars": 478,
+    "finalUrl": "http://127.0.0.1:5174/soc/vulnerabilities?ownerId=7"
+  },
+  {
+    "filename": "06-rules-current.png",
+    "route": "/soc/rules",
+    "status": 200,
+    "title": "检测内容规则设置 - CyberFusion SOC",
+    "chars": 3205,
+    "finalUrl": "http://127.0.0.1:5174/soc/rules"
+  },
+  {
+    "filename": "07-client-workbench-current.png",
+    "route": "/client/workbench",
+    "status": 200,
+    "title": "CyberFusion 安全管家 - CyberFusion SOC",
+    "chars": 763,
+    "finalUrl": "http://127.0.0.1:5174/client/workbench"
+  },
+  {
+    "filename": "08-showcase-current.png",
+    "route": "/showcase",
+    "status": 200,
+    "title": "安全运营演示台 - CyberFusion SOC",
+    "chars": 2014,
+    "finalUrl": "http://127.0.0.1:5174/showcase"
+  },
+  {
+    "filename": "09-alerts-current.png",
+    "route": "/soc/alerts",
+    "status": 200,
+    "title": "告警处置 - CyberFusion SOC",
+    "chars": 2797,
+    "finalUrl": "http://127.0.0.1:5174/soc/alerts?ownerId=7"
+  },
+  {
+    "filename": "10-tickets-current.png",
+    "route": "/soc/tickets",
+    "status": 200,
+    "title": "工单中心 - CyberFusion SOC",
+    "chars": 823,
+    "finalUrl": "http://127.0.0.1:5174/soc/tickets"
+  },
+  {
+    "filename": "11-client-tasks-current.png",
+    "route": "/client/tasks",
+    "status": 200,
+    "title": "我的待办 - CyberFusion SOC",
+    "chars": 338,
+    "finalUrl": "http://127.0.0.1:5174/client/tasks"
+  },
+  {
+    "filename": "12-reports-current.png",
+    "route": "/soc/reports",
+    "status": 200,
+    "title": "报告中心 - CyberFusion SOC",
+    "chars": 5415,
+    "finalUrl": "http://127.0.0.1:5174/soc/reports"
+  },
+  {
+    "filename": "13-platform-dashboard-current.png",
+    "route": "/dashboard",
+    "status": 200,
+    "title": "仪表盘 - CyberFusion SOC",
+    "chars": 1846,
+    "finalUrl": "http://127.0.0.1:5174/dashboard"
+  }
+]

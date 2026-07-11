@@ -35,6 +35,13 @@
         </div>
       </el-header>
       <el-main class="admin-main" @click.capture="captureReturnFocus">
+        <section v-if="activeWorkspaceOwner" class="workspace-context-bar">
+          <div>
+            <strong>用户工作区</strong>
+            <span>正在查看用户 #{{ activeWorkspaceOwner }} 的主机、告警、事件簇与处置记录</span>
+          </div>
+          <el-button size="small" @click="exitWorkspace">返回用户总览</el-button>
+        </section>
         <RouterView />
       </el-main>
     </el-container>
@@ -94,6 +101,9 @@ const returnTarget = computed(() => appStore.returnRoute)
 const hasReturnTarget = computed(() => Boolean(returnTarget.value && returnTarget.value.fullPath !== route.fullPath))
 const showReturnButton = computed(() => hasReturnTarget.value || route.path !== EXPERT_HOME_PATH)
 const returnButtonLabel = computed(() => hasReturnTarget.value ? '返回原界面' : '返回工作台')
+const activeWorkspaceOwner = computed(() => typeof route.query.ownerId === 'string' && /^\d+$/.test(route.query.ownerId)
+  ? route.query.ownerId
+  : '')
 const profileVisible = ref(false)
 const passwordSaving = ref(false)
 const passwordFormRef = ref<FormInstance>()
@@ -129,6 +139,13 @@ async function returnToOrigin() {
   await router.push(target)
 }
 
+function exitWorkspace() {
+  const query = { ...route.query }
+  delete query.ownerId
+  const target = router.resolve({ path: route.path, query, hash: route.hash }).fullPath
+  void router.push({ path: '/soc/user-workspaces', query: { target } })
+}
+
 async function savePassword() {
   if (!(await passwordFormRef.value?.validate().catch(() => false))) return
   passwordSaving.value = true
@@ -153,6 +170,31 @@ async function savePassword() {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(247, 243, 235, 0.86) 48%, rgba(238, 245, 247, 0.92)),
     var(--soc-canvas);
+}
+
+.workspace-context-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 1240px;
+  margin: 0 auto 12px;
+  border: 1px solid rgba(88, 163, 139, 0.34);
+  border-radius: 8px;
+  background: rgba(241, 250, 246, 0.92);
+  color: var(--soc-text);
+  padding: 9px 12px;
+}
+
+.workspace-context-bar strong,
+.workspace-context-bar span {
+  display: block;
+}
+
+.workspace-context-bar span {
+  margin-top: 2px;
+  color: var(--soc-text-muted);
+  font-size: 12px;
 }
 
 .admin-layout::before {

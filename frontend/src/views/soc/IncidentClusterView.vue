@@ -125,6 +125,15 @@
           <span>推荐动作</span><strong>{{ current.recommendation || actionLabel(current) }}</strong>
           <span>摘要</span><strong>{{ current.summary || '-' }}</strong>
         </div>
+        <SecurityDispositionGuide
+          category="incident"
+          :subject="current.title || current.clusterNo"
+          :severity="current.severity"
+          :status="current.status"
+          :asset="assetLabel(current)"
+          :reason="current.summary || `该事件簇已聚合 ${current.eventCount || 0} 条事件与 ${current.alertCount || 0} 条告警。`"
+          :recommendation="current.recommendation || actionLabel(current)"
+        />
 
         <section class="detail-section">
           <div class="section-title">
@@ -215,6 +224,29 @@
           </article>
         </section>
 
+        <section class="detail-section closure-readiness-panel">
+          <div class="section-title">
+            <div>
+              <strong>闭环检查</strong>
+              <span>关闭前必须完成证据复核、工单处置和结论记录。</span>
+            </div>
+            <el-tag :type="closureReadiness?.canClose ? 'success' : 'warning'" effect="plain">{{ closureReadiness?.canClose ? '可关闭' : '待完成' }}</el-tag>
+          </div>
+          <div v-if="closureReadiness" class="closure-check-list">
+            <article :class="{ passed: closureReadiness.evidenceCount > 0 }">
+              <strong>证据链已复核</strong><span>{{ closureReadiness.evidenceCount }} 条可追溯证据</span>
+            </article>
+            <article :class="{ passed: !closureReadiness.ticketRequired || closureReadiness.ticketClosed }">
+              <strong>{{ closureReadiness.ticketRequired ? '处置工单已完成' : '工单要求' }}</strong>
+              <span>{{ closureReadiness.ticketRequired ? (closureReadiness.ticketClosed ? '工单已关闭或归档' : `当前工单状态：${closureReadiness.ticketStatus || '未创建'}`) : '当前等级可直接完成复核' }}</span>
+            </article>
+            <article class="closure-conclusion-card">
+              <strong>复核结论</strong><span>关闭时必须填写处理结果、修复依据或接受风险的原因。</span>
+            </article>
+          </div>
+          <el-alert v-if="closureReadiness?.blockers.length" type="warning" :closable="false" :title="closureReadiness.blockers.join('；')" />
+        </section>
+
         <section v-if="appStore.showRawEvidence" class="detail-section">
           <div class="section-title">
             <strong>专家诊断</strong>
@@ -224,6 +256,7 @@
         </section>
 
         <div class="drawer-actions">
+          <el-button v-if="current.status !== 'closed'" @click="startInvestigation">开始研判</el-button>
           <el-button v-if="current.ticketId" type="primary" @click="goTicket(current)">查看工单</el-button>
           <el-button v-else type="warning" @click="createTicket(current)">转为处置工单</el-button>
           <el-button type="danger" :disabled="current.status === 'closed'" @click="closeCurrent">关闭事件簇</el-button>
@@ -238,15 +271,19 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
 import {
   closeIncident,
   correlateIncidents,
   incidentDetail,
+  incidentClosureReadiness,
+  investigateIncident,
   listIncidents,
   ticketIncident,
   type IncidentClusterItem,
+  type IncidentClosureReadiness,
   type IncidentEvidenceItem,
 } from '@/api/soc'
 import { useAppStore } from '@/stores/app'
@@ -263,6 +300,7 @@ const correlating = ref(false)
 const error = ref('')
 const detailError = ref('')
 const drawer = ref(false)
+const closureReadiness = ref<IncidentClosureReadiness>()
 const diagnosticsVisible = ref(false)
 const current = ref<IncidentClusterItem>()
 
@@ -323,10 +361,12 @@ async function runCorrelation() {
 async function open(row: IncidentClusterItem) {
   drawer.value = true
   current.value = row
+  closureReadiness.value = undefined
   detailError.value = ''
   try {
     const { data } = await incidentDetail(row.id)
     current.value = data.data
+    await loadClosureReadiness(row.id)
   } catch {
     detailError.value = '事件簇详情加载失败'
   }
@@ -345,6 +385,7 @@ async function openRouteIncidentIfNeeded() {
   try {
     const { data } = await incidentDetail(openIncidentId)
     current.value = data.data
+    await loadClosureReadiness(openIncidentId)
   } catch {
     detailError.value = '事件簇详情加载失败'
   }
@@ -356,20 +397,57 @@ async function createTicket(row: IncidentClusterItem) {
     await ticketIncident(row.id, '由安全事件簇转为处置工单')
     ElMessage.success('已转为处置工单')
     await load()
-    if (current.value?.id === row.id) current.value = (await incidentDetail(row.id)).data.data
+    if (current.value?.id === row.id) {
+      current.value = (await incidentDetail(row.id)).data.data
+      await loadClosureReadiness(row.id)
+    }
   } catch (err) {
     if (err !== 'cancel') ElMessage.error('转工单失败，请检查权限或后端服务。')
+  }
+}
+
+async function startInvestigation() {
+  if (!current.value) return
+  try {
+    const { value } = await ElMessageBox.prompt('记录本次研判的范围或下一步计划。', '开始事件研判', {
+      inputPlaceholder: '例如：先确认来源 IP、受影响资产和关联告警',
+      inputValidator: (text) => text.trim().length >= 6 || '请填写至少 6 个字符的研判计划',
+      confirmButtonText: '开始研判',
+      cancelButtonText: '取消',
+    })
+    current.value = (await investigateIncident(current.value.id, value)).data.data
+    ElMessage.success('事件簇已进入研判阶段')
+    await loadClosureReadiness(current.value.id)
+    await load()
+  } catch (err) {
+    if (err !== 'cancel' && err !== 'close') ElMessage.error('开始研判失败，请检查权限或后端服务。')
+  }
+}
+
+async function loadClosureReadiness(id: number) {
+  try {
+    closureReadiness.value = (await incidentClosureReadiness(id)).data.data
+  } catch {
+    closureReadiness.value = undefined
   }
 }
 
 async function closeCurrent() {
   if (!current.value) return
   try {
-    await ElMessageBox.confirm('关闭后该事件簇会保留证据链但不再作为待处理事项，继续？', '关闭确认', { type: 'warning' })
-    await closeIncident(current.value.id, '已完成事件簇复核')
+    const { value } = await ElMessageBox.prompt('请填写已采取的措施、验证结果或接受风险理由。该结论会写入工单时间线。', '提交闭环结论', {
+      inputType: 'textarea',
+      inputPlaceholder: '至少 12 个字符，例如：已确认访问由授权运维产生，工单任务与复核证据已完成。',
+      inputValidator: (text) => text.trim().length >= 12 || '请填写至少 12 个字符的闭环结论',
+      confirmButtonText: '确认关闭',
+      cancelButtonText: '返回处理',
+      type: 'warning',
+    })
+    await closeIncident(current.value.id, value)
     ElMessage.success('事件簇已关闭')
     await load()
     current.value = (await incidentDetail(current.value.id)).data.data
+    await loadClosureReadiness(current.value.id)
   } catch (err) {
     if (err !== 'cancel') ElMessage.error('关闭事件簇失败，请检查权限或后端服务。')
   }
@@ -535,8 +613,49 @@ function formatTime(value?: string) {
   justify-content: flex-start;
 }
 
+.closure-readiness-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.closure-readiness-panel .section-title > div {
+  display: grid;
+  gap: 4px;
+}
+
+.closure-readiness-panel .section-title span {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.closure-check-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.closure-check-list article {
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid rgba(218, 139, 48, 0.38);
+  border-radius: 8px;
+  background: rgba(255, 250, 244, 0.7);
+}
+
+.closure-check-list article.passed {
+  border-color: rgba(37, 161, 100, 0.42);
+  background: rgba(244, 252, 247, 0.82);
+}
+
+.closure-check-list strong { color: var(--el-text-color-primary); }
+.closure-check-list span { color: var(--el-text-color-secondary); font-size: 13px; line-height: 1.5; }
+
 @media (max-width: 900px) {
   .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .closure-check-list {
     grid-template-columns: 1fr;
   }
 }

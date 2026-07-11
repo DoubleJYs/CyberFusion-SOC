@@ -300,21 +300,6 @@
     },
     {
       "section": "soc",
-      "title": "告警降噪",
-      "path": "/soc/alert-noise",
-      "file": "23-soc-alert-noise.png",
-      "note": "告警降噪、白名单和误报处理。",
-      "url": "http://127.0.0.1:5174/soc/alert-noise",
-      "pageTitle": "告警降噪 - CyberFusion SOC",
-      "capturedAt": "2026-06-23T04:10:57.385Z",
-      "viewport": {
-        "width": 1440,
-        "height": 1000
-      },
-      "textSample": "CF CyberFusion SOC 统一安全运营平台 客户演示模式 从安全运营演示台开始，再进入专家后台查看细节 客户演示 安全运营演示台 SOC 专家模式 安全总览 安全验证 告警处置 告警处置 降噪规则 证据中心 资产风险 检测规则 工单中心 报告中心 系统管理 员工端 我的电脑安全助手 首页 / 降噪规则 平台运行中 安全运营演示台 更多入口 柔光 "
-    },
-    {
-      "section": "soc",
       "title": "资产视图",
       "path": "/soc/assets",
       "file": "24-soc-assets.png",

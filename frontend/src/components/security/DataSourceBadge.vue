@@ -12,6 +12,7 @@ const props = defineProps<{
 const normalized = computed(() => (props.source || 'mock').toLowerCase())
 
 const label = computed(() => {
+  if (normalized.value === 'validation-fixture') return '预置验证'
   if (['macos-agent', 'windows-agent', 'host-agent'].includes(normalized.value)) return '主机'
   if (['wazuh', 'wazuh-api', 'wazuh-indexer', 'indexer', 'realtime', 'live'].includes(normalized.value)) return '实时'
   if (['mysql', 'sync', 'synced', 'import', 'imported'].includes(normalized.value)) return '同步'
@@ -24,6 +25,7 @@ const tagType = computed(() => {
   if (label.value === '实时') return 'success'
   if (label.value === '同步') return 'warning'
   if (label.value === '外部') return 'primary'
+  if (label.value === '预置验证') return 'warning'
   return 'info'
 })
 </script>

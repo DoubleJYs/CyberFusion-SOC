@@ -83,4 +83,11 @@ public class SocExternalEventController {
     public ApiResult<List<SocOperationService.ExternalSourceSummary>> summary() {
         return ApiResult.ok(service.externalEventSummary());
     }
+
+    @Operation(summary = "外部访问与扫描风险概览")
+    @GetMapping("/risk-overview")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:external-event:view')")
+    public ApiResult<SocOperationService.ExternalRiskOverview> riskOverview() {
+        return ApiResult.ok(service.externalRiskOverview());
+    }
 }

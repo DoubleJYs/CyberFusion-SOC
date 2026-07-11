@@ -10,6 +10,7 @@
       </RouterLink>
       <nav class="client-nav">
         <RouterLink :to="clientRoute('/client/workbench')">我的电脑</RouterLink>
+        <RouterLink :to="clientRoute('/client/protection')">本机保护</RouterLink>
         <RouterLink :to="clientRoute('/client/operations')">我的待办</RouterLink>
         <RouterLink :to="clientRoute('/client/data-report')">提交日志</RouterLink>
       </nav>

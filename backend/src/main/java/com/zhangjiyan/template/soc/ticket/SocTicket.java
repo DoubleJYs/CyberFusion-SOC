@@ -14,6 +14,7 @@ public class SocTicket {
     private Long id;
     private String ticketNo;
     private Long alertId;
+    private Long ownerId;
     private String title;
     private String severity;
     private String status;

@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS soc_demo_workflow_run (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  run_id VARCHAR(80) NOT NULL,
+  batch_id VARCHAR(80) NOT NULL,
+  selected_case_id VARCHAR(80) NOT NULL,
+  step_key VARCHAR(32) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'active',
+  counts_json JSON NOT NULL,
+  logs_json JSON NOT NULL,
+  created_by BIGINT NULL,
+  created_by_name VARCHAR(64) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_demo_workflow_run_id (run_id),
+  KEY idx_soc_demo_workflow_run_status_updated (status, updated_at),
+  KEY idx_soc_demo_workflow_run_batch (batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_demo_workflow_archive (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  run_id VARCHAR(80) NOT NULL,
+  batch_id VARCHAR(80) NOT NULL,
+  selected_case_id VARCHAR(80) NOT NULL,
+  final_step_key VARCHAR(32) NOT NULL,
+  final_status VARCHAR(32) NOT NULL,
+  counts_json JSON NOT NULL,
+  logs_json JSON NOT NULL,
+  created_by BIGINT NULL,
+  created_by_name VARCHAR(64) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  archived_by BIGINT NULL,
+  archived_by_name VARCHAR(64) NULL,
+  archived_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  archive_reason VARCHAR(255) NULL,
+  UNIQUE KEY uk_soc_demo_workflow_archive_run_id (run_id),
+  KEY idx_soc_demo_workflow_archive_time (archived_at),
+  KEY idx_soc_demo_workflow_archive_operator (archived_by, archived_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

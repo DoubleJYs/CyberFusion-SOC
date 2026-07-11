@@ -5,6 +5,9 @@ import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentDetail;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentHeartbeatResult;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentOverview;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRegistrationResult;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRuntimeResult;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.LocalAgentInstallContext;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.LocalAgentInstallResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,6 +25,8 @@ import java.util.List;
 public class HostAgentController {
 
     private final HostAgentService service;
+    private final HostAgentRuntimeService runtimeService;
+    private final HostAgentLocalInstallService localInstallService;
 
     @Operation(summary = "管理员注册或轮换 Host Agent Token")
     @PostMapping("/register")
@@ -58,6 +63,37 @@ public class HostAgentController {
     @PreAuthorize("hasRole('admin') or hasAuthority('soc:agent:view')")
     public ApiResult<AgentDetail> detail(@PathVariable Long id) {
         return ApiResult.ok(service.detail(id));
+    }
+
+    @Operation(summary = "启用或停用 Host Agent")
+    @PatchMapping("/{id}/enabled")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:agent:manage')")
+    public ApiResult<SocHostAgent> toggleEnabled(@PathVariable Long id,
+                                                 @Valid @RequestBody HostAgentToggleRequest request) {
+        return ApiResult.ok(service.setEnabled(id, request.enabled()));
+    }
+
+    @Operation(summary = "启动或停止本机 Host Agent 运行时")
+    @PostMapping("/{id}/runtime")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:agent:manage')")
+    public ApiResult<AgentRuntimeResult> controlRuntime(@PathVariable Long id,
+                                                        @Valid @RequestBody HostAgentRuntimeRequest request) {
+        return ApiResult.ok(runtimeService.control(id, request));
+    }
+
+    @Operation(summary = "读取当前后端宿主机的 Host Agent 安装上下文")
+    @GetMapping("/local-install/context")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:agent:register')")
+    public ApiResult<LocalAgentInstallContext> localInstallContext() {
+        return ApiResult.ok(localInstallService.context());
+    }
+
+    @Operation(summary = "在当前后端宿主机安装、启动并校验 Host Agent")
+    @PostMapping("/local-install")
+    @PreAuthorize("hasRole('admin') or hasAuthority('soc:agent:manage')")
+    public ApiResult<LocalAgentInstallResult> installOnLocalHost(@Valid @RequestBody HostAgentLocalInstallRequest request,
+                                                                  HttpServletRequest servletRequest) {
+        return ApiResult.ok(localInstallService.install(request, clientIp(servletRequest)));
     }
 
     private String agentToken(HttpServletRequest request) {

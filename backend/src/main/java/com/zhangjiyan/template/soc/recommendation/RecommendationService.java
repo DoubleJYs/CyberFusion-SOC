@@ -234,11 +234,12 @@ public class RecommendationService {
             SocTicket ticket = task.getTicketId() == null ? null : tickets.get(task.getTicketId());
             SocAlert alert = alerts.get(firstNonNull(task.getAlertId(), ticket == null ? null : ticket.getAlertId()));
             String type = employee ? "client_task" : "playbook_task";
-            return item(key(type, task.getId()), employee ? "跟进员工待办：" + firstNotBlank(task.getTaskName(), task.getTaskKey()) : "完成剧本任务：" + firstNotBlank(task.getTaskName(), task.getTaskKey()),
+            RecommendationItem recommendation = item(key(type, task.getId()), employee ? "跟进员工待办：" + firstNotBlank(task.getTaskName(), task.getTaskKey()) : "完成剧本任务：" + firstNotBlank(task.getTaskName(), task.getTaskKey()),
                     score, done ? "任务已完成或确认，作为闭环证据保留。" : "处置剧本中仍有未完成任务，当前状态：" + firstNotBlank(task.getStatus(), "pending") + "。",
                     employee ? "提醒员工提交说明、日志或本机检查记录。" : "进入工单任务清单，完成复核、验证或报告记录。",
                     type, task.getId(), employee ? "employee" : "analyst", firstNotBlank(task.getStatus(), "pending"),
                     null, alert == null ? null : alert.getAssetIp(), alert == null ? null : alert.getAssetName(), score);
+            return ticket == null ? recommendation : withNavigation(recommendation, "ticket", ticket.getId());
         }).toList();
     }
 
@@ -279,11 +280,20 @@ public class RecommendationService {
                         .orderByDesc(SocAssetRiskFactor::getFactorScore)
                         .last("LIMIT 8"))
                 .stream()
-                .map(factor -> item("risk-factor-" + asset.getId() + "-" + factor.getFactorType() + "-" + nz(factor.getRelatedBizId()),
-                        factor.getFactorName(), 38 + nz(factor.getFactorScore()), factor.getExplanation(),
-                        firstNotBlank(factor.getRecommendation(), "按风险画像建议完成处置。"),
-                        firstNotBlank(factor.getRelatedBizType(), "risk_factor"), factor.getRelatedBizId(), assigneeFor(factor.getRelatedBizType()),
-                        "open", asset.getId(), asset.getIp(), asset.getHostname(), 38 + nz(factor.getFactorScore())))
+                .map(factor -> {
+                    RecommendationItem recommendation = item("risk-factor-" + asset.getId() + "-" + factor.getFactorType() + "-" + nz(factor.getRelatedBizId()),
+                            factor.getFactorName(), 38 + nz(factor.getFactorScore()), factor.getExplanation(),
+                            firstNotBlank(factor.getRecommendation(), "按风险画像建议完成处置。"),
+                            firstNotBlank(factor.getRelatedBizType(), "risk_factor"), factor.getRelatedBizId(), assigneeFor(factor.getRelatedBizType()),
+                            "open", asset.getId(), asset.getIp(), asset.getHostname(), 38 + nz(factor.getFactorScore()));
+                    String targetType = hasText(factor.getRelatedBizType()) && factor.getRelatedBizId() != null
+                            ? factor.getRelatedBizType()
+                            : "asset";
+                    Long targetId = hasText(factor.getRelatedBizType()) && factor.getRelatedBizId() != null
+                            ? factor.getRelatedBizId()
+                            : asset.getId();
+                    return withNavigation(recommendation, targetType, targetId);
+                })
                 .toList();
     }
 
@@ -553,7 +563,13 @@ public class RecommendationService {
         String status = "confirm".equals(action.getActionType()) ? "confirmed" : firstNotBlank(action.getActionType(), item.status());
         return new RecommendationItem(item.key(), item.title(), priority(reducedScore), item.reason(), item.recommendedAction(),
                 item.relatedBizType(), item.relatedBizId(), item.assigneeType(), status, item.assetId(), item.assetIp(),
-                item.assetName(), reducedScore);
+                item.assetName(), reducedScore, item.navigationBizType(), item.navigationBizId());
+    }
+
+    private RecommendationItem withNavigation(RecommendationItem item, String navigationBizType, Long navigationBizId) {
+        return new RecommendationItem(item.key(), item.title(), item.priority(), item.reason(), item.recommendedAction(),
+                item.relatedBizType(), item.relatedBizId(), item.assigneeType(), item.status(), item.assetId(), item.assetIp(),
+                item.assetName(), item.priorityScore(), navigationBizType, navigationBizId);
     }
 
     private RecommendationItem item(String key, String title, int priorityScore, String reason, String recommendedAction,
@@ -562,7 +578,7 @@ public class RecommendationService {
         int score = Math.max(1, Math.min(120, priorityScore));
         return new RecommendationItem(key, title, priority(score), reason, recommendedAction, relatedBizType,
                 relatedBizId == null ? 0L : relatedBizId, firstNotBlank(assigneeType, "analyst"),
-                firstNotBlank(status, "open"), assetId, assetIp, assetName, score);
+                firstNotBlank(status, "open"), assetId, assetIp, assetName, score, relatedBizType, relatedBizId);
     }
 
     private ClientNextAction toClientAction(RecommendationItem item) {
@@ -708,7 +724,8 @@ public class RecommendationService {
 
     public record RecommendationItem(String key, String title, String priority, String reason, String recommendedAction,
                                      String relatedBizType, Long relatedBizId, String assigneeType, String status,
-                                     Long assetId, String assetIp, String assetName, int priorityScore) {
+                                     Long assetId, String assetIp, String assetName, int priorityScore,
+                                     String navigationBizType, Long navigationBizId) {
     }
 
     public record ClientNextAction(String key, String title, String priority, String reason, String recommendedAction,

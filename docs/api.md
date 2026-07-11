@@ -358,6 +358,16 @@ Agent registration is an administrator action:
 
 - `POST /soc/agents/register`
 - `GET /soc/agents`
+- `GET /soc/agents/overview`
+
+`GET /soc/agents/overview` returns `runtime` from the operating system that runs the backend process (`osType`, label, OS version, and architecture). Its Agent list, source health, assets, host events, FIM, batches, and reject counters are scoped to that runtime OS family. This is server-runtime detection, not browser user-agent detection: a macOS backend does not display Windows Agent records in this overview, and a Windows backend does not display macOS Agent records.
+
+The local installation workflow is deliberately scoped to the backend host and uses fixed repository scripts only:
+
+- `GET /soc/agents/local-install/context` returns the detected OS, hostname, active IP addresses, backend API address, repository root, external runtime root, and default FIM directory.
+- `POST /soc/agents/local-install` registers or rotates one local Agent token, invokes the matching install script, starts the Agent, and runs one verification upload.
+
+The install request accepts only Agent identity, deployed Agent version, collection profile (`full`, `host-log`, `patrol-audit`, `file-integrity`, or `baseline-audit`), FIM directory, collection interval, and host labels. It cannot set filesystem roots, API URLs, shell commands, target OS, or token values. The token is placed only into the local runtime configuration by the installer and is never returned in the install result.
 
 Registration returns `agentToken` once. Store it only in the host Agent local configuration or a protected runtime secret. The backend stores only `tokenHash`.
 
@@ -368,6 +378,9 @@ Agent runtime endpoints use header `X-CyberFusion-Agent-Token` and do not use us
 - `POST /soc/ingest/host/events`
 - `POST /soc/ingest/host/fim`
 - `POST /soc/ingest/host/baseline`
+- `GET /soc/ingest/host/fim-watch-paths?agentId={agentId}&osType={osType}`
+
+FIM directory policies are managed by privileged users through `GET/POST/PUT /soc/fim/watch-paths`, `POST /soc/fim/watch-paths/{id}/publish`, and `POST /soc/fim/watch-paths/{id}/disable`. A policy is bound to a concrete hostname and OS type. The Agent-only read endpoint returns only active policies matching the authenticated Agent; it does not expose directories for other hosts. Directory changes contain path metadata and hashes only, never file content.
 
 Shared request fields:
 
@@ -384,6 +397,16 @@ Shared request fields:
 `osType` is one of `macos`, `windows`, or `linux`. The same schema is used for Mac and Windows fixture validation. Event and FIM payloads must provide stable `eventUid` values; repeated `eventUid` submissions are counted as duplicates and not inserted again.
 
 Assets write or update `soc_asset` with source types such as `macos-agent` or `windows-agent`. Host events write `soc_external_event`. FIM writes `soc_file_integrity_event`. Baseline checks write or update `soc_baseline_check`. These rows must not use demo markers such as `batch_id LIKE 'DEMO-%'`, `demo_case_id`, or `source_type='demo'`.
+
+### External Risk Events
+
+`/soc/external-events` is the operational view for risk that crosses the host boundary: external access to a protected host, host egress to the Internet, external scanner findings, and IOC intelligence matches. It returns only `waf`, `zeek`, `suricata`, `zap`, `trivy`, `misp`, and `opencti` sources. Host Agent observations such as `macos-agent` and `windows-agent` remain available from Agent, alert, asset, and host-security workflows, but are intentionally excluded from this page.
+
+`GET /soc/external-events/risk-overview` returns the current retained counts for inbound access, outbound access, scan findings, IOC hits, and linked alerts. Direction is inferred from normalized source/destination and associated asset fields; if a source did not provide enough network fields, the event remains visible but is not counted as an inbound or outbound connection.
+
+### Incident Closure Readiness
+
+`POST /soc/incidents/{id}/investigate` records the start of analyst investigation. `GET /soc/incidents/{id}/closure-readiness` returns evidence count, required ticket state, blockers, and whether the cluster can be closed. `POST /soc/incidents/{id}/close` requires a review conclusion of at least 12 characters. Critical and high incidents require a linked ticket in `已关闭` or `已归档`; every incident requires a traceable evidence chain.
 
 Example host event item:
 

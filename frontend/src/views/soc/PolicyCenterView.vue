@@ -4,28 +4,42 @@
       <div>
         <span class="soc-page-kicker">POLICY & RULE CENTER</span>
         <h1>策略与规则中心</h1>
-        <p>这个页面帮助安全工程师维护本机只读检查策略，并查看事件适配和告警联动规则的治理边界。</p>
+        <p>集中维护检测能力使用的主机检查、接入字段映射和人工响应模板。Sigma 检测规则在规则中心独立发布，事件关联、风险评分与算法评估不在此页配置。</p>
       </div>
       <div class="soc-page-tags">
-        <el-tag effect="plain">只读检查</el-tag>
-        <el-tag effect="plain">安全预检</el-tag>
+        <el-tag effect="plain">主机只读检查</el-tag>
+        <el-tag effect="plain">文件监控授权</el-tag>
+        <el-tag effect="plain">字段标准化</el-tag>
+        <el-tag effect="plain">人工响应模板</el-tag>
         <el-tag effect="plain">变更审计</el-tag>
       </div>
     </section>
 
     <el-alert
-      title="本页面只维护只读检查命令，不支持任意 shell，不允许攻击、扫描、写文件或外部访问。"
+      title="本页只配置经过允许清单验证的主机只读检查、文件监控目录、字段映射和人工响应说明；不支持任意 shell、攻击、扫描、写文件或外部访问。文件监控仅上传元数据与哈希，不上传文件内容。"
       type="warning"
       show-icon
       :closable="false"
       class="policy-alert"
     />
 
+    <section class="policy-capability-grid" aria-label="能力域配置入口">
+      <article v-for="entry in capabilityEntries" :key="entry.code" class="policy-capability-card" :class="`policy-capability-card--${entry.tone}`">
+        <div class="policy-capability-card__head">
+          <span>{{ entry.code }}</span>
+          <el-tag size="small" effect="plain">{{ entry.domain }}</el-tag>
+        </div>
+        <h2>{{ entry.title }}</h2>
+        <p>{{ entry.description }}</p>
+        <el-button type="primary" plain @click="openCapabilityEntry(entry)">{{ entry.action }}</el-button>
+      </article>
+    </section>
+
     <el-tabs v-model="activeTab" class="policy-tabs">
-      <el-tab-pane label="本机检查策略" name="local-check">
+      <el-tab-pane label="主机检查配置" name="local-check">
         <section class="soc-panel panel-pad">
           <div class="soc-filter-bar">
-            <el-input v-model="query.keyword" clearable placeholder="搜索名称、commandKey、说明" @keyup.enter="loadPolicies" />
+            <el-input v-model="query.keyword" clearable placeholder="搜索检查名称、检查键或说明" @keyup.enter="loadPolicies" />
             <el-select v-model="query.osType" clearable placeholder="OS">
               <el-option label="Linux" value="Linux" />
               <el-option label="macOS" value="macOS" />
@@ -38,7 +52,7 @@
             </el-select>
             <el-button @click="loadPolicies">查询</el-button>
             <el-button @click="resetFilters">重置</el-button>
-            <el-button v-permission="'soc:policy:create'" type="primary" @click="openCreate">新增策略</el-button>
+            <el-button v-permission="'soc:policy:create'" type="primary" @click="openCreate">新增检查</el-button>
           </div>
         </section>
 
@@ -52,11 +66,11 @@
             :closable="false"
             class="policy-alert"
           />
-          <el-table v-loading="loading" :data="rows" empty-text="暂无本机检查策略">
-            <el-table-column prop="displayName" label="命令名称" min-width="180" />
-            <el-table-column prop="osType" label="OS" width="96" />
-            <el-table-column prop="category" label="分类" width="130" />
-            <el-table-column prop="commandKey" label="commandKey" min-width="150" />
+          <el-table v-loading="loading" :data="rows" empty-text="暂无主机检查配置">
+            <el-table-column prop="displayName" label="检查名称" min-width="180" />
+            <el-table-column prop="osType" label="主机系统" width="96" />
+            <el-table-column prop="category" label="检查分类" width="130" />
+            <el-table-column prop="commandKey" label="检查键" min-width="150" />
             <el-table-column label="状态" width="112">
               <template #default="{ row }">
                 <el-tag :type="statusTag(row.status)" effect="plain">{{ statusLabel(row.status) }}</el-tag>
@@ -81,7 +95,7 @@
             </el-table-column>
           </el-table>
           <div class="pagination-row">
-            <span>共 {{ total }} 条策略</span>
+            <span>共 {{ total }} 条检查</span>
             <el-pagination
               v-model:current-page="query.pageNum"
               v-model:page-size="query.pageSize"
@@ -93,9 +107,13 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="事件适配映射" name="adapter">
+      <el-tab-pane label="文件监控授权" name="fim-watch">
+        <FimWatchPathsPanel />
+      </el-tab-pane>
+
+      <el-tab-pane label="接入字段映射" name="adapter">
         <el-alert
-          title="事件适配映射只支持字段路径、固定转换和占位符模板；不支持脚本、表达式、SQL、正则执行或外部调用。"
+          title="接入字段映射将各能力域的结构化字段统一为 CyberFusion 安全记录。仅支持字段路径、固定转换和占位符模板，不执行脚本、SQL、正则或外部调用。"
           type="info"
           show-icon
           :closable="false"
@@ -104,8 +122,8 @@
 
         <section class="soc-panel panel-pad">
           <div class="soc-filter-bar">
-            <el-input v-model="adapterQuery.keyword" clearable placeholder="搜索来源、名称、说明" @keyup.enter="loadAdapters" />
-            <el-select v-model="adapterQuery.sourceType" clearable placeholder="sourceType">
+            <el-input v-model="adapterQuery.keyword" clearable placeholder="搜索数据来源、映射名称或说明" @keyup.enter="loadAdapters" />
+            <el-select v-model="adapterQuery.sourceType" clearable placeholder="数据来源">
               <el-option v-for="source in adapterSources" :key="source" :label="source" :value="source" />
             </el-select>
             <el-select v-model="adapterQuery.status" clearable placeholder="状态">
@@ -115,14 +133,14 @@
             </el-select>
             <el-button @click="loadAdapters">查询</el-button>
             <el-button @click="resetAdapterFilters">重置</el-button>
-            <el-button v-permission="'soc:policy:create'" type="primary" @click="openAdapterCreate">新增适配器</el-button>
+            <el-button v-permission="'soc:policy:create'" type="primary" @click="openAdapterCreate">新增接入映射</el-button>
           </div>
         </section>
 
         <section class="table-panel">
-          <el-table v-loading="adapterLoading" :data="adapterRows" empty-text="暂无事件适配映射">
-            <el-table-column prop="sourceType" label="sourceType" width="120" />
-            <el-table-column prop="displayName" label="适配器名称" min-width="190" />
+          <el-table v-loading="adapterLoading" :data="adapterRows" empty-text="暂无接入字段映射">
+            <el-table-column prop="sourceType" label="数据来源" width="120" />
+            <el-table-column prop="displayName" label="映射名称" min-width="190" />
             <el-table-column prop="description" label="说明" min-width="240" show-overflow-tooltip />
             <el-table-column label="状态" width="112">
               <template #default="{ row }">
@@ -135,7 +153,7 @@
               </template>
             </el-table-column>
             <el-table-column prop="version" label="版本" width="80" />
-            <el-table-column prop="sampleFile" label="样例文件" min-width="230" show-overflow-tooltip />
+            <el-table-column prop="sampleFile" label="样例输入" min-width="230" show-overflow-tooltip />
             <el-table-column prop="updatedAt" label="更新时间" min-width="172" />
             <el-table-column label="操作" width="340">
               <template #default="{ row }">
@@ -148,7 +166,7 @@
             </el-table-column>
           </el-table>
           <div class="pagination-row">
-            <span>共 {{ adapterTotal }} 条适配器</span>
+            <span>共 {{ adapterTotal }} 条映射</span>
             <el-pagination
               v-model:current-page="adapterQuery.pageNum"
               v-model:page-size="adapterQuery.pageSize"
@@ -160,9 +178,9 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="处置剧本" name="playbook">
+      <el-tab-pane label="人工响应模板" name="playbook">
         <el-alert
-          title="处置剧本只生成建议、工单任务和时间线，不支持脚本、攻击、扫描、写文件、自动修复或外部系统调用。"
+          title="人工响应模板会为匹配的告警生成建议、工单任务和时间线。它不会执行命令、攻击、扫描、写文件、自动修复或调用外部系统。"
           type="warning"
           show-icon
           :closable="false"
@@ -170,8 +188,8 @@
         />
         <section class="soc-panel panel-pad">
           <div class="soc-filter-bar">
-            <el-input v-model="playbookQuery.keyword" clearable placeholder="搜索剧本名称、编码、说明" @keyup.enter="loadPlaybooks" />
-            <el-select v-model="playbookQuery.sourceType" clearable placeholder="sourceType">
+            <el-input v-model="playbookQuery.keyword" clearable placeholder="搜索模板名称、编码或说明" @keyup.enter="loadPlaybooks" />
+            <el-select v-model="playbookQuery.sourceType" clearable placeholder="数据来源">
               <el-option v-for="source in [...adapterSources, 'suricata,zeek']" :key="source" :label="source" :value="source" />
             </el-select>
             <el-select v-model="playbookQuery.status" clearable placeholder="状态">
@@ -181,13 +199,13 @@
             </el-select>
             <el-button @click="loadPlaybooks">查询</el-button>
             <el-button @click="resetPlaybookFilters">重置</el-button>
-            <el-button v-permission="'soc:policy:create'" type="primary" @click="openPlaybookCreate">新增剧本</el-button>
+            <el-button v-permission="'soc:policy:create'" type="primary" @click="openPlaybookCreate">新增响应模板</el-button>
           </div>
         </section>
         <section class="table-panel">
-          <el-table v-loading="playbookLoading" :data="playbookRows" empty-text="暂无处置剧本">
-            <el-table-column prop="playbookName" label="剧本名称" min-width="190" />
-            <el-table-column prop="playbookKey" label="剧本编码" min-width="150" />
+          <el-table v-loading="playbookLoading" :data="playbookRows" empty-text="暂无人工响应模板">
+            <el-table-column prop="playbookName" label="模板名称" min-width="190" />
+            <el-table-column prop="playbookKey" label="模板编码" min-width="150" />
             <el-table-column prop="sourceType" label="来源" width="120" />
             <el-table-column prop="eventType" label="事件类型" min-width="170" show-overflow-tooltip />
             <el-table-column prop="minSeverity" label="最低等级" width="100" />
@@ -209,7 +227,7 @@
             </el-table-column>
           </el-table>
           <div class="pagination-row">
-            <span>共 {{ playbookTotal }} 条剧本</span>
+            <span>共 {{ playbookTotal }} 条模板</span>
             <el-pagination
               v-model:current-page="playbookQuery.pageNum"
               v-model:page-size="playbookQuery.pageSize"
@@ -221,7 +239,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="事件关联规则" name="correlation">
+      <el-tab-pane v-if="showAlgorithmControls" label="事件关联规则" name="correlation">
         <el-alert
           title="事件关联规则只支持结构化字段、阈值和时间窗口，不支持脚本、外部查询、扫描或自动修复。"
           type="warning"
@@ -291,7 +309,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="告警联动规则" name="alert-link">
+      <el-tab-pane v-if="showAlgorithmControls" label="告警联动规则" name="alert-link">
         <section class="placeholder-panel">
           <h2>告警联动规则</h2>
           <p>当前阶段不开放在线编辑联动规则，避免错误配置造成告警风暴。演示批次仍复用后端强校验的 linkAlerts 逻辑。</p>
@@ -299,7 +317,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="风险评分策略" name="risk-scoring">
+      <el-tab-pane v-if="showAlgorithmControls" label="风险评分策略" name="risk-scoring">
         <el-alert
           title="风险评分策略只维护数字权重和说明文本，不支持脚本、表达式、扫描、自动修复或外部调用。"
           type="warning"
@@ -358,7 +376,7 @@
         </section>
       </el-tab-pane>
 
-      <el-tab-pane label="算法治理" name="algorithm">
+      <el-tab-pane v-if="showAlgorithmControls" label="算法治理" name="algorithm">
         <el-alert
           title="算法治理只做现有规则的状态展示和 dry-run 回放评估，不新增检测能力、不执行扫描、不写真实处置结果。"
           type="warning"
@@ -529,11 +547,11 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑本机检查策略' : '新增本机检查策略'" width="720px">
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑主机检查配置' : '新增主机检查配置'" width="720px">
       <el-form :model="form" label-width="130px" class="policy-form">
-        <el-form-item label="命令名称"><el-input v-model="form.displayName" /></el-form-item>
-        <el-form-item label="commandKey"><el-input v-model="form.commandKey" placeholder="identity / network / custom_key" /></el-form-item>
-        <el-form-item label="OS">
+        <el-form-item label="检查名称"><el-input v-model="form.displayName" /></el-form-item>
+        <el-form-item label="检查键"><el-input v-model="form.commandKey" placeholder="identity / network / custom_key" /></el-form-item>
+        <el-form-item label="主机系统">
           <el-segmented v-model="form.osType" :options="['Linux', 'macOS', 'Windows']" />
         </el-form-item>
         <el-form-item label="分类">
@@ -572,14 +590,14 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="adapterDialogVisible" :title="editingAdapterId ? '编辑事件适配器' : '新增事件适配器'" width="680px">
+    <el-dialog v-model="adapterDialogVisible" :title="editingAdapterId ? '编辑接入字段映射' : '新增接入字段映射'" width="680px">
       <el-form :model="adapterForm" label-width="120px" class="policy-form">
-        <el-form-item label="sourceType">
+        <el-form-item label="数据来源">
           <el-select v-model="adapterForm.sourceType" :disabled="Boolean(editingAdapterId)">
             <el-option v-for="source in adapterSources" :key="source" :label="source" :value="source" />
           </el-select>
         </el-form-item>
-        <el-form-item label="适配器名称"><el-input v-model="adapterForm.displayName" /></el-form-item>
+        <el-form-item label="映射名称"><el-input v-model="adapterForm.displayName" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="adapterForm.description" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="状态">
           <el-segmented v-model="adapterForm.status" :options="['draft', 'active', 'disabled']" />
@@ -623,7 +641,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="playbookDialogVisible" :title="editingPlaybookId ? '编辑处置剧本' : '新增处置剧本'" width="820px">
+    <el-dialog v-model="playbookDialogVisible" :title="editingPlaybookId ? '编辑人工响应模板' : '新增人工响应模板'" width="820px">
       <el-alert
         title="请只填写人工处置说明和预期证据，不要填写命令、脚本、攻击 payload、扫描或自动修复步骤。"
         type="warning"
@@ -632,11 +650,11 @@
         class="policy-alert"
       />
       <el-form :model="playbookForm" label-width="120px" class="policy-form">
-        <el-form-item label="剧本名称"><el-input v-model="playbookForm.playbookName" /></el-form-item>
-        <el-form-item label="剧本编码"><el-input v-model="playbookForm.playbookKey" placeholder="PB-WAF-BLOCK" /></el-form-item>
-        <el-form-item label="sourceType"><el-input v-model="playbookForm.sourceType" placeholder="waf / suricata,zeek" /></el-form-item>
-        <el-form-item label="eventType"><el-input v-model="playbookForm.eventType" placeholder="waf_block,upload_block 或 *" /></el-form-item>
-        <el-form-item label="ruleId"><el-input v-model="playbookForm.ruleIdPattern" placeholder="* 或规则 ID 片段" /></el-form-item>
+        <el-form-item label="模板名称"><el-input v-model="playbookForm.playbookName" /></el-form-item>
+        <el-form-item label="模板编码"><el-input v-model="playbookForm.playbookKey" placeholder="PB-WAF-BLOCK" /></el-form-item>
+        <el-form-item label="数据来源"><el-input v-model="playbookForm.sourceType" placeholder="waf / suricata,zeek" /></el-form-item>
+        <el-form-item label="事件类型"><el-input v-model="playbookForm.eventType" placeholder="waf_block,upload_block 或 *" /></el-form-item>
+        <el-form-item label="规则标识"><el-input v-model="playbookForm.ruleIdPattern" placeholder="* 或规则 ID 片段" /></el-form-item>
         <el-form-item label="最低等级">
           <el-segmented v-model="playbookForm.minSeverity" :options="['low', 'medium', 'high', 'critical']" />
         </el-form-item>
@@ -817,7 +835,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import FimWatchPathsPanel from '@/components/security/FimWatchPathsPanel.vue'
 import {
   algorithmOverview,
   changeLocalCheckPolicyEnabled,
@@ -880,7 +899,56 @@ import {
 } from '@/api/soc'
 
 const router = useRouter()
-const activeTab = ref('local-check')
+const route = useRoute()
+const activeTab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'local-check')
+const showAlgorithmControls = false
+const capabilityEntries = [
+  {
+    code: 'DR',
+    domain: '检测内容规则设置',
+    title: 'Sigma 检测规则',
+    description: '设置接入规则的检测内容、统一告警等级、发布状态与命中预览。',
+    action: '进入规则中心',
+    path: '/soc/rules',
+    tone: 'detection',
+  },
+  {
+    code: 'HT',
+    domain: '主机威胁中心',
+    title: '主机检查配置',
+    description: '维护 Agent 可执行的只读检查允许清单，发布前可完成安全预检。',
+    action: '配置主机检查',
+    tab: 'local-check',
+    tone: 'host',
+  },
+  {
+    code: 'FM',
+    domain: '主机威胁中心',
+    title: '文件监控授权',
+    description: '按主机授权日志、审计和业务目录；Agent 只记录元数据与哈希变化，不上传文件内容。',
+    action: '管理监控目录',
+    tab: 'fim-watch',
+    tone: 'fim',
+  },
+  {
+    code: 'FA',
+    domain: '字段分析工作台',
+    title: '接入字段映射',
+    description: '把 WAF、主机与网络来源的字段归一为可关联的安全记录。',
+    action: '维护字段映射',
+    tab: 'adapter',
+    tone: 'mapping',
+  },
+  {
+    code: 'SO',
+    domain: '自动化编排中心',
+    title: '人工响应模板',
+    description: '为命中告警给出人工复核步骤、预期证据与工单时间线，不执行自动修复。',
+    action: '维护响应模板',
+    tab: 'playbook',
+    tone: 'response',
+  },
+] as const
 const loading = ref(false)
 const saving = ref(false)
 const auditLoading = ref(false)
@@ -1025,6 +1093,18 @@ watch(activeTab, (tab) => {
   if (tab === 'algorithm') void loadAlgorithmGovernance()
 })
 
+watch(() => route.query.tab, (tab) => {
+  if (typeof tab === 'string' && ['local-check', 'fim-watch', 'adapter', 'playbook', 'audit'].includes(tab)) activeTab.value = tab
+})
+
+function openCapabilityEntry(entry: (typeof capabilityEntries)[number]) {
+  if ('path' in entry) {
+    void router.push(entry.path)
+    return
+  }
+  activeTab.value = entry.tab
+}
+
 const formattedPreview = computed(() => {
   if (!adapterPreviewResult.value) return '-'
   return JSON.stringify(adapterPreviewResult.value.normalizedEvent, null, 2)
@@ -1125,7 +1205,7 @@ async function saveAdapterProfile() {
     } else {
       await createEventAdapter(payload)
     }
-    ElMessage.success('事件适配器已保存')
+    ElMessage.success('接入字段映射已保存')
     adapterDialogVisible.value = false
     await loadAdapters()
   } finally {
@@ -1161,17 +1241,17 @@ async function validateAdapterRow(row: EventAdapterProfileItem) {
 
 async function publishAdapterRow(row: EventAdapterProfileItem) {
   if (!row.id) return
-  await ElMessageBox.confirm('发布后多源导入会优先使用该 active 适配映射。确认发布？', '发布事件适配器')
+  await ElMessageBox.confirm('发布后多源导入会优先使用该 active 字段映射。确认发布？', '发布接入字段映射')
   await publishEventAdapter(row.id)
-  ElMessage.success('事件适配器已发布')
+  ElMessage.success('接入字段映射已发布')
   await loadAdapters()
 }
 
 async function disableAdapterRow(row: EventAdapterProfileItem) {
   if (!row.id) return
-  await ElMessageBox.confirm('停用后导入会回退到内置安全适配器。确认停用？', '停用事件适配器')
+  await ElMessageBox.confirm('停用后导入会回退到内置安全字段映射。确认停用？', '停用接入字段映射')
   await disableEventAdapter(row.id)
-  ElMessage.success('事件适配器已停用')
+  ElMessage.success('接入字段映射已停用')
   await loadAdapters()
 }
 
@@ -1227,7 +1307,7 @@ async function loadPlaybooks() {
     playbookRows.value = res.data.data.records
     playbookTotal.value = res.data.data.total
   } catch {
-    ElMessage.error('处置剧本加载失败')
+    ElMessage.error('人工响应模板加载失败')
   } finally {
     playbookLoading.value = false
   }
@@ -1567,11 +1647,11 @@ async function savePlaybook() {
     } else {
       await createResponsePlaybook(payload)
     }
-    ElMessage.success('处置剧本已保存')
+    ElMessage.success('人工响应模板已保存')
     playbookDialogVisible.value = false
     await loadPlaybooks()
   } catch (error) {
-    ElMessage.error(error instanceof SyntaxError ? '步骤 JSON 格式不正确' : '处置剧本保存失败')
+    ElMessage.error(error instanceof SyntaxError ? '步骤 JSON 格式不正确' : '人工响应模板保存失败')
   } finally {
     playbookSaving.value = false
   }
@@ -1602,17 +1682,17 @@ async function validatePlaybookRow(row: ResponsePlaybookItem) {
 
 async function publishPlaybookRow(row: ResponsePlaybookItem) {
   if (!row.id) return
-  await ElMessageBox.confirm('发布后告警详情会推荐该处置剧本。确认发布？', '发布处置剧本')
+  await ElMessageBox.confirm('发布后告警详情会推荐该人工响应模板。确认发布？', '发布人工响应模板')
   await publishResponsePlaybook(row.id)
-  ElMessage.success('处置剧本已发布')
+  ElMessage.success('人工响应模板已发布')
   await loadPlaybooks()
 }
 
 async function disablePlaybookRow(row: ResponsePlaybookItem) {
   if (!row.id) return
-  await ElMessageBox.confirm('停用后告警详情不再推荐该处置剧本。确认停用？', '停用处置剧本')
+  await ElMessageBox.confirm('停用后告警详情不再推荐该人工响应模板。确认停用？', '停用人工响应模板')
   await disableResponsePlaybook(row.id)
-  ElMessage.success('处置剧本已停用')
+  ElMessage.success('人工响应模板已停用')
   await loadPlaybooks()
 }
 
@@ -1935,6 +2015,60 @@ function statusTag(status: string) {
   margin-top: 14px;
 }
 
+.policy-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.policy-capability-card {
+  display: flex;
+  min-width: 0;
+  min-height: 204px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid rgba(179, 173, 163, 0.44);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.policy-capability-card--detection { border-top: 3px solid #e88e36; }
+.policy-capability-card--host { border-top: 3px solid #36a674; }
+.policy-capability-card--mapping { border-top: 3px solid #3d93df; }
+.policy-capability-card--response { border-top: 3px solid #9d7bd8; }
+.policy-capability-card--fim { border-top: 3px solid #18a6a6; }
+
+.policy-capability-card__head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.policy-capability-card__head > span {
+  color: var(--soc-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.policy-capability-card h2 {
+  margin: 14px 0 8px;
+  color: var(--soc-text);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.policy-capability-card p {
+  flex: 1;
+  margin: 0 0 14px;
+  color: var(--soc-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .panel-pad {
   padding: 14px;
 }
@@ -2155,6 +2289,10 @@ function statusTag(status: string) {
 }
 
 @media (max-width: 900px) {
+  .policy-capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .adapter-summary,
   .preview-grid {
     grid-template-columns: 1fr;
@@ -2173,6 +2311,12 @@ function statusTag(status: string) {
   .algorithm-metrics,
   .algorithm-card__meta,
   .replay-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .policy-capability-grid {
     grid-template-columns: 1fr;
   }
 }

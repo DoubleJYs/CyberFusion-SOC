@@ -2,12 +2,15 @@ package com.zhangjiyan.template.soc.agent;
 
 import com.zhangjiyan.template.common.result.ApiResult;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.IngestResult;
+import com.zhangjiyan.template.soc.fim.FimWatchPathService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "SOC 主机真实数据接入", description = "Mac/Windows Host Agent 资产、事件、FIM 和基线上报")
 @RestController
@@ -22,6 +25,14 @@ public class HostIngestController {
     public ApiResult<IngestResult> assets(@Valid @RequestBody HostAssetIngestRequest request,
                                           HttpServletRequest servletRequest) {
         return ApiResult.ok(service.ingestAssets(request, agentToken(servletRequest), clientIp(servletRequest)));
+    }
+
+    @Operation(summary = "读取当前 Agent 的已授权文件监控目录")
+    @GetMapping("/fim-watch-paths")
+    public ApiResult<List<FimWatchPathService.AgentWatchPath>> fimWatchPaths(@RequestParam String agentId,
+                                                                               @RequestParam String osType,
+                                                                               HttpServletRequest servletRequest) {
+        return ApiResult.ok(service.authorizedFimWatchPaths(agentId, agentToken(servletRequest), osType));
     }
 
     @Operation(summary = "上报主机原始安全事件")

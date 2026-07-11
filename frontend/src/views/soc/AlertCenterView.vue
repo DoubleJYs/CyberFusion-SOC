@@ -67,6 +67,16 @@
     </section>
     <el-drawer v-model="drawer" title="告警详情" size="520px">
       <div v-if="current" class="drawer-stack">
+        <SecurityDispositionGuide
+          category="alert"
+          :subject="current.ruleName || current.eventType || current.ruleDescription"
+          :source="current.sourceType"
+          :severity="current.severity"
+          :status="current.noiseStatus || current.status"
+          :asset="`${current.assetName || '-'}（${current.assetIp || '-'}）`"
+          :reason="current.evidenceSummary || current.ruleDescription"
+          :recommendation="playbookSuggestions[0]?.matchReason"
+        />
         <div class="soc-drawer-grid">
           <span>告警 ID</span><strong>{{ current.alertUid }}</strong>
           <span>等级</span><strong><SeverityBadge :severity="current.severity" /></strong>
@@ -154,6 +164,7 @@ import { reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
 import {

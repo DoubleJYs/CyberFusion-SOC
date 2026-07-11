@@ -4,30 +4,6 @@
       <span>{{ sidebarHint.title }}</span>
       <strong>{{ sidebarHint.description }}</strong>
     </div>
-    <div v-if="showDemoDataActions" class="sidebar-demo-actions">
-      <div class="demo-data-status" :class="{ active: demoStatus?.hasDemoData }">
-        <span>{{ demoStatusText }}</span>
-      </div>
-      <el-button
-        size="small"
-        type="primary"
-        :loading="demoImporting"
-        :disabled="demoClearing || !canImportDemoData"
-        @click="handleImportDemoData"
-      >
-        导入演示数据
-      </el-button>
-      <el-button
-        size="small"
-        plain
-        type="danger"
-        :loading="demoClearing"
-        :disabled="demoImporting || !canClearDemoData"
-        @click="handleClearDemoData"
-      >
-        清除演示数据
-      </el-button>
-    </div>
     <el-menu
       ref="menuRef"
       :key="`${collapsed ? 'collapsed' : 'expanded'}-${isSystemManagementArea ? 'system' : 'work'}`"
@@ -49,10 +25,8 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute } from 'vue-router'
 import SidebarMenuNode from './SidebarMenuNode.vue'
-import { clearDemoData, demoDataStatus, importDemoData, type DemoDataStatus } from '@/api/soc'
 import { useAuthStore } from '@/stores/auth'
 import type { MenuItem } from '@/types/system'
 import { roleExperience } from '@/utils/roleExperience'
@@ -61,26 +35,11 @@ const props = defineProps<{ collapsed: boolean }>()
 
 const authStore = useAuthStore()
 const route = useRoute()
-const router = useRouter()
 const collapsed = computed(() => props.collapsed)
 const experience = computed(() => roleExperience(authStore.roles, authStore.userInfo))
 const menuRef = ref()
-const demoImporting = ref(false)
-const demoClearing = ref(false)
-const demoStatus = ref<DemoDataStatus>()
 const SIDEBAR_SCROLL_KEY = 'cyberfusion:admin-sidebar-scroll-top'
 const isSystemManagementArea = computed(() => route.path === '/dashboard' || route.path.startsWith('/system'))
-const canImportDemoData = computed(() => authStore.hasPermission('soc:demo-range:import'))
-const canClearDemoData = computed(() => authStore.hasPermission('soc:demo-range:clear'))
-const showDemoDataActions = computed(() => {
-  if (isSystemManagementArea.value) return false
-  return !collapsed.value && (canImportDemoData.value || canClearDemoData.value)
-})
-const demoStatusText = computed(() => {
-  if (!demoStatus.value) return '演示数据状态待同步'
-  if (demoStatus.value.hasDemoData) return `演示数据 ${demoStatus.value.totalDemoRows} 条`
-  return '当前无演示数据'
-})
 const fallbackMenus: MenuItem[] = [
   {
     id: 2000,
@@ -98,7 +57,21 @@ const fallbackMenus: MenuItem[] = [
       { id: 2019, parentId: 2000, name: '每日处理', path: '/soc/daily-recommendations', type: 'menu', sort: 3, visible: 1, status: 1, icon: 'Calendar' },
     ],
   },
-  { id: 2018, parentId: 0, name: 'Agent 管理', path: '/soc/agents', type: 'menu', sort: 6, visible: 1, status: 1, icon: 'Connection' },
+  {
+    id: 2018,
+    parentId: 0,
+    name: 'Agent 中心',
+    path: '/soc/agents',
+    type: 'directory',
+    sort: 6,
+    visible: 1,
+    status: 1,
+    icon: 'Connection',
+    children: [
+      { id: 2024, parentId: 2018, name: 'Agent 安装', path: '/soc/agents/install', type: 'menu', sort: 10, visible: 1, status: 1, icon: 'SetUp' },
+      { id: 2025, parentId: 2018, name: 'Agent 管理', path: '/soc/agents', type: 'menu', sort: 20, visible: 1, status: 1, icon: 'Connection' },
+    ],
+  },
 ]
 const showcaseMenu: MenuItem = {
   id: -10,
@@ -124,6 +97,7 @@ const clientMenu: MenuItem = {
   icon: 'Monitor',
   children: [],
 }
+const clientProtectionMenu: MenuItem = directMenu(-25, '本机保护', '/client/protection', 'Shield', 2)
 const clientTaskMenu: MenuItem = directMenu(-21, '我的待办', '/client/tasks', 'Tickets', 2)
 const clientReportMenu: MenuItem = directMenu(-22, '提交日志', '/client/data-report', 'DocumentChecked', 3)
 const clientToolMenu: MenuItem = directMenu(-23, '安全工具', '/client/local-range', 'Tools', 4)
@@ -193,108 +167,11 @@ function allDirectoryIndexes(item: MenuItem): string[] {
 
 onMounted(() => {
   void restoreSidebarPosition(true)
-  void loadDemoDataStatus()
 })
 
 watch(() => route.path, () => {
   void restoreSidebarPosition(false)
-  void loadDemoDataStatus()
 })
-
-watch(showDemoDataActions, (visible) => {
-  if (visible) void loadDemoDataStatus()
-})
-
-async function handleImportDemoData() {
-  try {
-    await ElMessageBox.confirm(
-      '导入会先清理旧演示数据，再写入固定演示资产、告警、工单、报表和离线证据链；用户、角色和账号不会被修改。继续？',
-      '导入演示数据',
-      { type: 'info', confirmButtonText: '导入', cancelButtonText: '取消' },
-    )
-  } catch (error) {
-    if (!isConfirmCancel(error)) {
-      ElMessage.error(messageFromError(error, '导入演示数据已取消'))
-    }
-    return
-  }
-
-  demoImporting.value = true
-  try {
-    const response = await importDemoData()
-    const payload = response.data.data
-    ElMessage.success(payload.message || `演示数据已导入，当前演示记录 ${payload.totalDemoRows} 条`)
-    demoStatus.value = {
-      seedBatchId: payload.seedBatchId,
-      demoRangeBatchId: payload.demoRangeBatchId,
-      totalDemoRows: payload.totalDemoRows,
-      hasDemoData: payload.totalDemoRows > 0,
-      message: payload.message,
-    }
-    refreshCurrentRoute()
-  } catch (error) {
-    ElMessage.error(messageFromError(error, '导入演示数据失败'))
-  } finally {
-    demoImporting.value = false
-  }
-}
-
-async function handleClearDemoData() {
-  try {
-    await ElMessageBox.confirm(
-      '只清理演示批次、演示来源和固定演示标识的数据；用户、角色、菜单、策略和本机真实数据会保留。继续？',
-      '清除演示数据',
-      { type: 'warning', confirmButtonText: '清除', cancelButtonText: '取消' },
-    )
-  } catch (error) {
-    if (!isConfirmCancel(error)) {
-      ElMessage.error(messageFromError(error, '清除演示数据已取消'))
-    }
-    return
-  }
-
-  demoClearing.value = true
-  try {
-    const response = await clearDemoData()
-    const payload = response.data.data
-    ElMessage.success(payload.message || '演示数据已清除')
-    demoStatus.value = {
-      seedBatchId: payload.seedBatchId,
-      demoRangeBatchId: payload.demoRangeBatchId,
-      totalDemoRows: payload.totalDemoRows,
-      hasDemoData: payload.totalDemoRows > 0,
-      message: payload.message,
-    }
-    refreshCurrentRoute()
-  } catch (error) {
-    ElMessage.error(messageFromError(error, '清除演示数据失败'))
-  } finally {
-    demoClearing.value = false
-  }
-}
-
-function refreshCurrentRoute() {
-  window.setTimeout(() => router.go(0), 350)
-}
-
-async function loadDemoDataStatus() {
-  if (!showDemoDataActions.value) return
-  try {
-    const response = await demoDataStatus()
-    demoStatus.value = response.data.data
-  } catch {
-    demoStatus.value = undefined
-  }
-}
-
-function isConfirmCancel(error: unknown) {
-  return error === 'cancel' || error === 'close'
-}
-
-function messageFromError(error: unknown, fallback: string) {
-  const candidate = error as { response?: { data?: { message?: string } }; message?: string }
-  return candidate.response?.data?.message || candidate.message || fallback
-}
 
 function rememberScroll(event: Event) {
   const target = event.target as HTMLElement | null
@@ -344,9 +221,11 @@ function cloneVisible(item: MenuItem): MenuItem | null {
 
 function normalizeTaskMenus(source: MenuItem[]) {
   const findPath = (path: string) => findMenuByPath(source, path)
-  const leaf = (path: string, name: string, icon?: string, fallback = false) => {
+  const leaf = (path: string, name: string, icon?: string, fallback = false): MenuItem | null => {
     const item = findPath(path)
-    if (item) return { ...item, name, icon: icon || item.icon }
+    // A directory may share a route with its landing page. Normalized entries
+    // must still be leaves, otherwise its original children create a duplicate submenu.
+    if (item) return { ...item, name, icon: icon || item.icon, type: 'menu', children: [] } as MenuItem
     return fallback ? directMenu(fallbackId(path), name, path, icon || 'Menu', 1000) : null
   }
   const dir = (id: number, name: string, icon: string, children: Array<MenuItem | null>) => {
@@ -365,7 +244,10 @@ function normalizeTaskMenus(source: MenuItem[]) {
         adminLeaf('/soc/demo-range', '安全验证中心', 'Operation'),
         adminLeaf('/soc/daily-recommendations', '每日处理', 'Calendar'),
       ]),
-      adminLeaf('/soc/agents', 'Agent 管理', 'Connection'),
+      dir(-150, 'Agent 中心', 'Connection', [
+        adminLeaf('/soc/agents/install', 'Agent 安装', 'SetUp'),
+        adminLeaf('/soc/agents', 'Agent 管理', 'Connection'),
+      ]),
       dir(-200, '安全运营', 'Monitor', [
         adminLeaf('/soc/incidents', '安全事件簇', 'Share'),
         adminLeaf('/soc/alerts', '告警中心', 'WarningFilled'),
@@ -382,8 +264,7 @@ function normalizeTaskMenus(source: MenuItem[]) {
       ]),
       dir(-400, '治理策略', 'SetUp', [
         adminLeaf('/soc/policies', '策略与规则中心', 'SetUp'),
-        adminLeaf('/soc/rules', '检测规则中心', 'List'),
-        adminLeaf('/soc/alert-noise', '告警降噪', 'Filter'),
+        adminLeaf('/soc/rules', '检测内容规则设置', 'List'),
         adminLeaf('/soc/settings', '接入与诊断设置', 'Tools'),
       ]),
     ].filter((item): item is MenuItem => Boolean(item))
@@ -395,7 +276,10 @@ function normalizeTaskMenus(source: MenuItem[]) {
         leaf('/soc/dashboard', '安全运营工作台', 'DataAnalysis'),
         leaf('/soc/daily-recommendations', '每日处理', 'Calendar'),
       ]),
-      leaf('/soc/agents', 'Agent 管理', 'Connection'),
+      dir(-150, 'Agent 中心', 'Connection', [
+        leaf('/soc/agents/install', 'Agent 安装', 'SetUp'),
+        leaf('/soc/agents', 'Agent 管理', 'Connection'),
+      ]),
       dir(-200, '安全运营', 'Monitor', [
         leaf('/soc/incidents', '安全事件簇', 'Share'),
         leaf('/soc/alerts', '告警中心', 'WarningFilled'),
@@ -406,8 +290,7 @@ function normalizeTaskMenus(source: MenuItem[]) {
       ]),
       dir(-300, '治理策略', 'SetUp', [
         leaf('/soc/policies', '策略与规则中心', 'SetUp'),
-        leaf('/soc/rules', '检测规则中心', 'List'),
-        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
+        leaf('/soc/rules', '检测内容规则设置', 'List'),
       ]),
     ].filter((item): item is MenuItem => Boolean(item))
   }
@@ -420,9 +303,8 @@ function normalizeTaskMenus(source: MenuItem[]) {
       ]),
       dir(-200, '治理策略', 'SetUp', [
         leaf('/soc/policies', '策略与规则中心', 'SetUp'),
-        leaf('/soc/rules', '检测规则中心', 'List'),
+        leaf('/soc/rules', '检测内容规则设置', 'List'),
         leaf('/soc/external-events', '事件适配', 'Connection'),
-        leaf('/soc/alert-noise', '告警降噪', 'Filter'),
       ]),
       dir(-300, '风险与关联', 'Share', [
         leaf('/soc/incidents', '事件关联', 'Share'),
@@ -451,7 +333,7 @@ function normalizeTaskMenus(source: MenuItem[]) {
 
   if (experience.value.isEmployee) {
     return [
-      dir(-100, '安全管家', 'Monitor', [clientMenu, clientTaskMenu, clientReportMenu, clientToolMenu, clientLogMenu]),
+      dir(-100, '安全管家', 'Monitor', [clientMenu, clientProtectionMenu, clientTaskMenu, clientReportMenu, clientToolMenu, clientLogMenu]),
     ].filter((item): item is MenuItem => Boolean(item))
   }
 
@@ -583,41 +465,6 @@ function menuIndex(item: MenuItem) {
   line-height: 1.45;
 }
 
-.sidebar-demo-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  margin: 10px 10px 0;
-}
-
-.demo-data-status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding: 3px 8px;
-  border: 1px solid rgba(93, 135, 255, 0.22);
-  border-radius: 8px;
-  background: rgba(239, 249, 250, 0.76);
-  color: var(--soc-text-muted);
-  font-size: 11px;
-  font-weight: 720;
-}
-
-.demo-data-status.active {
-  border-color: rgba(211, 120, 39, 0.34);
-  background: rgba(255, 248, 238, 0.9);
-  color: var(--soc-warm-strong);
-}
-
-.sidebar-demo-actions .el-button {
-  width: 100%;
-  min-height: 32px;
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .sidebar-menu {
   --el-menu-bg-color: transparent;
   --el-menu-text-color: #475467;
@@ -685,7 +532,6 @@ function menuIndex(item: MenuItem) {
   }
 
   .sidebar-quick,
-  .sidebar-demo-actions,
   .menu-section-label {
     display: none;
   }

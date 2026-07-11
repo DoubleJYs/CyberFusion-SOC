@@ -62,6 +62,7 @@ export interface HostAgentItem {
   macAddressesJson?: string
   labelsJson?: string
   status: string
+  enabled?: number
   lastIp?: string
   queueDepth?: number
   queueBytes?: number
@@ -72,6 +73,9 @@ export interface HostAgentItem {
   lastSeenAt?: string
   createdAt?: string
   updatedAt?: string
+  runtimeControllable?: boolean
+  runtimeControlStatus?: string
+  runtimeControlReason?: string
 }
 
 export interface HostAgentSourceHealth {
@@ -89,6 +93,8 @@ export interface HostAgentSourceHealth {
 export interface HostAgentRecentEvent {
   id: number
   eventUid: string
+  sourceAgentId?: string
+  sourceAgentName?: string
   sourceType: string
   eventType: string
   severity: string
@@ -103,6 +109,8 @@ export interface HostAgentRecentEvent {
 export interface HostAgentBatchItem {
   id: number
   batchId: string
+  agentId?: string
+  sourceAgentName?: string
   ingestType: string
   itemCount: number
   acceptedCount: number
@@ -116,6 +124,8 @@ export interface HostAgentBatchItem {
 export interface HostAgentRejectItem {
   id: number
   batchId?: string
+  agentId?: string
+  sourceAgentName?: string
   ingestType?: string
   eventUid?: string
   reasonCode: string
@@ -124,6 +134,7 @@ export interface HostAgentRejectItem {
 }
 
 export interface HostAgentOverview {
+  runtime: HostAgentRuntimeEnvironment
   totalAgents: number
   onlineAgents: number
   offlineAgents: number
@@ -139,6 +150,14 @@ export interface HostAgentOverview {
   sources: HostAgentSourceHealth[]
   agents: HostAgentItem[]
   recentEvents: HostAgentRecentEvent[]
+}
+
+export interface HostAgentRuntimeEnvironment {
+  osType: 'macos' | 'windows' | 'linux' | 'unknown' | string
+  label: string
+  osName: string
+  osVersion: string
+  architecture: string
 }
 
 export interface ReportExportPreview {
@@ -159,6 +178,78 @@ export interface HostAgentDetail {
   recentBatches: HostAgentBatchItem[]
   recentEvents: HostAgentRecentEvent[]
   recentRejects: HostAgentRejectItem[]
+}
+
+export interface HostAgentRuntimeResult {
+  agentId: string
+  action: 'start' | 'stop'
+  runtimeStatus: string
+  enabled: boolean
+  commandExecuted: boolean
+  message: string
+  operatedAt: string
+}
+
+export interface HostAgentLocalInstallContext {
+  runtime: HostAgentRuntimeEnvironment
+  hostname: string
+  ipAddresses: string[]
+  defaultAgentId: string
+  defaultAgentName: string
+  agentVersion: string
+  apiBaseUrl: string
+  projectRoot: string
+  envRoot: string
+  fimPath: string
+  supported: boolean
+  message: string
+}
+
+export interface HostAgentLocalInstallRequest {
+  agentId: string
+  agentName: string
+  hostname: string
+  agentVersion: string
+  profile: 'full' | 'host-log' | 'patrol-audit' | 'file-integrity' | 'baseline-audit'
+  ipAddresses: string[]
+  fimPath: string
+  interval: string
+}
+
+export interface HostAgentLocalInstallStage {
+  label: string
+  status: string
+  detail: string
+}
+
+export interface HostAgentLocalInstallResult {
+  agentId: string
+  installed: boolean
+  verified: boolean
+  runtimeStatus: string
+  stages: HostAgentLocalInstallStage[]
+  message: string
+}
+
+export interface HostAgentRegisterPayload {
+  agentId?: string
+  agentName?: string
+  hostname: string
+  osType: 'macos' | 'windows' | 'linux'
+  osVersion?: string
+  architecture?: string
+  agentVersion: string
+  ipAddresses?: string[]
+  macAddresses?: string[]
+  labels?: Record<string, string>
+}
+
+export interface HostAgentRegistrationResult {
+  agentId: string
+  agentToken: string
+  status: string
+  registeredAt: string
+  message: string
 }
 
 export interface AssetRiskSnapshot {
@@ -279,6 +370,8 @@ export interface RecommendationItem {
   assetIp?: string
   assetName?: string
   priorityScore: number
+  navigationBizType?: string
+  navigationBizId?: number
 }
 
 export interface ClientNextAction {
@@ -608,6 +701,34 @@ export interface FileIntegrityItem {
   reviewedAt?: string
 }
 
+export interface FimWatchPathItem {
+  id: number
+  displayName: string
+  hostName: string
+  osType: 'macos' | 'windows' | 'linux'
+  watchPath: string
+  purpose: 'host_log' | 'audit' | 'file_integrity' | 'application_log' | 'custom'
+  recursive: number | boolean
+  maxEntries: number
+  status: 'draft' | 'active' | 'disabled'
+  enabled: number | boolean
+  version: number
+  approvedAt?: string
+  updatedAt?: string
+}
+
+export interface FimWatchPathPayload {
+  displayName: string
+  hostName: string
+  osType: 'macos' | 'windows' | 'linux'
+  watchPath: string
+  purpose: 'host_log' | 'audit' | 'file_integrity' | 'application_log' | 'custom'
+  recursive: boolean
+  maxEntries: number
+  status?: 'draft' | 'active' | 'disabled'
+  enabled?: boolean
+}
+
 export interface ExternalEventItem {
   id: number
   eventUid: string
@@ -639,6 +760,14 @@ export interface ExternalSourceSummary {
   sourceType: string
   total: number
   highRisk: number
+  linkedAlerts: number
+}
+
+export interface ExternalRiskOverview {
+  inboundAccess: number
+  outboundAccess: number
+  scanFindings: number
+  iocHits: number
   linkedAlerts: number
 }
 
@@ -977,6 +1106,30 @@ export interface DemoRangeEvidenceChain {
   notificationLogs: NotificationLogItem[]
 }
 
+export interface DemoWorkflowLogRecord {
+  id: string
+  time: string
+  type: string
+  title: string
+  detail?: string
+  stepKey?: string
+}
+
+export interface DemoWorkflowRecord {
+  id: string
+  batchId: string
+  selectedCaseId: string
+  stepKey: 'scenario' | 'evidence' | 'alerts' | 'tickets' | 'report'
+  status: 'active' | 'completed'
+  createdAt: string
+  updatedAt: string
+  lastVisitedAt: string
+  createdBy?: number
+  createdByName?: string
+  counts: Record<string, number>
+  logs: DemoWorkflowLogRecord[]
+}
+
 export interface RuleItem {
   ruleId: string
   ruleName: string
@@ -987,6 +1140,35 @@ export interface RuleItem {
   lastHitAt?: string
   hitCount: number
   falsePositiveCount: number
+  policyId?: number
+  status?: 'draft' | 'active' | 'disabled' | 'external'
+  detectionCategory?: string
+  detectionSummary?: string
+}
+
+export interface DetectionRulePolicyItem {
+  id?: number
+  sourceType: string
+  ruleId: string
+  ruleName: string
+  detectionCategory: 'identity' | 'host' | 'network' | 'web' | 'vulnerability' | 'custom'
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  detectionSummary?: string
+  status: 'draft' | 'active' | 'disabled'
+  enabled: number
+  version: number
+  updatedAt?: string
+}
+
+export interface DetectionRulePolicyPayload {
+  sourceType: string
+  ruleId: string
+  ruleName: string
+  detectionCategory: DetectionRulePolicyItem['detectionCategory']
+  severity: DetectionRulePolicyItem['severity']
+  detectionSummary?: string
+  status?: DetectionRulePolicyItem['status']
+  enabled?: boolean
 }
 
 export interface RuleHits {
@@ -1205,6 +1387,17 @@ export interface IncidentCorrelateResult {
   activeRules: number
 }
 
+export interface IncidentClosureReadiness {
+  incidentId: number
+  evidenceCount: number
+  ticketRequired: boolean
+  ticketId?: number
+  ticketStatus?: string
+  ticketClosed: boolean
+  canClose: boolean
+  blockers: string[]
+}
+
 export interface CorrelationRuleItem {
   id?: number
   ruleKey: string
@@ -1288,50 +1481,6 @@ export interface NotificationLogItem {
   errorMessage?: string
   sentAt?: string
   createdAt?: string
-}
-
-export interface AlertWhitelistItem {
-  id: number
-  ruleName: string
-  ruleId?: string
-  assetIp?: string
-  sourceIp?: string
-  severity?: string
-  reason: string
-  enabled: number
-  matchCount: number
-  lastMatchedAt?: string
-  expiresAt?: string
-}
-
-export interface AlertWhitelistPayload {
-  ruleName: string
-  ruleId?: string
-  assetIp?: string
-  sourceIp?: string
-  severity?: string
-  reason: string
-  enabled?: number
-  expiresAt?: string
-}
-
-export interface AlertAggregationItem {
-  ruleId: string
-  ruleDescription: string
-  severity: string
-  assetName: string
-  assetIp: string
-  sourceIp?: string
-  repeatCount: number
-  latestEventTime?: string
-  whitelistRuleName?: string
-}
-
-export interface AlertNoiseSummary {
-  activeWhitelists: number
-  whitelistHits: number
-  falsePositiveAlerts: number
-  duplicateGroups: number
 }
 
 export interface AssetRiskScore {
@@ -1500,6 +1649,35 @@ export interface OperationsOverview {
   generatedAt: string
 }
 
+export interface UserWorkspaceCard {
+  ownerId: number
+  username: string
+  nickname: string
+  deptId?: number
+  dataMode: 'real' | 'validation'
+  assetCount: number
+  highRiskAssetCount: number
+  agentCount: number
+  onlineAgentCount: number
+  openAlertCount: number
+  highAlertCount: number
+  openIncidentCount: number
+  highIncidentCount: number
+  openVulnerabilityCount: number
+  highVulnerabilityCount: number
+  baselineCount: number
+  failedBaselineCount: number
+  fimCount: number
+  fim24hCount: number
+  externalEventCount: number
+  highExternalEventCount: number
+  ticketCount: number
+  openTicketCount: number
+  overdueTicketCount: number
+  reportCount: number
+  reports24hCount: number
+}
+
 export interface PageQuery {
   pageNum: number
   pageSize: number
@@ -1517,6 +1695,10 @@ export interface PageQuery {
 
 export function dashboardOverview() {
   return request.get<ApiResult<{ todayAlerts: number; highAlerts: number; pendingTickets: number; assets: number; unhandledAlerts: number }>>('/soc/dashboard/overview')
+}
+
+export function userWorkspaceCards() {
+  return request.get<ApiResult<UserWorkspaceCard[]>>('/soc/user-workspaces')
 }
 
 export function alertTrend() {
@@ -1649,6 +1831,26 @@ export function listHostAgents(params?: { osType?: string; status?: string }) {
   })
 }
 
+export function registerHostAgent(payload: HostAgentRegisterPayload) {
+  return request.post<ApiResult<HostAgentRegistrationResult>>('/soc/agents/register', payload)
+}
+
+export function updateHostAgentEnabled(id: number, enabled: boolean) {
+  return request.patch<ApiResult<HostAgentItem>>(`/soc/agents/${id}/enabled`, { enabled })
+}
+
+export function controlHostAgentRuntime(id: number, action: 'start' | 'stop') {
+  return request.post<ApiResult<HostAgentRuntimeResult>>(`/soc/agents/${id}/runtime`, { action })
+}
+
+export function hostAgentLocalInstallContext() {
+  return request.get<ApiResult<HostAgentLocalInstallContext>>('/soc/agents/local-install/context')
+}
+
+export function installHostAgentOnLocalHost(payload: HostAgentLocalInstallRequest) {
+  return request.post<ApiResult<HostAgentLocalInstallResult>>('/soc/agents/local-install', payload)
+}
+
 export function assetRiskProfile(id: number) {
   return request.get<ApiResult<AssetRiskProfile>>(`/soc/assets/${id}/risk-profile`, {
     headers: { 'X-Silent-Error': '1' },
@@ -1704,6 +1906,16 @@ export function correlateIncidents() {
 
 export function ticketIncident(id: number, remark?: string) {
   return request.post<ApiResult<TicketItem>>(`/soc/incidents/${id}/ticket`, { remark })
+}
+
+export function investigateIncident(id: number, remark?: string) {
+  return request.post<ApiResult<IncidentClusterItem>>(`/soc/incidents/${id}/investigate`, { remark })
+}
+
+export function incidentClosureReadiness(id: number) {
+  return request.get<ApiResult<IncidentClosureReadiness>>(`/soc/incidents/${id}/closure-readiness`, {
+    headers: { 'X-Silent-Error': '1' },
+  })
 }
 
 export function closeIncident(id: number, remark?: string) {
@@ -1773,7 +1985,9 @@ export function generateReport(reportType: string, batchId?: string) {
 }
 
 export function reportExportUrl(id: number, format: 'xlsx' | 'pdf', disposition: 'inline' | 'attachment' = 'attachment') {
-  return `/api/soc/reports/${id}/export?format=${format}&disposition=${disposition}`
+  const ownerId = new URLSearchParams(window.location.search).get('ownerId')
+  const workspaceQuery = ownerId && /^\d+$/.test(ownerId) ? `&ownerId=${encodeURIComponent(ownerId)}` : ''
+  return `/api/soc/reports/${id}/export?format=${format}&disposition=${disposition}${workspaceQuery}`
 }
 
 export function previewReportExport(id: number, format: 'xlsx' | 'pdf') {
@@ -1809,30 +2023,6 @@ export function notificationLogs(params: PageQuery) {
 
 export function testNotificationChannel(id: number) {
   return request.post<ApiResult<NotificationLogItem>>(`/soc/settings/notification-channels/${id}/test`)
-}
-
-export function alertNoiseSummary() {
-  return request.get<ApiResult<AlertNoiseSummary>>('/soc/alert-noise/summary')
-}
-
-export function listAlertWhitelists(params: PageQuery) {
-  return request.get<ApiResult<PageResult<AlertWhitelistItem>>>('/soc/alert-noise/whitelists', { params })
-}
-
-export function createAlertWhitelist(data: AlertWhitelistPayload) {
-  return request.post<ApiResult<AlertWhitelistItem>>('/soc/alert-noise/whitelists', data)
-}
-
-export function updateAlertWhitelist(id: number, data: AlertWhitelistPayload) {
-  return request.put<ApiResult<AlertWhitelistItem>>(`/soc/alert-noise/whitelists/${id}`, data)
-}
-
-export function updateAlertWhitelistStatus(id: number, targetStatus: 'enabled' | 'disabled', remark: string) {
-  return request.post<ApiResult<AlertWhitelistItem>>(`/soc/alert-noise/whitelists/${id}/status`, { targetStatus, remark })
-}
-
-export function listAlertAggregations(params: PageQuery) {
-  return request.get<ApiResult<AlertAggregationItem[]>>('/soc/alert-noise/aggregations', { params })
 }
 
 export function listVulnerabilities(params: PageQuery) {
@@ -1883,6 +2073,26 @@ export function fileIntegritySummary() {
   return request.get<ApiResult<Array<{ name: string; value: number }>>>('/soc/fim/summary')
 }
 
+export function listFimWatchPaths(params: { pageNum: number; pageSize: number; osType?: string; hostName?: string; status?: string; keyword?: string }) {
+  return request.get<ApiResult<PageResult<FimWatchPathItem>>>('/soc/fim/watch-paths', { params })
+}
+
+export function createFimWatchPath(data: FimWatchPathPayload) {
+  return request.post<ApiResult<FimWatchPathItem>>('/soc/fim/watch-paths', data)
+}
+
+export function updateFimWatchPath(id: number, data: FimWatchPathPayload) {
+  return request.put<ApiResult<FimWatchPathItem>>(`/soc/fim/watch-paths/${id}`, data)
+}
+
+export function publishFimWatchPath(id: number) {
+  return request.post<ApiResult<FimWatchPathItem>>(`/soc/fim/watch-paths/${id}/publish`)
+}
+
+export function disableFimWatchPath(id: number) {
+  return request.post<ApiResult<FimWatchPathItem>>(`/soc/fim/watch-paths/${id}/disable`)
+}
+
 export function listExternalEvents(params: PageQuery) {
   return request.get<ApiResult<PageResult<ExternalEventItem>>>('/soc/external-events', { params })
 }
@@ -1915,6 +2125,10 @@ export function externalEventSummary() {
   return request.get<ApiResult<ExternalSourceSummary[]>>('/soc/external-events/summary')
 }
 
+export function externalRiskOverview() {
+  return request.get<ApiResult<ExternalRiskOverview>>('/soc/external-events/risk-overview')
+}
+
 export function listRules(params: PageQuery) {
   return request.get<ApiResult<PageResult<RuleItem>>>('/soc/rules', { params })
 }
@@ -1925,6 +2139,22 @@ export function ruleHits(sourceType: string, ruleId: string) {
 
 export function adapterFieldMappings() {
   return request.get<ApiResult<AdapterFieldMapping[]>>('/soc/rules/adapter-mappings')
+}
+
+export function createDetectionRulePolicy(data: DetectionRulePolicyPayload) {
+  return request.post<ApiResult<DetectionRulePolicyItem>>('/soc/rules/configs', data)
+}
+
+export function updateDetectionRulePolicy(id: number, data: DetectionRulePolicyPayload) {
+  return request.put<ApiResult<DetectionRulePolicyItem>>(`/soc/rules/configs/${id}`, data)
+}
+
+export function publishDetectionRulePolicy(id: number) {
+  return request.post<ApiResult<DetectionRulePolicyItem>>(`/soc/rules/configs/${id}/publish`)
+}
+
+export function disableDetectionRulePolicy(id: number) {
+  return request.post<ApiResult<DetectionRulePolicyItem>>(`/soc/rules/configs/${id}/disable`)
 }
 
 export function listClientLocalCommands(os: string) {
@@ -2129,6 +2359,26 @@ export function demoDataStatus() {
 
 export function demoRangeEvidenceChain(batchId: string) {
   return request.get<ApiResult<DemoRangeEvidenceChain>>(`/soc/demo-range/batches/${encodeURIComponent(batchId)}/evidence-chain`)
+}
+
+export function listDemoWorkflowRuns() {
+  return request.get<ApiResult<DemoWorkflowRecord[]>>('/soc/demo-range/workflows')
+}
+
+export function saveDemoWorkflowRun(data: DemoWorkflowRecord) {
+  const { id, ...workflow } = data
+  return request.post<ApiResult<DemoWorkflowRecord>>('/soc/demo-range/workflows', {
+    ...workflow,
+    runId: id,
+  })
+}
+
+export function archiveDemoWorkflowRun(runId: string, reason = '') {
+  return request.post<ApiResult<DemoWorkflowRecord>>(`/soc/demo-range/workflows/${encodeURIComponent(runId)}/archive`, { reason })
+}
+
+export function deleteDemoWorkflowRun(runId: string) {
+  return request.delete<ApiResult<void>>(`/soc/demo-range/workflows/${encodeURIComponent(runId)}`)
 }
 
 export function clientDevices() {

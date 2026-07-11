@@ -6,6 +6,7 @@ import com.zhangjiyan.template.common.file.FileTypeUtils;
 import com.zhangjiyan.template.common.result.ApiResult;
 import com.zhangjiyan.template.system.file.dto.AttachmentCreateRequest;
 import com.zhangjiyan.template.system.file.vo.SysAttachmentVO;
+import com.zhangjiyan.template.system.file.vo.SysFileTablePreview;
 import com.zhangjiyan.template.system.file.vo.SysFileVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -63,15 +64,22 @@ public class SysFileController {
         return fileResponse(file, resource, false);
     }
 
-    @Operation(summary = "图片预览")
+    @Operation(summary = "图片和 PDF 预览")
     @GetMapping("/system/files/{id}/preview")
     @PreAuthorize("hasRole('admin') or hasAuthority('system:file:download')")
     public ResponseEntity<Resource> preview(@PathVariable Long id) {
         SysFile file = fileService.fileEntity(id);
-        if (!FileTypeUtils.isImage(file.getFileExt(), file.getContentType())) {
-            throw new BusinessException("非图片文件请下载查看");
+        if (!FileTypeUtils.isImage(file.getFileExt(), file.getContentType()) && !isPdf(file)) {
+            throw new BusinessException("该文件暂不支持流式预览，请下载查看");
         }
         return fileResponse(file, fileService.fileResource(id), true);
+    }
+
+    @Operation(summary = "Excel 表格预览")
+    @GetMapping("/system/files/{id}/table-preview")
+    @PreAuthorize("hasRole('admin') or hasAuthority('system:file:download')")
+    public ApiResult<SysFileTablePreview> tablePreview(@PathVariable Long id) {
+        return ApiResult.ok(fileService.tablePreview(id));
     }
 
     @Operation(summary = "删除文件")
@@ -106,7 +114,7 @@ public class SysFileController {
     }
 
     private ResponseEntity<Resource> fileResponse(SysFile file, Resource resource, boolean inline) {
-        MediaType mediaType = file.getContentType() == null ? MediaType.APPLICATION_OCTET_STREAM : MediaType.parseMediaType(file.getContentType());
+        MediaType mediaType = mediaType(file);
         ContentDisposition disposition = (inline ? ContentDisposition.inline() : ContentDisposition.attachment())
                 .filename(file.getOriginalName(), StandardCharsets.UTF_8)
                 .build();
@@ -114,5 +122,23 @@ public class SysFileController {
                 .contentType(mediaType)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(resource);
+    }
+
+    private boolean isPdf(SysFile file) {
+        return "pdf".equalsIgnoreCase(file.getFileExt())
+                || "application/pdf".equalsIgnoreCase(file.getContentType());
+    }
+
+    private MediaType mediaType(SysFile file) {
+        if (isPdf(file)) {
+            return MediaType.APPLICATION_PDF;
+        }
+        if ("xlsx".equalsIgnoreCase(file.getFileExt())) {
+            return MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        if (file.getContentType() == null || file.getContentType().isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
+        return MediaType.parseMediaType(file.getContentType());
     }
 }

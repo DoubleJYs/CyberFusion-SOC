@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.zhangjiyan.template.common.dto.PageResult;
 import com.zhangjiyan.template.system.file.dto.AttachmentCreateRequest;
 import com.zhangjiyan.template.system.file.vo.SysAttachmentVO;
+import com.zhangjiyan.template.system.file.vo.SysFileTablePreview;
 import com.zhangjiyan.template.system.file.vo.SysFileVO;
 import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,6 +19,8 @@ public interface SysFileService extends IService<SysFile> {
     SysFileVO detail(Long id);
 
     Resource fileResource(Long id);
+
+    SysFileTablePreview tablePreview(Long id);
 
     SysFile fileEntity(Long id);
 

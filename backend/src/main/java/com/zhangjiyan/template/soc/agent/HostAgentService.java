@@ -6,12 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zhangjiyan.template.common.exception.BusinessException;
 import com.zhangjiyan.template.common.result.ResultCode;
 import com.zhangjiyan.template.common.security.SecurityUtils;
+import com.zhangjiyan.template.soc.SocSecurityScope;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentBatchItem;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentDetail;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentHeartbeatResult;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentOverview;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRegistrationResult;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRejectItem;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRuntimeEnvironment;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentSourceHealth;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.IngestResult;
 import com.zhangjiyan.template.soc.agent.HostAgentResponses.RecentHostEvent;
@@ -25,7 +27,9 @@ import com.zhangjiyan.template.soc.external.SocExternalEvent;
 import com.zhangjiyan.template.soc.external.SocExternalEventMapper;
 import com.zhangjiyan.template.soc.fim.SocFileIntegrityEvent;
 import com.zhangjiyan.template.soc.fim.SocFileIntegrityEventMapper;
+import com.zhangjiyan.template.soc.fim.FimWatchPathService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,7 +45,7 @@ import java.util.Map;
 import java.util.Objects;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class HostAgentService {
 
     public static final String AGENT_TOKEN_HEADER = "X-CyberFusion-Agent-Token";
@@ -49,7 +53,6 @@ public class HostAgentService {
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final DateTimeFormatter BATCH_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     private static final long AGENT_ONLINE_WINDOW_MINUTES = 10;
-    private static final List<String> AGENT_SOURCE_TYPES = List.of("macos-agent", "windows-agent", "host-agent");
     private static final List<String> ALERT_EVENT_TYPES = List.of(
             "windows_logon_failure",
             "failed_logon",
@@ -92,14 +95,31 @@ public class HostAgentService {
     private final SocExternalEventMapper externalEventMapper;
     private final SocAlertMapper alertMapper;
     private final SocFileIntegrityEventMapper fimMapper;
+    private final FimWatchPathService fimWatchPathService;
     private final SocBaselineCheckMapper baselineMapper;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper;
+    private final SocSecurityScope securityScope;
+
+    // Compatibility constructor for focused service tests that exercise ingest
+    // behavior without the optional FIM policy directory.
+    public HostAgentService(SocHostAgentMapper agentMapper,
+                            SocIngestBatchMapper batchMapper,
+                            SocIngestRejectLogMapper rejectLogMapper,
+                            SocAssetMapper assetMapper,
+                            SocExternalEventMapper externalEventMapper,
+                            SocAlertMapper alertMapper,
+                            SocFileIntegrityEventMapper fimMapper,
+                            SocBaselineCheckMapper baselineMapper,
+                            PasswordEncoder passwordEncoder,
+                            ObjectMapper objectMapper) {
+        this(agentMapper, batchMapper, rejectLogMapper, assetMapper, externalEventMapper, alertMapper, fimMapper,
+                null, baselineMapper, passwordEncoder, objectMapper, null);
+    }
 
     public List<SocHostAgent> listAgents(String osType, String status) {
         LocalDateTime now = LocalDateTime.now();
-        List<SocHostAgent> agents = agentMapper.selectList(new LambdaQueryWrapper<SocHostAgent>()
-                .eq(SocHostAgent::getDeleted, 0)
+        List<SocHostAgent> agents = agentMapper.selectList(scopedAgentQuery()
                 .eq(osType != null && !osType.isBlank(), SocHostAgent::getOsType, normalizeOs(osType))
                 .orderByDesc(SocHostAgent::getLastSeenAt));
         return agents.stream()
@@ -108,31 +128,88 @@ public class HostAgentService {
                 .toList();
     }
 
+    private LambdaQueryWrapper<SocHostAgent> scopedAgentQuery() {
+        LambdaQueryWrapper<SocHostAgent> wrapper = new LambdaQueryWrapper<SocHostAgent>()
+                .eq(SocHostAgent::getDeleted, 0);
+        if (securityScope != null) {
+            securityScope.applyDataScope(wrapper, SocHostAgent::getOwnerId, SocHostAgent::getDeptId);
+        }
+        return wrapper;
+    }
+
+    private void ensureVisible(SocHostAgent agent) {
+        if (securityScope != null && !securityScope.canAccessSelectedWorkspace(agent.getOwnerId(), agent.getDeptId())) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "Host Agent not found");
+        }
+    }
+
+    /**
+     * The Agent reads only policies that were explicitly published for its own
+     * hostname and OS. This endpoint is token-authenticated and never exposes
+     * policies for another host.
+     */
+    public List<FimWatchPathService.AgentWatchPath> authorizedFimWatchPaths(String agentId, String token, String osType) {
+        SocHostAgent agent = authenticate(agentId, token, "fim_config", null, null);
+        if (fimWatchPathService == null) {
+            throw new BusinessException("FIM watch path policy service is unavailable");
+        }
+        return fimWatchPathService.activeFor(agent, osType);
+    }
+
     public AgentOverview overview() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime since = now.minusHours(24);
-        List<SocHostAgent> agents = listAgents(null, null);
-        long onlineAgents = agents.stream().filter(agent -> "online".equals(agent.getStatus())).count();
-        List<AgentSourceHealth> sources = SOURCE_GROUPS.stream()
-                .map(group -> sourceHealth(group, agents, since))
+        String runtimeOs = HostAgentRuntimeInspector.localOsType();
+        SourceGroup runtimeSource = runtimeSourceGroup(runtimeOs);
+        List<String> runtimeSourceTypes = runtimeSource.eventSourceTypes();
+        List<SocHostAgent> agents = listAgents(runtimeOs, null);
+        List<String> agentIds = agents.stream()
+                .map(SocHostAgent::getAgentId)
+                .filter(HostAgentService::notBlank)
                 .toList();
+        long onlineAgents = agents.stream().filter(agent -> "online".equals(agent.getStatus())).count();
+        List<AgentSourceHealth> sources = List.of(sourceHealth(runtimeSource, agents, since));
         return new AgentOverview(
+                runtimeEnvironment(runtimeOs),
                 agents.size(),
                 onlineAgents,
                 agents.size() - onlineAgents,
-                agents.stream().filter(agent -> "macos".equals(normalizeOs(agent.getOsType()))).count(),
-                agents.stream().filter(agent -> "windows".equals(normalizeOs(agent.getOsType()))).count(),
-                agents.stream().filter(agent -> "linux".equals(normalizeOs(agent.getOsType()))).count(),
-                countAssets(AGENT_SOURCE_TYPES),
-                countExternalEvents(AGENT_SOURCE_TYPES, since, false),
-                countFimEvents(AGENT_SOURCE_TYPES, since),
-                countFailedBaselines(AGENT_SOURCE_TYPES),
-                countBatches(since, null),
-                countRejects(since, null),
+                "macos".equals(runtimeOs) ? agents.size() : 0,
+                "windows".equals(runtimeOs) ? agents.size() : 0,
+                "linux".equals(runtimeOs) ? agents.size() : 0,
+                countAssets(runtimeSourceTypes),
+                countExternalEvents(runtimeSourceTypes, since, false),
+                countFimEvents(runtimeSourceTypes, since),
+                countFailedBaselines(runtimeSourceTypes),
+                countBatchesForAgents(since, agentIds),
+                countRejectsForAgents(since, agentIds),
                 sources,
                 agents,
-                recentEventsForSources(AGENT_SOURCE_TYPES, 10)
+                recentEventsForSources(runtimeSourceTypes, 50)
         );
+    }
+
+    private AgentRuntimeEnvironment runtimeEnvironment(String runtimeOs) {
+        String osName = System.getProperty("os.name", "unknown");
+        return new AgentRuntimeEnvironment(
+                runtimeOs,
+                switch (runtimeOs) {
+                    case "macos" -> "macOS";
+                    case "windows" -> "Windows";
+                    case "linux" -> "Linux";
+                    default -> "Host OS";
+                },
+                osName,
+                System.getProperty("os.version", ""),
+                System.getProperty("os.arch", "")
+        );
+    }
+
+    private SourceGroup runtimeSourceGroup(String runtimeOs) {
+        return SOURCE_GROUPS.stream()
+                .filter(group -> group.osTypes().contains(runtimeOs))
+                .findFirst()
+                .orElse(new SourceGroup("host-agent", "Host Agent", List.of(runtimeOs), List.of("host-agent"), false));
     }
 
     public AgentDetail detail(Long id) {
@@ -142,6 +219,7 @@ public class HostAgentService {
         if (agent == null || Integer.valueOf(1).equals(agent.getDeleted())) {
             throw new BusinessException(ResultCode.NOT_FOUND, "Host Agent not found");
         }
+        ensureVisible(agent);
         SocHostAgent sanitizedAgent = sanitizeAgent(agent, now);
         SourceGroup group = SOURCE_GROUPS.stream()
                 .filter(item -> item.sourceType().equals(agentSourceType(sanitizedAgent)))
@@ -173,17 +251,49 @@ public class HostAgentService {
     }
 
     @Transactional
+    public SocHostAgent setEnabled(Long id, Boolean enabled) {
+        SocHostAgent agent = agentMapper.selectById(id);
+        if (agent == null || Integer.valueOf(1).equals(agent.getDeleted())) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "Host Agent not found");
+        }
+        ensureVisible(agent);
+        boolean nextEnabled = Boolean.TRUE.equals(enabled);
+        agent.setEnabled(nextEnabled ? 1 : 0);
+        if (!nextEnabled) {
+            agent.setStatus("disabled");
+        } else if ("disabled".equalsIgnoreCase(firstNotBlank(agent.getStatus(), ""))) {
+            agent.setStatus("offline");
+        }
+        agentMapper.updateById(agent);
+        return sanitizeAgent(agent, LocalDateTime.now());
+    }
+
+    @Transactional
     public AgentRegistrationResult register(HostAgentRegisterRequest request, String clientIp) {
+        return registerForOwner(request, clientIp,
+                SecurityUtils.currentUser().map(user -> user.userId()).orElse(null), null);
+    }
+
+    /** Registers an Agent for an already scoped host owner without letting a browser choose that owner. */
+    @Transactional
+    public AgentRegistrationResult registerForOwner(HostAgentRegisterRequest request, String clientIp, Long ownerId, Long deptId) {
         LocalDateTime now = LocalDateTime.now();
         String agentId = firstNotBlank(request.agentId(), defaultAgentId(request.osType(), request.hostname()));
         SocHostAgent agent = findAgent(agentId);
         boolean created = agent == null;
+        if (!created && ownerId != null && agent.getOwnerId() != null && !ownerId.equals(agent.getOwnerId())) {
+            throw new BusinessException(ResultCode.AUTH_FORBIDDEN, "Agent 已归属其他用户，不能轮换其身份令牌。");
+        }
         if (agent == null) {
             agent = new SocHostAgent();
             agent.setAgentId(agentId);
             agent.setFirstSeenAt(now);
             agent.setDeleted(0);
-            agent.setOwnerId(SecurityUtils.currentUser().map(user -> user.userId()).orElse(null));
+            agent.setOwnerId(ownerId);
+            agent.setDeptId(deptId);
+        } else if (agent.getOwnerId() == null && ownerId != null) {
+            agent.setOwnerId(ownerId);
+            agent.setDeptId(deptId);
         }
         String token = newToken();
         agent.setAgentName(firstNotBlank(request.agentName(), request.hostname()));
@@ -196,20 +306,21 @@ public class HostAgentService {
         agent.setMacAddressesJson(writeJson(request.macAddresses()));
         agent.setLabelsJson(writeJson(request.labels()));
         agent.setTokenHash(passwordEncoder.encode(token));
-        agent.setStatus("online");
-        agent.setLastIp(clientIp);
-        agent.setLastSeenAt(now);
-        agent.setQueueDepth(0);
-        agent.setQueueBytes(0L);
-        agent.setCollectedCount(0L);
-        agent.setSentCount(0L);
-        agent.setFailedCount(0L);
+        agent.setEnabled(1);
+        agent.setStatus("offline");
+        if (created) {
+            agent.setQueueDepth(0);
+            agent.setQueueBytes(0L);
+            agent.setCollectedCount(0L);
+            agent.setSentCount(0L);
+            agent.setFailedCount(0L);
+        }
         if (created) {
             agentMapper.insert(agent);
         } else {
             agentMapper.updateById(agent);
         }
-        return new AgentRegistrationResult(agentId, token, "online", now,
+        return new AgentRegistrationResult(agentId, token, effectiveStatus(agent, now), now,
                 created ? "Agent registered. Store the token in the local host agent config." : "Agent token rotated. Update the local host agent config.");
     }
 
@@ -398,6 +509,10 @@ public class HostAgentService {
         if (agent == null || Integer.valueOf(1).equals(agent.getDeleted()) || !passwordEncoder.matches(token, agent.getTokenHash())) {
             writeReject(batchId, agentId, null, ingestType, "agent_auth_failed", "Agent token rejected.", payload);
             throw new BusinessException(ResultCode.AUTH_UNAUTHORIZED, "Agent token is invalid");
+        }
+        if (!isAgentEnabled(agent)) {
+            writeReject(batchId, agentId, null, ingestType, "agent_disabled", "Agent is disabled by platform policy.", payload);
+            throw new BusinessException(ResultCode.AUTH_FORBIDDEN, "Agent is disabled");
         }
         return agent;
     }
@@ -703,6 +818,24 @@ public class HostAgentService {
                 .ge(SocIngestRejectLog::getCreatedAt, since));
     }
 
+    private long countBatchesForAgents(LocalDateTime since, List<String> agentIds) {
+        if (agentIds == null || agentIds.isEmpty()) {
+            return 0;
+        }
+        return batchMapper.selectCount(new LambdaQueryWrapper<SocIngestBatch>()
+                .in(SocIngestBatch::getAgentId, agentIds)
+                .ge(SocIngestBatch::getFinishedAt, since));
+    }
+
+    private long countRejectsForAgents(LocalDateTime since, List<String> agentIds) {
+        if (agentIds == null || agentIds.isEmpty()) {
+            return 0;
+        }
+        return rejectLogMapper.selectCount(new LambdaQueryWrapper<SocIngestRejectLog>()
+                .in(SocIngestRejectLog::getAgentId, agentIds)
+                .ge(SocIngestRejectLog::getCreatedAt, since));
+    }
+
     private List<RecentHostEvent> recentEventsForSources(List<String> sourceTypes, int limit) {
         if (sourceTypes == null || sourceTypes.isEmpty()) {
             return List.of();
@@ -744,22 +877,40 @@ public class HostAgentService {
     }
 
     private SocHostAgent sanitizeAgent(SocHostAgent agent, LocalDateTime now) {
+        if (agent.getEnabled() == null) {
+            agent.setEnabled(1);
+        }
         agent.setStatus(effectiveStatus(agent, now));
+        HostAgentRuntimeInspector.RuntimeInstallStatus runtimeStatus =
+                HostAgentRuntimeInspector.inspect(agent, HostAgentRuntimeInspector.localOsType());
+        agent.setRuntimeControllable(runtimeStatus.controllable());
+        agent.setRuntimeControlStatus(runtimeStatus.status());
+        agent.setRuntimeControlReason(runtimeStatus.reason());
         agent.setTokenHash(null);
         return agent;
     }
 
     private String effectiveStatus(SocHostAgent agent, LocalDateTime now) {
+        if (!isAgentEnabled(agent)) {
+            return "disabled";
+        }
         if (!"online".equalsIgnoreCase(firstNotBlank(agent.getStatus(), "")) || agent.getLastSeenAt() == null) {
             return "offline";
         }
         return agent.getLastSeenAt().isAfter(now.minusMinutes(AGENT_ONLINE_WINDOW_MINUTES)) ? "online" : "offline";
     }
 
+    private boolean isAgentEnabled(SocHostAgent agent) {
+        return !Integer.valueOf(0).equals(agent.getEnabled());
+    }
+
     private RecentHostEvent toRecentEvent(SocExternalEvent event) {
+        AgentIdentity identity = agentIdentityForEvent(event);
         return new RecentHostEvent(
                 event.getId(),
                 event.getEventUid(),
+                identity.agentId(),
+                identity.agentName(),
                 event.getSourceType(),
                 event.getEventType(),
                 event.getSeverity(),
@@ -773,9 +924,12 @@ public class HostAgentService {
     }
 
     private AgentBatchItem toBatchItem(SocIngestBatch batch) {
+        AgentIdentity identity = agentIdentity(batch.getAgentId());
         return new AgentBatchItem(
                 batch.getId(),
                 batch.getBatchId(),
+                batch.getAgentId(),
+                identity.agentName(),
                 batch.getIngestType(),
                 batch.getItemCount(),
                 batch.getAcceptedCount(),
@@ -788,15 +942,39 @@ public class HostAgentService {
     }
 
     private AgentRejectItem toRejectItem(SocIngestRejectLog rejectLog) {
+        AgentIdentity identity = agentIdentity(rejectLog.getAgentId());
         return new AgentRejectItem(
                 rejectLog.getId(),
                 rejectLog.getBatchId(),
+                rejectLog.getAgentId(),
+                identity.agentName(),
                 rejectLog.getIngestType(),
                 rejectLog.getEventUid(),
                 rejectLog.getReasonCode(),
                 rejectLog.getReason(),
                 rejectLog.getCreatedAt()
         );
+    }
+
+    private AgentIdentity agentIdentityForEvent(SocExternalEvent event) {
+        if (notBlank(event.getBatchId())) {
+            SocIngestBatch batch = batchMapper.selectOne(new LambdaQueryWrapper<SocIngestBatch>()
+                    .eq(SocIngestBatch::getBatchId, event.getBatchId())
+                    .last("LIMIT 1"));
+            if (batch != null && notBlank(batch.getAgentId())) {
+                return agentIdentity(batch.getAgentId());
+            }
+        }
+        return new AgentIdentity(null, null);
+    }
+
+    private AgentIdentity agentIdentity(String agentId) {
+        if (!notBlank(agentId)) {
+            return new AgentIdentity(null, null);
+        }
+        SocHostAgent agent = findAgent(agentId);
+        String name = agent == null ? agentId : firstNotBlank(agent.getAgentName(), agent.getHostname(), agent.getAgentId());
+        return new AgentIdentity(agentId, name);
     }
 
     private String batchId(String agentId, String requestedBatchId, String ingestType) {
@@ -917,5 +1095,8 @@ public class HostAgentService {
             List<String> eventSourceTypes,
             boolean demo
     ) {
+    }
+
+    private record AgentIdentity(String agentId, String agentName) {
     }
 }

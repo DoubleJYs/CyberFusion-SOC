@@ -61,6 +61,16 @@
           <span>数据来源</span><strong><DataSourceBadge :source="current.sourceType" /></strong>
           <span>整改建议</span><strong>{{ current.remediation }}</strong>
         </div>
+        <SecurityDispositionGuide
+          category="baseline"
+          :subject="current.checkItem || current.checkCode"
+          :source="current.sourceType"
+          :severity="current.severity"
+          :status="current.status"
+          :asset="`${current.assetName || '-'}（${current.assetIp || '-'}）`"
+          :reason="current.remediation"
+          :recommendation="current.remediation"
+        />
         <el-input v-model="remark" type="textarea" :rows="3" placeholder="填写整改或复核说明" />
         <div class="drawer-actions">
           <el-button v-for="status in nextStatuses(current.status)" :key="status" @click="transition(status)">{{ statusLabel(status) }}</el-button>
@@ -74,6 +84,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
 import { baselineDetail, baselineSummary, listBaselines, updateBaselineStatus, type BaselineItem } from '@/api/soc'
 

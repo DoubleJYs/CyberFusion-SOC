@@ -563,16 +563,17 @@ VALUES
   (2019, 2020, '每日处理', '/soc/daily-recommendations', 'soc/DailyRecommendationView', 'Calendar', 'menu', 'soc:recommendation:view', 19, 1, 1),
   (2002, 2020, '告警中心', '/soc/alerts', 'soc/AlertCenterView', 'WarningFilled', 'menu', 'soc:alert:view', 20, 1, 1),
   (2017, 2020, '安全事件簇', '/soc/incidents', 'soc/IncidentClusterView', 'Share', 'menu', 'soc:incident:list', 22, 1, 1),
-  (2014, 2020, '检测规则中心', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
+  (2014, 2020, '检测内容规则设置', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
   (2015, 2020, '策略与规则中心', '/soc/policies', 'soc/PolicyCenterView', 'SetUp', 'menu', 'soc:policy:list', 28, 1, 1),
-  (2010, 2020, '告警降噪', '/soc/alert-noise', 'soc/AlertNoiseView', 'Filter', 'menu', 'soc:alert-noise:view', 30, 1, 1),
   (2003, 2021, '资产视图', '/soc/assets', 'soc/AssetView', 'Cpu', 'menu', 'soc:asset:view', 10, 1, 1),
   (2016, 2021, '员工终端安全态势', '/soc/client-security', 'soc/ClientSecurityPostureView', 'Monitor', 'menu', 'soc:client-security:view', 15, 1, 1),
   (2007, 2021, '漏洞中心', '/soc/vulnerabilities', 'soc/VulnerabilityView', 'Aim', 'menu', 'soc:vulnerability:view', 20, 1, 1),
   (2008, 2021, '基线核查', '/soc/baselines', 'soc/BaselineView', 'Checked', 'menu', 'soc:baseline:view', 30, 1, 1),
   (2009, 2021, '文件完整性', '/soc/fim', 'soc/FileIntegrityView', 'Files', 'menu', 'soc:fim:view', 40, 1, 1),
   (2011, 2022, '外部事件', '/soc/external-events', 'soc/ExternalEventView', 'Connection', 'menu', 'soc:external-event:view', 10, 1, 1),
-  (2018, 0, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 6, 1, 1),
+  (2018, 0, 'Agent 中心', '/soc/agents', NULL, 'Connection', 'directory', 'soc:agent:view', 6, 1, 1),
+  (2024, 2018, 'Agent 安装命令设置与建立', '/soc/agents/install', 'soc/HostAgentInstallView', 'SetUp', 'menu', 'soc:agent:register', 10, 1, 1),
+  (2025, 2018, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 20, 1, 1),
   (2004, 2022, '工单中心', '/soc/tickets', 'soc/TicketView', 'Tickets', 'menu', 'soc:ticket:view', 20, 1, 1),
   (2005, 2022, '报表中心', '/soc/reports', 'soc/ReportView', 'DocumentChecked', 'menu', 'soc:report:view', 30, 1, 1),
   (2006, 2023, '系统配置', '/soc/settings', 'soc/SettingsView', 'Tools', 'menu', 'soc:settings:view', 10, 1, 1),
@@ -589,8 +590,6 @@ VALUES
   (2403, 2008, '基线状态流转', NULL, NULL, NULL, 'button', 'soc:baseline:status', 11, 0, 1),
   (2404, 2009, '文件完整性状态流转', NULL, NULL, NULL, 'button', 'soc:fim:status', 11, 0, 1),
   (2405, 2006, '测试通知通道', NULL, NULL, NULL, 'button', 'soc:settings:notify-test', 12, 0, 1),
-  (2410, 2010, '白名单启停', NULL, NULL, NULL, 'button', 'soc:alert-noise:status', 11, 0, 1),
-  (2411, 2010, '白名单保存', NULL, NULL, NULL, 'button', 'soc:alert-noise:save', 12, 0, 1),
   (2412, 2011, '外部事件状态流转', NULL, NULL, NULL, 'button', 'soc:external-event:status', 11, 0, 1),
   (2413, 2011, '安全数据导入', NULL, NULL, NULL, 'button', 'soc:external-event:import', 12, 0, 1),
   (2414, 2013, '导入演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
@@ -621,8 +620,9 @@ VALUES
   (2440, 2015, '算法回放评估', NULL, NULL, NULL, 'button', 'soc:algorithm:replay', 42, 0, 1),
   (2441, 2015, '算法评估记录', NULL, NULL, NULL, 'button', 'soc:algorithm:evaluation', 43, 0, 1),
   (2450, 2013, '清除演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:clear', 12, 0, 1),
-  (2451, 2018, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
-  (2452, 2018, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
+  (2451, 2025, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
+  (2452, 2024, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
+  (2453, 2025, 'Agent 启停', NULL, NULL, NULL, 'button', 'soc:agent:manage', 23, 0, 1),
   (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
   (2601, 2600, '我的电脑', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1),
   (2602, 2600, '我的待办', '/client/tasks', 'client/ClientOperationsView', 'Tickets', 'menu', 'client:tasks:view', 20, 1, 1),
@@ -640,15 +640,15 @@ SELECT 3, id FROM sys_menu WHERE id BETWEEN 2000 AND 2499
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 4, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2017, 2003, 2016, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2018, 2101, 2102, 2103, 2104, 2105, 2201, 2301, 2402, 2403, 2404, 2410, 2411, 2412, 2413, 2414, 2430, 2431, 2432, 2433, 2434, 2451)
+SELECT 4, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2017, 2003, 2016, 2004, 2005, 2007, 2008, 2009, 2011, 2018, 2025, 2101, 2102, 2103, 2104, 2105, 2201, 2301, 2402, 2403, 2404, 2412, 2413, 2414, 2430, 2431, 2432, 2433, 2434, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 5, id FROM sys_menu WHERE id IN (2000, 2021, 2022, 2003, 2004, 2007, 2008, 2009, 2011, 2018, 2201, 2402, 2403, 2404, 2451)
+SELECT 5, id FROM sys_menu WHERE id IN (2000, 2021, 2022, 2003, 2004, 2007, 2008, 2009, 2011, 2018, 2025, 2201, 2402, 2403, 2404, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 6, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2018, 2451)
+SELECT 6, id FROM sys_menu WHERE id IN (2000, 2020, 2021, 2022, 2001, 2012, 2013, 2019, 2014, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2011, 2018, 2025, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -666,17 +666,17 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT role_id, menu_id
 FROM (
-  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2025, 2451)
   UNION ALL
-  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2025, 2451)
 ) AS agent_menu_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
@@ -878,6 +878,19 @@ ON DUPLICATE KEY UPDATE
   updated_by = VALUES(updated_by),
   approved_by = VALUES(approved_by),
   approved_at = VALUES(approved_at);
+
+INSERT IGNORE INTO soc_detection_rule_policy
+  (id, source_type, rule_id, rule_name, detection_category, severity, detection_summary, status, enabled, version,
+   created_by, updated_by, approved_by, approved_at)
+VALUES
+  (701, 'sigma', 'SIGMA-DEMO-001', 'Sigma suspicious process behavior', 'host', 'medium', '检测可疑进程行为并将已命中的 Sigma 证据提升为统一告警。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (702, 'waf', 'WAF-DEMO-1001', 'Admin route protected by WAF policy', 'web', 'high', '检测受保护管理路径的访问阻断证据。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (703, 'waf', 'WAF-DEMO-2001', 'Unsafe upload metadata blocked by file policy', 'web', 'high', '检测上传入口的策略阻断与可疑元数据证据。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (704, 'zap', '10021', 'ZAP security header finding', 'web', 'medium', '检测 Web 应用安全响应头缺失等离线发现。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (705, 'suricata', 'ET-SCAN-001', 'ET SCAN Suspicious inbound port scan', 'network', 'high', '检测 IDS 发现的异常入站端口扫描行为。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (706, 'suricata', 'ET-POLICY-HTTP', 'ET POLICY Unusual HTTP user agent', 'network', 'medium', '检测网络侧异常 HTTP 客户端标识与策略偏离。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (707, 'wazuh', '5715', 'Multiple authentication failures followed by success', 'identity', 'critical', '检测多次认证失败后成功的高风险登录链路。', 'active', 1, 1, 1, 1, 1, NOW()),
+  (708, 'wazuh', '5502', 'Critical system configuration changed', 'host', 'high', '检测主机关键系统配置变更。', 'active', 1, 1, 1, 1, 1, NOW());
 
 INSERT INTO soc_event_adapter_profile
   (id, source_type, display_name, description, status, enabled, version, sort_order, sample_file, created_by, updated_by, approved_by, approved_at)
@@ -1091,6 +1104,7 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   mac_addresses_json JSON NULL,
   labels_json JSON NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  enabled TINYINT NOT NULL DEFAULT 1,
   token_hash VARCHAR(255) NOT NULL,
   last_ip VARCHAR(64) NULL,
   queue_depth INT NOT NULL DEFAULT 0,
@@ -1110,6 +1124,20 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   KEY idx_soc_host_agent_last_seen (last_seen_at),
   KEY idx_soc_host_agent_scope (owner_id, dept_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @host_agent_enabled_column_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'soc_host_agent'
+    AND COLUMN_NAME = 'enabled'
+);
+SET @host_agent_enabled_ddl := IF(@host_agent_enabled_column_exists = 0,
+  'ALTER TABLE soc_host_agent ADD COLUMN enabled TINYINT NOT NULL DEFAULT 1 AFTER status',
+  'SELECT 1'
+);
+PREPARE host_agent_enabled_stmt FROM @host_agent_enabled_ddl;
+EXECUTE host_agent_enabled_stmt;
+DEALLOCATE PREPARE host_agent_enabled_stmt;
 
 CREATE TABLE IF NOT EXISTS soc_ingest_batch (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

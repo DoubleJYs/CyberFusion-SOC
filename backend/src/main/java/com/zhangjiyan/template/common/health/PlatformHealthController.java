@@ -36,7 +36,8 @@ public class PlatformHealthController {
             "soc_event_adapter_profile",
             "soc_correlation_rule",
             "soc_incident_cluster",
-            "soc_incident_evidence"
+            "soc_incident_evidence",
+            "soc_fim_watch_path"
     );
 
     private final DataSource dataSource;

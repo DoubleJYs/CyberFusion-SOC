@@ -14,6 +14,16 @@ export interface AttachmentCreateForm {
   remark?: string
 }
 
+export interface FileTablePreview {
+  fileId: number
+  originalName: string
+  format: string
+  headers: string[]
+  rows: string[][]
+  totalRows: number
+  truncated: boolean
+}
+
 export async function uploadFile(file: File, bizType?: string, onProgress?: (percent: number) => void): Promise<SysFileRecord> {
   const formData = new FormData()
   formData.append('file', file)
@@ -49,6 +59,11 @@ export async function downloadFileBlob(id: number): Promise<Blob> {
 export async function previewFileBlob(id: number): Promise<Blob> {
   const response = await request.get(`/system/files/${id}/preview`, { responseType: 'blob' })
   return response.data
+}
+
+export async function previewFileTable(id: number): Promise<FileTablePreview> {
+  const response = await request.get<ApiResult<FileTablePreview>>(`/system/files/${id}/table-preview`)
+  return response.data.data
 }
 
 export function saveBlob(blob: Blob, filename: string) {

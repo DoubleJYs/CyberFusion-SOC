@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zhangjiyan.template.common.dto.PageResult;
+import com.zhangjiyan.template.common.excel.SimpleXlsxUtils;
 import com.zhangjiyan.template.common.exception.BusinessException;
 import com.zhangjiyan.template.common.file.FileStorageProperties;
 import com.zhangjiyan.template.common.file.FileStorageService;
@@ -12,6 +13,7 @@ import com.zhangjiyan.template.common.result.ResultCode;
 import com.zhangjiyan.template.common.security.SecurityUtils;
 import com.zhangjiyan.template.system.file.dto.AttachmentCreateRequest;
 import com.zhangjiyan.template.system.file.vo.SysAttachmentVO;
+import com.zhangjiyan.template.system.file.vo.SysFileTablePreview;
 import com.zhangjiyan.template.system.file.vo.SysFileVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.Resource;
@@ -19,11 +21,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class SysFileServiceImpl extends ServiceImpl<SysFileMapper, SysFile> implements SysFileService {
+
+    private static final int TABLE_PREVIEW_LIMIT = 200;
 
     private final FileStorageService storageService;
     private final FileStorageProperties storageProperties;
@@ -76,6 +81,35 @@ public class SysFileServiceImpl extends ServiceImpl<SysFileMapper, SysFile> impl
     public Resource fileResource(Long id) {
         SysFile file = fileEntity(id);
         return storageService.loadAsResource(file.getStoragePath());
+    }
+
+    @Override
+    public SysFileTablePreview tablePreview(Long id) {
+        SysFile file = fileEntity(id);
+        String ext = file.getFileExt() == null ? "" : file.getFileExt().toLowerCase();
+        if (!"xlsx".equals(ext)) {
+            throw new BusinessException("仅支持 xlsx 文件预览，请下载该文件查看完整内容");
+        }
+        try (var inputStream = fileResource(id).getInputStream()) {
+            List<List<String>> workbookRows = SimpleXlsxUtils.readWorkbook(inputStream);
+            List<String> headers = workbookRows.isEmpty() ? List.of() : workbookRows.get(0);
+            List<List<String>> bodyRows = workbookRows.stream()
+                    .skip(1)
+                    .limit(TABLE_PREVIEW_LIMIT)
+                    .toList();
+            int totalRows = Math.max(workbookRows.size() - 1, 0);
+            return new SysFileTablePreview(
+                    file.getId(),
+                    file.getOriginalName(),
+                    ext,
+                    headers,
+                    bodyRows,
+                    totalRows,
+                    totalRows > TABLE_PREVIEW_LIMIT
+            );
+        } catch (IOException ex) {
+            throw new BusinessException("Excel 文件预览失败");
+        }
     }
 
     @Override

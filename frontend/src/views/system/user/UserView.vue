@@ -55,9 +55,10 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="216" class-name="user-actions-column">
+        <el-table-column label="操作" width="294" class-name="user-actions-column">
           <template #default="{ row }">
             <div class="user-row-actions">
+              <el-button v-if="isWorkspaceUser(row)" link type="success" @click="openWorkspace(row)">安全工作区</el-button>
               <el-button v-permission="'system:user:update'" link type="primary" @click="openEdit(row)">编辑</el-button>
               <el-button v-permission="'system:user:assign-role'" link type="primary" @click="openRoles(row)">分配角色</el-button>
               <el-button v-permission="'system:user:reset-password'" link type="warning" @click="resetPassword(row)">重置密码</el-button>
@@ -112,6 +113,9 @@ import { fetchDepts, fetchPosts } from '@/api/org'
 import { assignUserRoles, changeUserStatus, createUser, fetchUsers, resetUserPassword, updateUser, type UserForm } from '@/api/user'
 import { fetchRoles } from '@/api/role'
 import type { DeptRecord, PostRecord, RoleRecord, UserRecord } from '@/types/system'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const loading = ref(false)
 const rows = ref<UserRecord[]>([])
@@ -195,6 +199,14 @@ function openEdit(row: UserRecord) {
     enabled: row.status === 1,
   })
   dialogVisible.value = true
+}
+
+function isWorkspaceUser(row: UserRecord) {
+  return row.roles.includes('employee')
+}
+
+function openWorkspace(row: UserRecord) {
+  void router.push({ path: '/soc/user-workspaces', query: { target: '/soc/assets', focusOwnerId: String(row.id) } })
 }
 
 async function save() {

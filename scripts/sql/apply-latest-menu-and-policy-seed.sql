@@ -11,6 +11,36 @@
 -- accounts do not retain legacy SOC/system menus in already-initialized DBs.
 -- Safe to rerun on MySQL 8.
 
+SET NAMES utf8mb4;
+
+CREATE TABLE IF NOT EXISTS soc_detection_rule_policy (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  source_type VARCHAR(32) NOT NULL,
+  rule_id VARCHAR(160) NOT NULL,
+  rule_name VARCHAR(255) NOT NULL,
+  detection_category VARCHAR(32) NOT NULL,
+  severity VARCHAR(16) NOT NULL,
+  detection_summary VARCHAR(1000) NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'draft',
+  enabled TINYINT NOT NULL DEFAULT 1,
+  version INT NOT NULL DEFAULT 1,
+  created_by BIGINT NULL,
+  updated_by BIGINT NULL,
+  approved_by BIGINT NULL,
+  approved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_soc_detection_rule_policy_source_rule (source_type, rule_id, deleted),
+  KEY idx_soc_detection_rule_policy_status (status, enabled),
+  KEY idx_soc_detection_rule_policy_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Alert noise was retired as a standalone expert-view page. Preserve the alert
+-- history and whitelist data, but remove the obsolete menu and button grants.
+DELETE FROM sys_role_menu WHERE menu_id IN (2010, 2410, 2411);
+DELETE FROM sys_menu WHERE id IN (2010, 2410, 2411);
+
 INSERT INTO sys_role (id, role_code, role_name, data_scope, status)
 VALUES
   (7, 'super_admin', '超级管理员兼容角色', 'all', 1),
@@ -33,9 +63,11 @@ INSERT INTO sys_menu (id, parent_id, name, path, component, icon, type, permissi
 VALUES
   (2013, 2020, '安全验证中心', '/soc/demo-range', 'soc/DemoRangeView', 'Operation', 'menu', 'soc:demo-range:view', 18, 1, 1),
   (2019, 2020, '每日处理', '/soc/daily-recommendations', 'soc/DailyRecommendationView', 'Calendar', 'menu', 'soc:recommendation:view', 19, 1, 1),
-  (2014, 2020, '检测规则中心', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
+  (2014, 2020, '检测内容规则设置', '/soc/rules', 'soc/RuleCenterView', 'List', 'menu', 'soc:rules:view', 25, 1, 1),
   (2015, 2020, '策略与规则中心', '/soc/policies', 'soc/PolicyCenterView', 'SetUp', 'menu', 'soc:policy:list', 28, 1, 1),
-  (2018, 0, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 6, 1, 1),
+  (2018, 0, 'Agent 中心', '/soc/agents', NULL, 'Connection', 'directory', 'soc:agent:view', 6, 1, 1),
+  (2024, 2018, 'Agent 安装命令设置与建立', '/soc/agents/install', 'soc/HostAgentInstallView', 'SetUp', 'menu', 'soc:agent:register', 10, 1, 1),
+  (2025, 2018, 'Agent 管理', '/soc/agents', 'soc/HostAgentView', 'Connection', 'menu', 'soc:agent:view', 20, 1, 1),
   (2414, 2013, '导入演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:import', 11, 0, 1),
   (2415, 2015, '策略新增', NULL, NULL, NULL, 'button', 'soc:policy:create', 11, 0, 1),
   (2416, 2015, '策略编辑', NULL, NULL, NULL, 'button', 'soc:policy:update', 12, 0, 1),
@@ -55,8 +87,9 @@ VALUES
   (2440, 2015, '算法回放评估', NULL, NULL, NULL, 'button', 'soc:algorithm:replay', 42, 0, 1),
   (2441, 2015, '算法评估记录', NULL, NULL, NULL, 'button', 'soc:algorithm:evaluation', 43, 0, 1),
   (2450, 2013, '清除演示数据', NULL, NULL, NULL, 'button', 'soc:demo-range:clear', 12, 0, 1),
-  (2451, 2018, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
-  (2452, 2018, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
+  (2451, 2025, 'Agent 管理查看', NULL, NULL, NULL, 'button', 'soc:agent:view', 21, 0, 1),
+  (2452, 2024, 'Agent 注册', NULL, NULL, NULL, 'button', 'soc:agent:register', 22, 0, 1),
+  (2453, 2025, 'Agent 启停', NULL, NULL, NULL, 'button', 'soc:agent:manage', 23, 0, 1),
   (2600, 0, '员工端', '/client', NULL, 'Monitor', 'directory', 'client:view', 90, 1, 1),
   (2601, 2600, '我的电脑', '/client/workbench', 'client/ClientWorkbenchView', 'Monitor', 'menu', 'client:workbench:view', 10, 1, 1),
   (2602, 2600, '我的待办', '/client/tasks', 'client/ClientOperationsView', 'Tickets', 'menu', 'client:tasks:view', 20, 1, 1),
@@ -77,7 +110,7 @@ ON DUPLICATE KEY UPDATE
 
 -- admin and security_admin can maintain policy, adapter, and playbook entries.
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 1, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452)
+SELECT 1, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2024, 2025, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452, 2453)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -85,23 +118,23 @@ SELECT 7, id FROM sys_menu
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 3, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452)
+SELECT 3, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2015, 2018, 2024, 2025, 2414, 2450, 2415, 2416, 2417, 2418, 2419, 2420, 2421, 2422, 2423, 2424, 2425, 2426, 2427, 2428, 2439, 2440, 2441, 2451, 2452, 2453)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
 SELECT role_id, menu_id
 FROM (
-  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 1 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 3 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  SELECT 4 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2025, 2451)
   UNION ALL
-  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 7 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451, 2452)
+  SELECT 8 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2024, 2025, 2451, 2452, 2453)
   UNION ALL
-  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2451)
+  SELECT 9 AS role_id, id AS menu_id FROM sys_menu WHERE id IN (2018, 2025, 2451)
 ) AS latest_agent_permission_seed
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
@@ -112,7 +145,7 @@ ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 -- security_analyst can operate the demo/alert/ticket/report path and apply playbooks,
 -- but cannot publish policy or adapter definitions.
 INSERT INTO sys_role_menu (role_id, menu_id)
-SELECT 4, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2018, 2414, 2420, 2421, 2427, 2428, 2451)
+SELECT 4, id FROM sys_menu WHERE id IN (2013, 2019, 2014, 2018, 2025, 2414, 2420, 2421, 2427, 2428, 2451)
 ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP;
 
 INSERT INTO sys_role_menu (role_id, menu_id)
@@ -183,6 +216,7 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   mac_addresses_json JSON NULL,
   labels_json JSON NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  enabled TINYINT NOT NULL DEFAULT 1,
   token_hash VARCHAR(255) NOT NULL,
   last_ip VARCHAR(64) NULL,
   queue_depth INT NOT NULL DEFAULT 0,
@@ -202,6 +236,45 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   KEY idx_soc_host_agent_last_seen (last_seen_at),
   KEY idx_soc_host_agent_scope (owner_id, dept_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @host_agent_enabled_column_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'soc_host_agent'
+    AND COLUMN_NAME = 'enabled'
+);
+
+CREATE TABLE IF NOT EXISTS soc_fim_watch_path (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  display_name VARCHAR(128) NOT NULL,
+  host_name VARCHAR(128) NOT NULL,
+  os_type VARCHAR(16) NOT NULL,
+  watch_path VARCHAR(500) NOT NULL,
+  purpose VARCHAR(32) NOT NULL,
+  is_recursive TINYINT NOT NULL DEFAULT 1,
+  max_entries INT NOT NULL DEFAULT 500,
+  status VARCHAR(16) NOT NULL DEFAULT 'draft',
+  enabled TINYINT NOT NULL DEFAULT 1,
+  version INT NOT NULL DEFAULT 1,
+  created_by BIGINT NULL,
+  updated_by BIGINT NULL,
+  approved_by BIGINT NULL,
+  approved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_soc_fim_watch_host_path (host_name, watch_path, deleted),
+  KEY idx_soc_fim_watch_target (os_type, host_name, status, enabled),
+  KEY idx_soc_fim_watch_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Host Agent FIM authorized watch paths';
+SET @host_agent_enabled_ddl := IF(@host_agent_enabled_column_exists = 0,
+  'ALTER TABLE soc_host_agent ADD COLUMN enabled TINYINT NOT NULL DEFAULT 1 AFTER status',
+  'SELECT 1'
+);
+PREPARE host_agent_enabled_stmt FROM @host_agent_enabled_ddl;
+EXECUTE host_agent_enabled_stmt;
+DEALLOCATE PREPARE host_agent_enabled_stmt;
 
 CREATE TABLE IF NOT EXISTS soc_ingest_batch (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

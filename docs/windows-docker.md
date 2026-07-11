@@ -277,7 +277,17 @@ http://127.0.0.1:18080/api
 
 ### 7.3 获取 Agent token
 
-推荐在页面 `/soc/agents` 中注册 Windows Agent，并只复制一次 `agentToken`。也可以用管理员 JWT 调接口注册；下面示例中的 access token 只能放在本机临时会话里，不要写入源码：
+推荐在平台页面 `Agent 中心 -> Agent 安装命令设置与建立`（路由 `/soc/agents/install`）中建立 Windows Agent：
+
+1. 目标系统选择 `Windows`。
+2. Agent ID 使用一台主机固定一个值，例如 `windows-host-agent`。
+3. 主机名、系统版本、架构和主机地址按真实 Windows 宿主机填写。
+4. 点击“建立 / 轮换 Agent Token”。
+5. 立即复制页面生成的 PowerShell 安装命令；离开页面后明文 token 不会再次显示。
+
+如果已经在 `Agent 管理`（路由 `/soc/agents`）里看到历史 Agent 记录，但显示“本机未安装”或“待心跳”，点击该行的“去设置安装”会把 Agent ID、主机名、系统和 IP 带回安装页，避免重新填写。页面建立 Agent 只代表平台生成了接收身份，真实在线状态必须等 Windows Service 或前台 Agent 进程启动后由心跳更新。
+
+也可以用管理员 JWT 调接口注册；下面示例中的 access token 只能放在本机临时会话里，不要写入源码：
 
 ```powershell
 $env:CYBERFUSION_ADMIN_ACCESS_TOKEN = "replace-with-local-admin-access-token"
@@ -311,7 +321,7 @@ $env:CYBERFUSION_AGENT_TOKEN = "replace-with-local-agent-token"
 
 验证通过后，应在平台中看到：
 
-- `/soc/agents` 出现 `windows-host-agent`。
+- `/soc/agents` 出现 `windows-host-agent`，心跳状态从“待心跳”变为“在线”。
 - `soc_asset` 中出现 `source_type=windows-agent` 的真实 Windows 主机资产。
 - `soc_external_event` 出现 Windows EventLog / Defender / 服务 / 端口 / 补丁摘要等主机事件。
 - `soc_file_integrity_event` 出现 FIM hash 元数据。

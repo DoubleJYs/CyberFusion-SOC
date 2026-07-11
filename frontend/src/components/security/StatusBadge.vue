@@ -33,6 +33,7 @@ const map: Record<string, string> = {
   linked: '已关联',
   online: '在线',
   offline: '离线',
+  pending_heartbeat: '待心跳',
   warning: '异常',
   empty: '无数据',
 }
@@ -41,7 +42,7 @@ const type = computed(() => {
   if (['closed', '已关闭', '已归档', 'fixed', 'passed', 'confirmed', 'READY', 'SENT', 'enabled', 'linked', 'online'].includes(props.status || '')) return 'success'
   if (['ignored', 'false_positive', 'accepted', 'DRY_RUN', 'whitelisted', 'disabled', 'offline', 'empty'].includes(props.status || '')) return 'info'
   if (['new', '待分派', 'open', 'failed', 'FAIL'].includes(props.status || '')) return 'danger'
-  if (['待复核', 'acknowledged', 'reviewing', 'fixing', 'remediating', 'PENDING', 'warning'].includes(props.status || '')) return 'warning'
+  if (['待复核', 'acknowledged', 'reviewing', 'fixing', 'remediating', 'PENDING', 'warning', 'pending_heartbeat'].includes(props.status || '')) return 'warning'
   return 'primary'
 })
 </script>

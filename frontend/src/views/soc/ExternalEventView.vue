@@ -2,28 +2,28 @@
   <div class="page-shell">
     <section class="soc-page-hero">
       <div>
-        <span class="soc-page-kicker">SECURITY EVIDENCE</span>
-        <h1>安全证据</h1>
-        <p>这个页面帮你查看和导入来自不同安全工具的原始安全记录，并关联到告警处置。</p>
+        <span class="soc-page-kicker">EXTERNAL RISK EVENTS</span>
+        <h1>外部事件</h1>
+        <p>聚合外部访问主机、主机访问外网、外部扫描和 IOC 情报风险；本机 Agent 日志不在此页展示。</p>
       </div>
       <div class="soc-page-tags">
-        <el-tag>Zeek</el-tag>
-        <el-tag>Suricata</el-tag>
-        <el-tag>MISP IOC</el-tag>
-        <el-tag>CyberChef</el-tag>
+        <el-tag>外部入站</el-tag>
+        <el-tag>主机外联</el-tag>
+        <el-tag>扫描发现</el-tag>
+        <el-tag>IOC 情报</el-tag>
       </div>
     </section>
 
     <section class="external-overview">
-      <RiskCard label="安全记录" :value="totals.total" delta="规范化事件记录" tone="medium" />
-      <RiskCard label="高风险事件" :value="totals.highRisk" delta="critical / high" tone="high" />
-      <RiskCard label="已关联告警" :value="totals.linkedAlerts" delta="进入告警处置" tone="low" />
-      <RiskCard label="能力引擎" :value="summary.length" delta="安全工具来源统计" tone="medium" />
+      <RiskCard label="外部访问主机" :value="riskOverview?.inboundAccess || 0" delta="外部源到受管资产" tone="high" />
+      <RiskCard label="主机外联" :value="riskOverview?.outboundAccess || 0" delta="受管资产到外网" tone="medium" />
+      <RiskCard label="外部扫描发现" :value="riskOverview?.scanFindings || 0" delta="ZAP / Trivy / 探测信号" tone="high" />
+      <RiskCard label="IOC 与告警" :value="riskOverview?.iocHits || 0" :delta="`${riskOverview?.linkedAlerts || 0} 条已关联告警`" tone="low" />
     </section>
 
     <section class="soc-panel panel-pad">
       <div class="soc-filter-bar external-filter">
-        <el-input v-model="query.keyword" clearable placeholder="事件、规则、资产、IOC" @keyup.enter="load" />
+        <el-input v-model="query.keyword" clearable placeholder="外部 IP、域名、扫描规则、资产或 IOC" @keyup.enter="load" />
         <el-select v-model="query.sourceType" clearable placeholder="来源">
           <el-option v-for="source in sourceOptions" :key="source.value" :label="source.label" :value="source.value" />
         </el-select>
@@ -34,9 +34,7 @@
           <el-option label="低危" value="low" />
         </el-select>
         <el-button @click="load">查询</el-button>
-        <el-button @click="openImport()">导入数据</el-button>
-        <el-button @click="runCyberChef">CyberChef 分析</el-button>
-        <el-button @click="runShuffle">Shuffle 通知</el-button>
+        <el-button type="primary" @click="openImport()">导入外部风险数据</el-button>
       </div>
     </section>
 
@@ -65,30 +63,7 @@
         </div>
       </dl>
       <div class="adapter-actions">
-        <el-button @click="openImport(query.sourceType)">导入 {{ activeSourceContext.shortName }} 数据</el-button>
-        <el-button @click="runCyberChef">分析字段</el-button>
-      </div>
-    </section>
-
-    <section v-if="trendHints.length" class="soc-panel trend-hint-panel">
-      <div class="trend-hint-head">
-        <div>
-          <span class="adapter-kicker">TREND ANOMALY</span>
-          <h2>趋势异常提示</h2>
-          <p>按当前筛选条件对比当前窗口和 7 天均值，帮助判断是否需要优先复核。</p>
-        </div>
-        <el-tag effect="plain">{{ trendHints.length }} 项</el-tag>
-      </div>
-      <div class="trend-hint-list">
-        <article v-for="item in trendHints" :key="`${item.title}-${item.assetIp}-${item.sourceType}`">
-          <div>
-            <SeverityBadge :severity="item.severity" />
-            <strong>{{ item.title }}</strong>
-            <b>{{ item.anomalyScore }}</b>
-          </div>
-          <span>{{ item.assetIp || '-' }} / {{ item.sourceType || '-' }} / 当前 {{ item.currentCount }} 条，基线 {{ item.baselineCount }} 条，{{ item.changeRatio }}x</span>
-          <p>{{ item.reason }}</p>
-        </article>
+        <el-button type="primary" @click="openImport(query.sourceType)">导入 {{ activeSourceContext.shortName }} 数据</el-button>
       </div>
     </section>
 
@@ -97,12 +72,12 @@
     </el-alert>
 
     <section class="table-panel">
-      <el-table v-loading="loading" :data="rows" empty-text="暂无安全记录" @row-click="open">
+      <el-table v-loading="loading" :data="rows" empty-text="暂无外部风险事件" @row-click="open">
         <el-table-column prop="eventUid" label="事件 ID" min-width="170" />
         <el-table-column label="来源" width="92"><template #default="{ row }"><DataSourceBadge :source="row.sourceType" /></template></el-table-column>
-        <el-table-column prop="eventType" label="类型" width="120" />
+        <el-table-column prop="eventType" label="风险类型" min-width="150" show-overflow-tooltip />
         <el-table-column label="等级" width="86"><template #default="{ row }"><SeverityBadge :severity="row.severity" /></template></el-table-column>
-        <el-table-column prop="ruleName" label="规则/情报" min-width="230" show-overflow-tooltip />
+        <el-table-column prop="ruleName" label="检测结论 / 情报" min-width="230" show-overflow-tooltip />
         <el-table-column prop="assetName" label="资产" min-width="120" />
         <el-table-column prop="srcIp" label="源 IP" width="140" />
         <el-table-column prop="destIp" label="目的 IP" width="140" />
@@ -111,12 +86,12 @@
         <el-table-column prop="eventTime" label="时间" width="180" />
       </el-table>
       <div class="pagination-row">
-        <span>安全记录 {{ total }} 条</span>
+        <span>外部风险事件 {{ total }} 条</span>
         <el-pagination v-model:current-page="query.pageNum" v-model:page-size="query.pageSize" layout="total, sizes, prev, pager, next" :total="total" @change="load" />
       </div>
     </section>
 
-    <el-drawer v-model="drawer" title="安全记录详情" size="560px">
+    <el-drawer v-model="drawer" title="外部事件详情" size="560px">
       <div v-if="current" class="drawer-stack">
         <div class="soc-drawer-grid">
           <span>事件 ID</span><strong>{{ current.eventUid }}</strong>
@@ -140,6 +115,16 @@
           <span>统一告警</span><strong>{{ current.alertId ? `#${current.alertId}` : '未关联' }}</strong>
           <span>状态</span><strong><StatusBadge :status="current.status" /></strong>
         </div>
+        <SecurityDispositionGuide
+          category="external"
+          :subject="current.eventType || current.ruleName || current.eventUid"
+          :source="current.sourceType"
+          :severity="current.severity"
+          :status="current.status"
+          :asset="`${current.assetName || '-'}（${current.assetIp || current.destIp || '-'}）`"
+          :reason="externalRiskReason(current)"
+          :recommendation="current.alertId ? '查看已关联告警，核对源/目的方向和同一资产的其他外部风险后决定是否进入事件簇。' : '确认访问方向、扫描结论或 IOC 命中后，再创建或关联告警，避免孤立处置。'"
+        />
         <section class="incident-mini-panel">
           <div class="mini-panel-head">
             <strong>所属事件簇</strong>
@@ -172,14 +157,13 @@
       </div>
     </el-drawer>
 
-    <el-dialog v-model="importVisible" title="CyberFusion 多源演示导入" width="720px">
+    <el-dialog v-model="importVisible" title="导入外部访问、扫描或 IOC 风险数据" width="720px">
       <el-form label-width="86px">
         <el-form-item label="来源" required>
           <el-select v-model="importForm.sourceType">
             <el-option label="Zeek conn.log" value="zeek" />
             <el-option label="Suricata eve.json" value="suricata" />
-            <el-option label="WAF / 网关审计" value="waf" />
-            <el-option label="Wazuh demo alert" value="wazuh" />
+            <el-option label="WAF / 网关访问审计" value="waf" />
             <el-option label="MISP IOC" value="misp" />
             <el-option label="Trivy JSON" value="trivy" />
             <el-option label="ZAP JSON" value="zap" />
@@ -198,16 +182,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="chefVisible" title="CyberChef 字段分析结果" width="620px">
-      <div v-if="chefResult" class="chef-result">
-        <p>{{ chefResult.note }}</p>
-        <el-tag v-for="operation in chefResult.suggestedOperations" :key="operation">{{ operation }}</el-tag>
-        <div class="event-json">
-          <strong>字段发现</strong>
-          <pre>{{ JSON.stringify(chefResult.findings, null, 2) }}</pre>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
@@ -217,23 +191,21 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
 import RiskCard from '@/components/security/RiskCard.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
 import {
   externalEventSummary,
-  analyzeCyberChefField,
   externalEventDetail,
+  externalRiskOverview as fetchExternalRiskOverview,
   importCyberFusionEvents,
   listIncidents,
   listExternalEvents,
-  sendShuffleDemoNotification,
-  trendAnomalies,
   updateExternalEventStatus,
-  type CyberChefAnalysis,
   type ExternalEventItem,
+  type ExternalRiskOverview,
   type ExternalSourceSummary,
-  type IncidentClusterItem,
-  type TrendAnomalyItem
+  type IncidentClusterItem
 } from '@/api/soc'
 import { useAppStore } from '@/stores/app'
 
@@ -243,31 +215,26 @@ const appStore = useAppStore()
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', sourceType: '', severity: '', status: '', eventType: '' })
 const rows = ref<ExternalEventItem[]>([])
 const summary = ref<ExternalSourceSummary[]>([])
-const trendHints = ref<TrendAnomalyItem[]>([])
+const riskOverview = ref<ExternalRiskOverview>()
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
 const drawer = ref(false)
 const current = ref<ExternalEventItem>()
 const relatedIncidents = ref<IncidentClusterItem[]>([])
-const remark = ref('已按安全记录处置流程复核')
+const remark = ref('已按外部风险事件处置流程复核')
 const importVisible = ref(false)
 const importing = ref(false)
 const importForm = reactive({ sourceType: 'zeek', content: '', linkAlerts: true })
-const chefVisible = ref(false)
-const chefResult = ref<CyberChefAnalysis>()
 
 const sourceOptions = [
-  { label: 'WAF', value: 'waf' },
-  { label: 'Wazuh', value: 'wazuh' },
-  { label: 'Zeek', value: 'zeek' },
-  { label: 'Suricata', value: 'suricata' },
-  { label: 'Sigma', value: 'sigma' },
-  { label: 'MISP', value: 'misp' },
-  { label: 'Trivy', value: 'trivy' },
-  { label: 'ZAP', value: 'zap' },
-  { label: 'CyberChef', value: 'cyberchef' },
-  { label: 'Shuffle', value: 'shuffle' },
+  { label: 'WAF / 网关', value: 'waf' },
+  { label: 'Zeek 网络日志', value: 'zeek' },
+  { label: 'Suricata IDS', value: 'suricata' },
+  { label: 'ZAP Web 扫描', value: 'zap' },
+  { label: 'Trivy 扫描', value: 'trivy' },
+  { label: 'MISP IOC', value: 'misp' },
+  { label: 'OpenCTI 情报', value: 'opencti' },
 ]
 
 const sourceContexts: Record<string, { code: string; shortName: string; upstream: string; title: string; description: string; destination: string }> = {
@@ -276,16 +243,8 @@ const sourceContexts: Record<string, { code: string; shortName: string; upstream
     shortName: 'WAF',
     upstream: 'WAF / Gateway audit',
     title: 'WAF 网关审计能力内容',
-    description: '接收离线 WAF / 网关审计日志，展示识别、拦截、请求 ID、目标 URL 和规则命中证据。',
-    destination: '安全记录 / 告警处置',
-  },
-  wazuh: {
-    code: '01',
-    shortName: 'Wazuh',
-    upstream: 'Wazuh demo alerts',
-    title: 'Wazuh 主机告警能力内容',
-    description: '接收主机安全告警、认证失败、配置变更和文件变更等事件，归一化后进入告警处置和工单闭环。',
-    destination: '安全记录 / 告警处置',
+    description: '接收 WAF / 网关访问审计，展示外部来源、拦截结果、请求 ID、目标 URL 和规则命中证据。',
+    destination: '外部事件 / 告警处置',
   },
   zeek: {
     code: '03',
@@ -293,7 +252,7 @@ const sourceContexts: Record<string, { code: string; shortName: string; upstream
     upstream: 'Zeek conn.log',
     title: 'Zeek 网络日志能力内容',
     description: '面向连接日志、协议元数据和网络会话字段，导入后支持源/目的 IP、服务、IOC 和资产维度分析。',
-    destination: '安全记录 / IOC 识别',
+    destination: '外部事件 / IOC 识别',
   },
   suricata: {
     code: '04',
@@ -301,15 +260,7 @@ const sourceContexts: Record<string, { code: string; shortName: string; upstream
     upstream: 'Suricata eve.json',
     title: 'Suricata IDS EVE 能力内容',
     description: '解析 IDS 告警、HTTP/DNS/TLS 等 EVE 记录，按规则、严重性和资产关联到统一告警。',
-    destination: '安全记录 / 告警处置',
-  },
-  sigma: {
-    code: '05',
-    shortName: 'Sigma',
-    upstream: 'Sigma rules',
-    title: 'Sigma 检测规则能力内容',
-    description: '保存检测规则元数据、规则标识、命中预览和后续告警降噪联动，作为统一规则中心的数据来源。',
-    destination: '规则中心 / 命中预览',
+    destination: '外部事件 / 告警处置',
   },
   misp: {
     code: '08',
@@ -317,7 +268,7 @@ const sourceContexts: Record<string, { code: string; shortName: string; upstream
     upstream: 'MISP attributes',
     title: 'MISP IOC 情报能力内容',
     description: '导入 IP、域名、URL、哈希等 IOC，命中资产或事件后提升告警优先级并进入分析闭环。',
-    destination: '安全记录 / 告警关联',
+    destination: '外部事件 / 告警关联',
   },
   zap: {
     code: '14',
@@ -325,7 +276,23 @@ const sourceContexts: Record<string, { code: string; shortName: string; upstream
     upstream: 'ZAP JSON',
     title: 'ZAP Web 风险能力内容',
     description: '接入 Web 扫描发现、插件 ID、风险等级、URL 和修复建议，用于 Web 风险复核和报告输出。',
-    destination: '安全记录 / 漏洞风险',
+    destination: '外部事件 / 漏洞风险',
+  },
+  trivy: {
+    code: '15',
+    shortName: 'Trivy',
+    upstream: 'Trivy JSON',
+    title: '镜像与软件扫描发现',
+    description: '接入镜像、软件包和依赖扫描发现，关联受影响资产、组件和修复建议。',
+    destination: '外部事件 / 漏洞风险',
+  },
+  opencti: {
+    code: '09',
+    shortName: 'OpenCTI',
+    upstream: 'OpenCTI intelligence',
+    title: '外部威胁情报',
+    description: '接入外部 IOC、攻击者和基础设施情报，用于与网络访问和资产事件交叉核对。',
+    destination: '外部事件 / IOC 命中',
   },
 }
 
@@ -340,15 +307,6 @@ const domainContexts: Record<string, { code: string; shortName: string; upstream
     sources: ['zeek', 'suricata'],
   },
 }
-
-const totals = computed(() => summary.value.reduce(
-  (acc, item) => ({
-    total: acc.total + item.total,
-    highRisk: acc.highRisk + item.highRisk,
-    linkedAlerts: acc.linkedAlerts + item.linkedAlerts
-  }),
-  { total: 0, highRisk: 0, linkedAlerts: 0 }
-))
 
 const activeDomainContext = computed(() => {
   const domain = routeQuery('domain')
@@ -387,13 +345,10 @@ const importPlaceholder = computed(() => {
 })
 
 watch(
-  () => [route.query.sourceType, route.query.eventType, route.query.tool, route.query.domain, route.query.keyword, route.query.assetIp, route.query.openEventUid],
+  () => [route.query.sourceType, route.query.eventType, route.query.domain, route.query.keyword, route.query.assetIp, route.query.openEventUid],
   () => {
     applyRouteQuery()
     void load()
-    if (route.query.tool === 'cyberchef') {
-      void runCyberChef()
-    }
   },
   { immediate: true }
 )
@@ -414,24 +369,18 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [listRes, summaryRes, trendRes] = await Promise.all([
+    const [listRes, summaryRes, overviewRes] = await Promise.all([
       listExternalEvents(query),
       externalEventSummary(),
-      trendAnomalies({
-        assetIp: routeQuery('assetIp') || undefined,
-        sourceType: query.sourceType || undefined,
-        eventType: query.eventType || undefined,
-        severity: query.severity || undefined,
-        limit: 3,
-      }).catch(() => undefined)
+      fetchExternalRiskOverview(),
     ])
     rows.value = listRes.data.data.records
     total.value = listRes.data.data.total
     summary.value = summaryRes.data.data
-    trendHints.value = trendRes?.data.data || []
+    riskOverview.value = overviewRes.data.data
     openRouteEventIfNeeded()
   } catch {
-    error.value = '安全记录加载失败，请检查权限或后端服务状态。'
+    error.value = '外部风险事件加载失败，请检查权限或后端服务状态。'
   } finally {
     loading.value = false
   }
@@ -472,7 +421,7 @@ function openRouteEventIfNeeded() {
 async function setStatus(status: string) {
   if (!current.value) return
   await updateExternalEventStatus(current.value.id, status, remark.value)
-  ElMessage.success('安全记录状态已更新')
+  ElMessage.success('外部事件状态已更新')
   drawer.value = false
   await load()
 }
@@ -488,7 +437,7 @@ function openImport(sourceType?: string) {
 
 async function submitImport() {
   if (!importForm.content.trim()) {
-    ElMessage.warning('请填写 Suricata EVE JSON Lines')
+    ElMessage.warning('请填写对应外部数据源的原始记录')
     return
   }
   importing.value = true
@@ -510,17 +459,12 @@ async function submitImport() {
   }
 }
 
-async function runCyberChef() {
-  const value = current.value?.ioc || current.value?.srcIp || current.value?.destIp || rows.value[0]?.ioc || rows.value[0]?.srcIp || 'https%3A%2F%2Fdemo.example.local%2Flogin%3Fsrc%3D203.0.113.88'
-  const res = await analyzeCyberChefField(value, 'ioc_or_network_field')
-  chefResult.value = res.data.data
-  chefVisible.value = true
-}
-
-async function runShuffle() {
-  const res = await sendShuffleDemoNotification()
-  ElMessage.success(res.data.data.message)
-  await load()
+function externalRiskReason(item: ExternalEventItem) {
+  const source = item.sourceType || '外部来源'
+  if (['misp', 'opencti'].includes(source)) return `该记录来自外部威胁情报，IOC 为 ${item.ioc || '待补充'}；需要确认是否命中受管资产、访问记录或同一时间段的网络事件。`
+  if (['zap', 'trivy'].includes(source)) return `该记录来自外部扫描工具，结论为 ${item.ruleName || item.eventType || '待补充'}；需要确认受影响资产、暴露面和修复窗口。`
+  if (item.assetIp && item.assetIp === item.srcIp) return `该记录显示受管资产可能向外部 ${item.destIp || '目标'} 发起访问；需要核对业务用途、域名信誉和同一主机的关联证据。`
+  return `该记录显示外部 ${item.srcIp || '来源'} 可能访问受管资产 ${item.destIp || item.assetIp || '目标'}；需要确认访问是否被拦截、是否重复发生及是否影响资产。`
 }
 
 function formatJson(value?: string) {
@@ -725,15 +669,6 @@ function formatJson(value?: string) {
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
-}
-.chef-result {
-  display: grid;
-  gap: 12px;
-}
-.chef-result p {
-  margin: 0;
-  color: var(--soc-text-muted);
-  line-height: 1.6;
 }
 @media (max-width: 1100px) {
   .external-overview {

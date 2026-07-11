@@ -11,6 +11,9 @@ import com.zhangjiyan.template.soc.playbook.ResponsePlaybookService;
 import com.zhangjiyan.template.soc.playbook.SocTicketTask;
 import com.zhangjiyan.template.soc.playbook.TaskActionRequest;
 import com.zhangjiyan.template.soc.risk.RiskScoringService;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.AgentRuntimeResult;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.LocalAgentInstallContext;
+import com.zhangjiyan.template.soc.agent.HostAgentResponses.LocalAgentInstallResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +33,7 @@ public class ClientSecurityLabController {
     private final SocOperationService service;
     private final ResponsePlaybookService playbookService;
     private final RiskScoringService riskScoringService;
+    private final ClientProtectionService protectionService;
 
     @Operation(summary = "用户端可见电脑清单")
     @GetMapping("/devices")
@@ -51,6 +55,35 @@ public class ClientSecurityLabController {
     @PreAuthorize("isAuthenticated()")
     public ApiResult<RiskScoringService.AssetRiskProfile> riskProfile(@PathVariable String ip) {
         return ApiResult.ok(riskScoringService.clientProfile(ip));
+    }
+
+    @Operation(summary = "用户端本机保护状态")
+    @GetMapping("/protection/status")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<ClientProtectionService.ClientProtectionStatus> protectionStatus(@RequestParam(required = false) String assetIp) {
+        return ApiResult.ok(protectionService.status(assetIp));
+    }
+
+    @Operation(summary = "读取当前用户电脑的本机 Agent 安装上下文")
+    @GetMapping("/protection/install-context")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<LocalAgentInstallContext> protectionInstallContext(@RequestParam String assetIp) {
+        return ApiResult.ok(protectionService.installContext(assetIp));
+    }
+
+    @Operation(summary = "用户在自己的当前电脑安装并校验 Agent")
+    @PostMapping("/protection/install")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<LocalAgentInstallResult> protectionInstall(@Valid @RequestBody ClientProtectionInstallRequest request,
+                                                                 HttpServletRequest servletRequest) {
+        return ApiResult.ok(protectionService.install(request, servletRequest.getRemoteAddr()));
+    }
+
+    @Operation(summary = "用户启动或停止自己当前电脑的 Agent")
+    @PostMapping("/protection/runtime")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResult<AgentRuntimeResult> protectionRuntime(@RequestParam String assetIp, @RequestParam String action) {
+        return ApiResult.ok(protectionService.control(assetIp, action));
     }
 
     @Operation(summary = "提交本地授权演练事件")

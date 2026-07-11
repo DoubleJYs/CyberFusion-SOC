@@ -129,6 +129,7 @@ public class CorrelationService {
         ticket.setTitle("安全事件簇处置：" + cluster.getTitle());
         ticket.setSeverity(cluster.getSeverity());
         ticket.setStatus("待分派");
+        ticket.setOwnerId(cluster.getOwnerId());
         ticket.setAssigneeId(request == null ? null : request.assigneeId());
         ticket.setDeptId(cluster.getDeptId());
         ticket.setDueAt(LocalDateTime.now().plusHours("critical".equals(cluster.getSeverity()) ? 4 : 24));
@@ -150,8 +151,45 @@ public class CorrelationService {
     }
 
     @Transactional
+    public SocIncidentCluster startInvestigation(Long id, IncidentActionRequest request) {
+        SocIncidentCluster cluster = detail(id);
+        if ("closed".equalsIgnoreCase(cluster.getStatus())) {
+            throw new BusinessException("已关闭事件簇不能重新开始研判");
+        }
+        cluster.setStatus("investigating");
+        clusterMapper.updateById(cluster);
+        if (cluster.getTicketId() != null) {
+            appendTimeline(cluster.getTicketId(), "开始事件研判", null, "处理中",
+                    firstNotBlank(request == null ? null : request.remark(), "分析员开始核对证据链、资产影响和处置范围"));
+        }
+        return detail(id);
+    }
+
+    public ClosureReadiness closureReadiness(Long id) {
+        SocIncidentCluster cluster = detail(id);
+        int evidenceCount = cluster.getEvidence() == null ? 0 : cluster.getEvidence().size();
+        boolean ticketRequired = Set.of("critical", "high").contains(firstNotBlank(cluster.getSeverity(), "").toLowerCase(Locale.ROOT));
+        SocTicket ticket = cluster.getTicketId() == null ? null : ticketMapper.selectById(cluster.getTicketId());
+        String ticketStatus = ticket == null ? null : ticket.getStatus();
+        boolean ticketClosed = ticket != null && Set.of("已关闭", "已归档").contains(ticketStatus);
+        List<String> blockers = new ArrayList<>();
+        if (evidenceCount == 0) blockers.add("缺少可追溯证据链，不能确认影响范围");
+        if (ticketRequired && ticket == null) blockers.add("严重或高危事件簇必须先转为处置工单");
+        if (ticket != null && !ticketClosed) blockers.add("关联工单尚未关闭或归档，请完成任务、复核和工单结论");
+        return new ClosureReadiness(cluster.getId(), evidenceCount, ticketRequired, cluster.getTicketId(), ticketStatus,
+                ticketClosed, blockers.isEmpty(), blockers);
+    }
+
+    @Transactional
     public SocIncidentCluster close(Long id, IncidentActionRequest request) {
         SocIncidentCluster cluster = detail(id);
+        if (request == null || !notBlank(request.remark()) || request.remark().trim().length() < 12) {
+            throw new BusinessException("关闭事件簇前必须填写不少于 12 个字符的复核结论");
+        }
+        ClosureReadiness readiness = closureReadiness(id);
+        if (!readiness.canClose()) {
+            throw new BusinessException("尚未满足闭环条件：" + String.join("；", readiness.blockers()));
+        }
         cluster.setStatus("closed");
         cluster.setClosedAt(LocalDateTime.now());
         clusterMapper.updateById(cluster);
@@ -646,7 +684,7 @@ public class CorrelationService {
                         .ne(SocIncidentCluster::getSourceTypes, "")
                         .notLike(SocIncidentCluster::getSourceTypes, "mock")
                         .notLike(SocIncidentCluster::getSourceTypes, "local-demo-client")
-                        .notLike(SocIncidentCluster::getSourceTypes, "fixture")
+                        .ne(SocIncidentCluster::getSourceTypes, "fixture")
                         .notLike(SocIncidentCluster::getSourceTypes, "demo"));
     }
 
@@ -858,6 +896,10 @@ public class CorrelationService {
     }
 
     public record CorrelateResult(int upsertedClusters, int createdClusters, int evidenceWritten, int activeRules) {
+    }
+
+    public record ClosureReadiness(Long incidentId, int evidenceCount, boolean ticketRequired, Long ticketId,
+                                   String ticketStatus, boolean ticketClosed, boolean canClose, List<String> blockers) {
     }
 
     public record ValidationResult(boolean passed, String message) {

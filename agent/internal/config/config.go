@@ -14,6 +14,8 @@ type Config struct {
 	APIBaseURL         string
 	AgentID            string
 	AgentToken         string
+	AgentVersion       string
+	Profile            string
 	ConfigFile         string
 	OSType             string
 	Mode               string
@@ -36,6 +38,8 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.APIBaseURL, "api-base-url", envOr("CYBERFUSION_API_BASE", "http://127.0.0.1:18080/api"), "CyberFusion API base URL")
 	fs.StringVar(&cfg.AgentID, "agent-id", os.Getenv("CYBERFUSION_AGENT_ID"), "stable agent id")
 	fs.StringVar(&cfg.AgentToken, "agent-token", os.Getenv("CYBERFUSION_AGENT_TOKEN"), "agent token; prefer environment or protected config")
+	fs.StringVar(&cfg.AgentVersion, "agent-version", envOr("CYBERFUSION_AGENT_VERSION", "0.1.0-dev"), "deployed Agent software version")
+	fs.StringVar(&cfg.Profile, "profile", envOr("CYBERFUSION_AGENT_PROFILE", "full"), "collection profile: full, host-log, patrol-audit, file-integrity, baseline-audit")
 	fs.StringVar(&cfg.ConfigFile, "config-file", os.Getenv("CYBERFUSION_AGENT_CONFIG"), "optional KEY=VALUE config file")
 	fs.StringVar(&cfg.OSType, "os-type", defaultOSType(), "collector OS type: macos, windows, linux")
 	fs.StringVar(&cfg.Mode, "mode", "collect", "collect or fixture")
@@ -69,11 +73,19 @@ func Parse(args []string) (Config, error) {
 	cfg.OSType = strings.ToLower(strings.TrimSpace(cfg.OSType))
 	cfg.FixtureOS = strings.ToLower(strings.TrimSpace(cfg.FixtureOS))
 	cfg.FixtureRunID = sanitizeID(cfg.FixtureRunID)
+	cfg.AgentVersion = strings.TrimSpace(cfg.AgentVersion)
+	cfg.Profile = strings.ToLower(strings.TrimSpace(cfg.Profile))
 	if cfg.Mode != "collect" && cfg.Mode != "fixture" {
 		return cfg, errors.New("mode must be collect or fixture")
 	}
 	if cfg.OSType != "macos" && cfg.OSType != "windows" && cfg.OSType != "linux" {
 		return cfg, errors.New("os-type must be macos, windows, or linux")
+	}
+	if cfg.AgentVersion == "" {
+		return cfg, errors.New("agent-version is required")
+	}
+	if cfg.Profile != "full" && cfg.Profile != "host-log" && cfg.Profile != "patrol-audit" && cfg.Profile != "file-integrity" && cfg.Profile != "baseline-audit" {
+		return cfg, errors.New("profile must be full, host-log, patrol-audit, file-integrity, or baseline-audit")
 	}
 	if cfg.FixtureOS != "current" && cfg.FixtureOS != "macos" && cfg.FixtureOS != "windows" && cfg.FixtureOS != "all" {
 		return cfg, errors.New("fixture-os must be current, macos, windows, or all")
@@ -144,6 +156,12 @@ func applyConfigFile(cfg *Config, values map[string]string, setFlags map[string]
 	}
 	if !setFlags["agent-token"] && cfg.AgentToken == "" {
 		cfg.AgentToken = firstConfig(values, "CYBERFUSION_AGENT_TOKEN", cfg.AgentToken)
+	}
+	if !setFlags["agent-version"] {
+		cfg.AgentVersion = firstConfig(values, "CYBERFUSION_AGENT_VERSION", cfg.AgentVersion)
+	}
+	if !setFlags["profile"] {
+		cfg.Profile = firstConfig(values, "CYBERFUSION_AGENT_PROFILE", cfg.Profile)
 	}
 	if !setFlags["runtime-dir"] && cfg.RuntimeDir == "" {
 		cfg.RuntimeDir = firstConfig(values, "CYBERFUSION_AGENT_RUNTIME_DIR", cfg.RuntimeDir)

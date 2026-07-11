@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
@@ -30,7 +31,7 @@ func main() {
 		}
 	}()
 	if cfg.DryRun {
-		snapshots, err := snapshotsFor(cfg)
+		snapshots, err := snapshotsFor(cfg, nil)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "collect error: %v\n", err)
 			os.Exit(1)
@@ -43,7 +44,11 @@ func main() {
 		return
 	}
 	if cfg.Once {
-		snapshots, err := snapshotsFor(cfg)
+		watches, watchErr := fetchFIMWatchPaths(cfg)
+		if watchErr != nil {
+			fmt.Fprintf(os.Stderr, "fim watch configuration unavailable, using local fallback: %v\n", watchErr)
+		}
+		snapshots, err := snapshotsFor(cfg, watches)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "collect error: %v\n", err)
 			os.Exit(1)
@@ -61,7 +66,7 @@ func main() {
 	}
 }
 
-func snapshotsFor(cfg config.Config) ([]schema.Snapshot, error) {
+func snapshotsFor(cfg config.Config, watches []collector.FIMWatchPath) ([]schema.Snapshot, error) {
 	if cfg.Mode == "fixture" {
 		targets := []string{cfg.OSType}
 		if cfg.FixtureOS == "all" {
@@ -84,9 +89,13 @@ func snapshotsFor(cfg config.Config) ([]schema.Snapshot, error) {
 		return snapshots, nil
 	}
 	snapshot, err := collector.CollectOnce(collector.Options{
-		AgentID: cfg.AgentID,
-		OSType:  cfg.OSType,
-		FIMPath: cfg.FIMPath,
+		AgentID:       cfg.AgentID,
+		AgentVersion:  cfg.AgentVersion,
+		OSType:        cfg.OSType,
+		Profile:       cfg.Profile,
+		FIMPath:       cfg.FIMPath,
+		FIMWatchPaths: watches,
+		FIMStateFile:  filepath.Join(cfg.RuntimeDir, "fim-state.json"),
 	})
 	if err != nil {
 		return nil, err
@@ -190,12 +199,34 @@ func (p *resourceProbe) Write() error {
 }
 
 func runOneCycle(cfg config.Config, logger core.Logger, cycle int) error {
-	snapshots, err := snapshotsFor(cfg)
+	watches, watchErr := fetchFIMWatchPaths(cfg)
+	if watchErr != nil {
+		logger.Error("fim watch configuration unavailable; using local fallback", "error", watchErr)
+	}
+	snapshots, err := snapshotsFor(cfg, watches)
 	if err != nil {
 		return err
 	}
 	logger.Info("agent daemon cycle collected", "cycle", cycle, "snapshots", len(snapshots))
 	return runUpload(cfg, snapshots)
+}
+
+func fetchFIMWatchPaths(cfg config.Config) ([]collector.FIMWatchPath, error) {
+	if cfg.Mode != "collect" || cfg.AgentToken == "" {
+		return nil, nil
+	}
+	paths, err := client.New(cfg.APIBaseURL, cfg.AgentToken).FIMWatchPaths(cfg.AgentID, cfg.OSType)
+	if err != nil {
+		return nil, err
+	}
+	watches := make([]collector.FIMWatchPath, 0, len(paths))
+	for _, path := range paths {
+		watches = append(watches, collector.FIMWatchPath{
+			ID: path.ID, Name: path.DisplayName, Path: path.WatchPath, Purpose: path.Purpose,
+			Recursive: path.Recursive, MaxEntries: path.MaxEntries, Version: path.Version,
+		})
+	}
+	return watches, nil
 }
 
 func runUpload(cfg config.Config, snapshots []schema.Snapshot) error {

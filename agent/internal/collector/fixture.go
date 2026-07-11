@@ -32,7 +32,12 @@ func FixtureWithRunID(agentID string, osType string, runID string) (schema.Snaps
 		primaryIP = "192.0.2.20"
 		fimPath = "C:\\ProgramData\\CyberFusion\\fixture.conf"
 	}
-	snapshot := baseSnapshot(agentID, osType, hostname, primaryIP, []string{primaryIP}, []string{"00:00:5e:00:53:01"}, now)
+	snapshot := baseSnapshot(Options{
+		AgentID:      agentID,
+		AgentVersion: schema.Version,
+		OSType:       osType,
+		Profile:      "full",
+	}, hostname, primaryIP, []string{primaryIP}, []string{"00:00:5e:00:53:01"}, now)
 	snapshot.Registration.OSVersion = "fixture"
 	snapshot.Registration.Architecture = "arm64/x64"
 	snapshot.Registration.Labels = map[string]string{"fixture": "true", "platform": osType}

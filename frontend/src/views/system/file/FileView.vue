@@ -44,7 +44,7 @@
       </el-table>
       <el-pagination v-model:current-page="query.pageNum" v-model:page-size="query.pageSize" layout="total, prev, pager, next" :total="total" @current-change="loadData" />
     </el-card>
-    <el-drawer v-model="previewVisible" title="文件预览" size="420px">
+    <el-drawer v-model="previewVisible" title="文件预览" :size="previewDrawerSize">
       <FilePreview :file="previewFile" />
     </el-drawer>
   </div>
@@ -66,6 +66,7 @@ const total = ref(0)
 const previewVisible = ref(false)
 const previewFile = ref<SysFileRecord | null>(null)
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', bizType: '' })
+const previewDrawerSize = computed(() => ['pdf', 'xlsx'].includes((previewFile.value?.fileExt || '').toLowerCase()) ? '820px' : '420px')
 const fileSummary = computed(() => [
   { label: '当前页文件', value: rows.value.length, hint: '已加载结果' },
   { label: '业务类型', value: new Set(rows.value.map((row) => row.bizType).filter(Boolean)).size, hint: '来源分类' },

@@ -29,8 +29,24 @@ if [[ "$FOREGROUND" == "1" ]]; then
 fi
 
 if [[ "$LAUNCHD_SCOPE" == "system" ]]; then
-  sudo launchctl kickstart -k "system/${label}"
+  target="/Library/LaunchDaemons/${label}.plist"
+  if ! sudo launchctl kickstart -k "system/${label}" >/dev/null 2>&1; then
+    if [[ ! -f "$target" ]]; then
+      printf 'ERROR: Launchd plist not installed: %s. Run scripts/mac/install-agent.sh first.\n' "$target" >&2
+      exit 1
+    fi
+    sudo launchctl bootstrap system "$target" >/dev/null 2>&1 || true
+    sudo launchctl kickstart -k "system/${label}"
+  fi
 else
-  launchctl kickstart -k "gui/$(id -u)/${label}"
+  target="${HOME}/Library/LaunchAgents/${label}.plist"
+  if ! launchctl kickstart -k "gui/$(id -u)/${label}" >/dev/null 2>&1; then
+    if [[ ! -f "$target" ]]; then
+      printf 'ERROR: Launchd plist not installed: %s. Run scripts/mac/install-agent.sh first.\n' "$target" >&2
+      exit 1
+    fi
+    launchctl bootstrap "gui/$(id -u)" "$target" >/dev/null 2>&1 || true
+    launchctl kickstart -k "gui/$(id -u)/${label}"
+  fi
 fi
 printf 'Started launchd job: %s\n' "$label"

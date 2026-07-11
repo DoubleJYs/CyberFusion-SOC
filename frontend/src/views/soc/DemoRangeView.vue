@@ -334,19 +334,24 @@ import { Refresh } from '@element-plus/icons-vue'
 import RiskCard from '@/components/security/RiskCard.vue'
 import {
   demoRangeEvidenceChain,
+  archiveDemoWorkflowRun,
   correlateIncidents,
+  deleteDemoWorkflowRun,
   generateReport,
   importDemoData,
   listIncidents,
   listAlerts,
+  listDemoWorkflowRuns,
   listExternalEvents,
   listReports,
   listTickets,
   listVulnerabilities,
   sendShuffleDemoNotification,
+  saveDemoWorkflowRun,
   type AlertItem,
   type DemoDataOperationResult,
   type DemoRangeEvidenceChain,
+  type DemoWorkflowRecord,
   type ExternalEventItem,
   type IncidentClusterItem,
   type ReportItem,
@@ -414,6 +419,7 @@ interface DemoWorkflowRun {
   lastVisitedAt: string
   counts: WorkflowCounts
   logs: WorkflowLog[]
+  createdByName?: string
 }
 
 interface DetailDrawerState {
@@ -617,10 +623,31 @@ const nextAction = computed(() => {
 })
 
 onMounted(() => {
-  runs.value = loadWorkflowRuns()
-  syncRouteWorkflow()
-  load()
+  void initializeWorkflowRuns()
 })
+
+async function initializeWorkflowRuns() {
+  const legacyRuns = loadWorkflowRuns()
+  try {
+    const response = await listDemoWorkflowRuns()
+    const serverRuns = response.data.data.map(fromWorkflowRecord)
+    const existingIds = new Set(serverRuns.map((run) => run.id))
+    for (const legacyRun of legacyRuns) {
+      if (existingIds.has(legacyRun.id)) continue
+      await saveDemoWorkflowRun(toWorkflowRecord(legacyRun))
+      if (legacyRun.status === 'completed') {
+        await archiveDemoWorkflowRun(legacyRun.id, '迁移已完成的本地安全验证工作流')
+      }
+    }
+    runs.value = (await listDemoWorkflowRuns()).data.data.map(fromWorkflowRecord)
+    localStorage.removeItem(WORKFLOW_STORAGE_KEY)
+  } catch {
+    runs.value = legacyRuns
+    error.value = '安全验证工作流无法同步到后端，当前仅保留本地恢复记录。'
+  }
+  syncRouteWorkflow()
+  await load()
+}
 
 watch(
   () => [route.params.runId, route.query.step],
@@ -710,7 +737,7 @@ function resumeWorkflow(run: DemoWorkflowRun) {
 
 async function removeWorkflow(run: DemoWorkflowRun) {
   try {
-    await ElMessageBox.confirm(`确认删除工作流记录 ${run.id}？只删除本地工作流记录，不删除 SOC 数据。`, '删除工作流记录', {
+    await ElMessageBox.confirm(`确认删除工作流记录 ${run.id}？会从后端活动工作流表删除，并保留后台流程日志；不会删除 SOC 数据。`, '删除工作流记录', {
       type: 'warning',
       confirmButtonText: '删除',
       cancelButtonText: '取消',
@@ -718,8 +745,14 @@ async function removeWorkflow(run: DemoWorkflowRun) {
   } catch {
     return
   }
-  runs.value = runs.value.filter((item) => item.id !== run.id)
-  persistWorkflowRuns()
+  try {
+    await deleteDemoWorkflowRun(run.id)
+    runs.value = runs.value.filter((item) => item.id !== run.id)
+    writeWorkflowCache()
+    ElMessage.success('工作流已从活动列表删除，操作已写入后台流程日志。')
+  } catch {
+    ElMessage.error('删除工作流失败，请检查后端服务或权限。')
+  }
 }
 
 function syncRouteWorkflow() {
@@ -818,10 +851,15 @@ async function confirmGenerateReport() {
   generating.value = true
   try {
     await generateReport('security_validation', currentBatch.value.batchId)
-    patchRun(run.id, { status: 'completed' }, workflowLog('report', '生成安全验证报告', currentBatch.value.batchId, 'report'))
+    const completedRun = patchRun(run.id, { status: 'completed' }, workflowLog('report', '生成安全验证报告', currentBatch.value.batchId, 'report'), false)
+    if (!completedRun) return
+    await saveDemoWorkflowRun(toWorkflowRecord(completedRun))
+    await archiveDemoWorkflowRun(completedRun.id, '已生成安全验证报告，自动归档')
+    runs.value = runs.value.filter((item) => item.id !== completedRun.id)
+    writeWorkflowCache()
     ElMessage.success('安全验证报告已生成')
     await loadEvidenceChain(currentBatch.value.batchId)
-    syncActiveRunSnapshot()
+    router.replace('/soc/demo-range').catch(() => undefined)
   } catch {
     ElMessage.error('报表生成失败，请检查权限或后端服务。')
   } finally {
@@ -906,11 +944,12 @@ function syncActiveRunSnapshot() {
   })
 }
 
-function patchRun(runId: string, patch: Partial<DemoWorkflowRun>, log?: WorkflowLog) {
+function patchRun(runId: string, patch: Partial<DemoWorkflowRun>, log?: WorkflowLog, synchronize = true) {
   const now = new Date().toISOString()
+  let updated: DemoWorkflowRun | undefined
   runs.value = runs.value.map((run) => {
     if (run.id !== runId) return run
-    return {
+    updated = {
       ...run,
       ...patch,
       counts: patch.counts ? { ...run.counts, ...patch.counts } : run.counts,
@@ -918,8 +957,10 @@ function patchRun(runId: string, patch: Partial<DemoWorkflowRun>, log?: Workflow
       lastVisitedAt: patch.lastVisitedAt || now,
       logs: log ? [log, ...run.logs].slice(0, MAX_LOGS) : run.logs,
     }
+    return updated
   })
-  persistWorkflowRuns()
+  if (synchronize) persistWorkflowRuns()
+  return updated
 }
 
 function loadWorkflowRuns() {
@@ -934,7 +975,53 @@ function loadWorkflowRuns() {
 }
 
 function persistWorkflowRuns() {
+  writeWorkflowCache()
+  void Promise.all(runs.value.map((run) => saveDemoWorkflowRun(toWorkflowRecord(run))))
+}
+
+function writeWorkflowCache() {
   localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(runs.value.slice(0, MAX_WORKFLOWS)))
+}
+
+function toWorkflowRecord(run: DemoWorkflowRun): DemoWorkflowRecord {
+  return {
+    id: run.id,
+    batchId: run.batchId,
+    selectedCaseId: run.selectedCaseId,
+    stepKey: run.stepKey,
+    status: run.status,
+    createdAt: run.createdAt,
+    updatedAt: run.updatedAt,
+    lastVisitedAt: run.lastVisitedAt,
+    counts: { ...run.counts },
+    logs: run.logs,
+  }
+}
+
+function fromWorkflowRecord(record: DemoWorkflowRecord): DemoWorkflowRun {
+  return {
+    id: record.id,
+    batchId: record.batchId,
+    selectedCaseId: record.selectedCaseId,
+    stepKey: record.stepKey,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    lastVisitedAt: record.lastVisitedAt,
+    createdByName: record.createdByName,
+    counts: {
+      events: record.counts.events || 0,
+      alerts: record.counts.alerts || 0,
+      vulnerabilities: record.counts.vulnerabilities || 0,
+      tickets: record.counts.tickets || 0,
+      reports: record.counts.reports || 0,
+      incidents: record.counts.incidents || 0,
+    },
+    logs: record.logs.map((log) => ({
+      ...log,
+      stepKey: stepKeyFromQuery(log.stepKey),
+    })),
+  }
 }
 
 function workflowLog(type: string, title: string, detail?: string, stepKey?: WorkflowStepKey): WorkflowLog {

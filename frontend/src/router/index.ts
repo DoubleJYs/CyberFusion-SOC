@@ -5,6 +5,7 @@ import { useAppStore } from '@/stores/app'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import ClientLayout from '@/layouts/ClientLayout.vue'
 import { EXPERT_HOME_PATH } from '@/utils/roleExperience'
+import { requiresUserWorkspace } from '@/utils/socUserWorkspace'
 import { ensureMenuRoutes, fallbackProtectedRoutes, firstRoutePathFromMenus, resetMenuRoutes } from './menuRoutes'
 
 const router = createRouter({
@@ -39,6 +40,7 @@ const router = createRouter({
         { path: 'operations', name: 'clientOperations', component: () => import('@/views/client/ClientOperationsView.vue'), meta: { title: '我的待办', requiresAuth: true } },
         { path: 'local-range', name: 'clientLocalRange', component: () => import('@/views/client/ClientLocalRangeView.vue'), meta: { title: '安全工具箱', requiresAuth: true } },
         { path: 'security-logs', name: 'clientSecurityLogs', component: () => import('@/views/client/ClientSecurityLogsView.vue'), meta: { title: '安全日志', requiresAuth: true } },
+        { path: 'protection', name: 'clientProtection', component: () => import('@/views/client/ClientProtectionView.vue'), meta: { title: '本机保护', requiresAuth: true } },
       ],
     },
     { path: '/', name: 'adminRoot', component: AdminLayout, redirect: EXPERT_HOME_PATH, children: fallbackProtectedRoutes },
@@ -67,6 +69,20 @@ router.beforeEach(async (to) => {
   }
   if (to.matched.some((record) => record.meta.public)) return true
 
+  const previousOwnerId = typeof router.currentRoute.value.query.ownerId === 'string'
+    ? router.currentRoute.value.query.ownerId
+    : ''
+  const targetOwnerId = typeof to.query.ownerId === 'string' ? to.query.ownerId : ''
+  const remainsInSocWorkspace = requiresUserWorkspace(to.path)
+  if (remainsInSocWorkspace && /^\d+$/.test(previousOwnerId) && !targetOwnerId) {
+    return {
+      path: to.path,
+      query: { ...to.query, ownerId: previousOwnerId },
+      hash: to.hash,
+      replace: true,
+    }
+  }
+
   if (!authStore.isAuthenticated) {
     resetMenuRoutes(router)
     return { path: '/login', query: { redirect: to.fullPath }, replace: true }
@@ -92,6 +108,9 @@ router.beforeEach(async (to) => {
   const permissionAllowed = permissions.length === 0 || permissions.some((permission) => authStore.hasPermission(permission))
   if (!roleAllowed || !permissionAllowed) {
     return { path: '/403', replace: true }
+  }
+  if (requiresUserWorkspace(to.path) && !targetOwnerId) {
+    return { path: '/soc/user-workspaces', query: { target: to.fullPath }, replace: true }
   }
   appStore.addVisitedTitle(title)
   return true

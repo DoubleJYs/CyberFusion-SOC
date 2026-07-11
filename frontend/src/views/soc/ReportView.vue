@@ -14,6 +14,16 @@
       </div>
     </section>
 
+    <section class="soc-panel closure-view-tabs">
+      <el-tabs v-model="activeClosureView">
+        <el-tab-pane label="全局报告总览" name="overview" />
+        <el-tab-pane label="按用户查看" name="users" />
+      </el-tabs>
+    </section>
+
+    <UserWorkspaceCards v-if="activeClosureView === 'users'" target="/soc/reports" compact />
+
+    <div v-show="activeClosureView === 'overview'" class="closure-overview-content">
     <section class="soc-panel report-toolbar">
       <div class="report-filters">
         <el-input v-model="query.keyword" clearable placeholder="搜索报表编号或标题" @keyup.enter="load" />
@@ -64,27 +74,19 @@
         </el-table-column>
         <el-table-column label="周期" width="210"><template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template></el-table-column>
         <el-table-column prop="summary" label="摘要" min-width="260" show-overflow-tooltip />
-        <el-table-column label="导出" width="190">
+        <el-table-column label="预览 / 下载" min-width="300">
           <template #default="{ row }">
             <div class="export-cell" @click.stop>
-              <el-dropdown trigger="click" @command="handleExcelCommand(row, $event)">
-                <el-button text>Excel</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="preview">预览 Excel</el-dropdown-item>
-                    <el-dropdown-item command="download">下载 Excel</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-              <el-dropdown trigger="click" @command="handlePdfCommand(row, $event)">
-                <el-button text>PDF</el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <el-dropdown-item command="preview">预览 PDF</el-dropdown-item>
-                    <el-dropdown-item command="download">下载 PDF</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
+              <div class="export-format-group">
+                <span class="export-format">Excel</span>
+                <el-button link type="primary" :icon="View" @click.stop="previewExport(row, 'xlsx')">预览</el-button>
+                <el-button link type="primary" :icon="Download" @click.stop="downloadReportExport(row, 'xlsx')">下载</el-button>
+              </div>
+              <div class="export-format-group">
+                <span class="export-format">PDF</span>
+                <el-button link type="primary" :icon="View" @click.stop="previewExport(row, 'pdf')">预览</el-button>
+                <el-button link type="primary" :icon="Download" @click.stop="downloadReportExport(row, 'pdf')">下载</el-button>
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -153,17 +155,22 @@
         </template>
       </div>
     </el-drawer>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Download, View } from '@element-plus/icons-vue'
 import { exportReportBlob, generateReport, listReports, previewReportExport, type ReportExportPreview, type ReportItem } from '@/api/soc'
 import { saveBlob } from '@/api/file'
+import UserWorkspaceCards from '@/components/security/UserWorkspaceCards.vue'
 
 const route = useRoute()
+const router = useRouter()
+const activeClosureView = ref(route.query.view === 'users' ? 'users' : 'overview')
 type ExportFormat = 'xlsx' | 'pdf'
 
 const reportType = ref('daily')
@@ -188,6 +195,18 @@ const exportTitle = computed(() => {
   return `${exportPreview.value.format === 'pdf' ? 'PDF' : 'Excel'} 预览`
 })
 const excelPreviewRows = computed(() => (exportPreview.value?.rows || []).map((cells, index) => ({ id: index, cells })))
+
+watch(activeClosureView, (view) => {
+  const nextQuery = { ...route.query }
+  delete nextQuery.ownerId
+  if (view === 'users') nextQuery.view = 'users'
+  else delete nextQuery.view
+  void router.replace({ path: route.path, query: nextQuery })
+})
+
+watch(() => route.query.ownerId, (ownerId) => {
+  if (typeof ownerId === 'string' && /^\d+$/.test(ownerId)) activeClosureView.value = 'overview'
+})
 
 watch(
   () => [route.query.keyword, route.query.reportType, route.query.batchId],
@@ -231,22 +250,6 @@ function onSelectionChange(selection: ReportItem[]) {
 function openReport(row: ReportItem) {
   currentReport.value = row
   drawer.value = true
-}
-
-function handleExcelCommand(row: ReportItem, command: unknown) {
-  handleExportCommand(row, 'xlsx', command)
-}
-
-function handlePdfCommand(row: ReportItem, command: unknown) {
-  handleExportCommand(row, 'pdf', command)
-}
-
-function handleExportCommand(row: ReportItem, format: ExportFormat, command: unknown) {
-  if (command === 'preview') {
-    void previewExport(row, format)
-    return
-  }
-  void downloadReportExport(row, format)
 }
 
 async function previewExport(report: ReportItem, format: ExportFormat) {
@@ -372,6 +375,9 @@ function matchFirst(value: string, pattern: RegExp) {
 </script>
 
 <style scoped>
+.closure-view-tabs { padding: 0 14px; }
+.closure-view-tabs :deep(.el-tabs__header) { margin: 0; }
+.closure-overview-content { display: contents; }
 .report-toolbar {
   display: flex;
   justify-content: space-between;
@@ -404,9 +410,29 @@ function matchFirst(value: string, pattern: RegExp) {
   gap: 16px;
 }
 .export-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.export-format-group {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  min-width: 126px;
+}
+.export-format {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 24px;
+  border: 1px solid rgba(210, 125, 48, 0.24);
+  border-radius: 6px;
+  background: rgba(255, 248, 238, 0.76);
+  color: var(--soc-accent);
+  font-size: 12px;
+  font-weight: 700;
 }
 .export-preview-shell {
   min-height: 560px;

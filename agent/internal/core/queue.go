@@ -21,8 +21,9 @@ type Operation struct {
 }
 
 type Queue struct {
-	pendingDir string
-	maxBytes   int64
+	pendingDir  string
+	rejectedDir string
+	maxBytes    int64
 }
 
 type QueueStats struct {
@@ -31,12 +32,17 @@ type QueueStats struct {
 }
 
 type FlushResult struct {
-	Sent   int64
-	Failed int64
+	Sent     int64
+	Failed   int64
+	Rejected int64
 }
 
 type RawPoster interface {
 	PostRaw(path string, body []byte) error
+}
+
+type permanentUploadError interface {
+	Permanent() bool
 }
 
 func NewQueue(runtimeDir string, maxBytes int64) (Queue, error) {
@@ -44,7 +50,11 @@ func NewQueue(runtimeDir string, maxBytes int64) (Queue, error) {
 	if err := os.MkdirAll(pending, 0o700); err != nil {
 		return Queue{}, err
 	}
-	return Queue{pendingDir: pending, maxBytes: maxBytes}, nil
+	rejected := filepath.Join(runtimeDir, "queue", "rejected")
+	if err := os.MkdirAll(rejected, 0o700); err != nil {
+		return Queue{}, err
+	}
+	return Queue{pendingDir: pending, rejectedDir: rejected, maxBytes: maxBytes}, nil
 }
 
 func (q Queue) Enqueue(kind string, path string, payload any, dedupeKeys []string) error {
@@ -153,6 +163,17 @@ func (q Queue) Flush(c RawPoster, limiter RateLimiter, state State, logger Logge
 			limiter.Wait()
 		}
 		if err := c.PostRaw(op.Path, op.Payload); err != nil {
+			if isPermanentUploadError(err) {
+				if rejectErr := q.reject(file, op); rejectErr == nil {
+					result.Rejected++
+					logger.Error("queue operation rejected permanently", "kind", op.Kind, "path", op.Path, "error", err)
+					continue
+				} else {
+					result.Failed++
+					logger.Error("queue operation reject move failed", "file", file, "error", rejectErr)
+					continue
+				}
+			}
 			result.Failed++
 			logger.Error("queue operation upload failed", "kind", op.Kind, "path", op.Path, "error", err)
 			continue
@@ -172,6 +193,19 @@ func (q Queue) Flush(c RawPoster, limiter RateLimiter, state State, logger Logge
 		logger.Info("queue operation uploaded", "kind", op.Kind, "path", op.Path)
 	}
 	return result, state, nil
+}
+
+func (q Queue) reject(file string, op Operation) error {
+	if err := os.MkdirAll(q.rejectedDir, 0o700); err != nil {
+		return err
+	}
+	target := filepath.Join(q.rejectedDir, op.ID+".json")
+	return os.Rename(file, target)
+}
+
+func isPermanentUploadError(err error) bool {
+	var permanent permanentUploadError
+	return errors.As(err, &permanent) && permanent.Permanent()
 }
 
 func readOperation(file string) (Operation, error) {

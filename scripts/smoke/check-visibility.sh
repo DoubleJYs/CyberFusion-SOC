@@ -256,7 +256,6 @@ walk(d["data"]["menus"])'
   check_menu_path "/soc/incidents" "menu:/soc/incidents"
   check_menu_path "/soc/capabilities" "menu:/soc/capabilities"
   check_menu_path "/soc/rules" "menu:/soc/rules"
-  check_menu_path "/soc/alert-noise" "menu:/soc/alert-noise"
   check_menu_path "/soc/baselines" "menu:/soc/baselines"
   check_menu_path "/soc/fim" "menu:/soc/fim"
   check_menu_path "/soc/external-events" "menu:/soc/external-events"

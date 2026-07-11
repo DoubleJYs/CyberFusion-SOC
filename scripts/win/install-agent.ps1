@@ -6,6 +6,8 @@ param(
     [string]$AdminAccessToken = $env:CYBERFUSION_ADMIN_ACCESS_TOKEN,
     [string]$ServiceName = "CyberFusionHostAgent",
     [string]$FimPath = "",
+    [string]$AgentVersion = $(if ($env:CYBERFUSION_AGENT_VERSION) { $env:CYBERFUSION_AGENT_VERSION } else { "0.1.0-dev" }),
+    [string]$AgentProfile = $(if ($env:CYBERFUSION_AGENT_PROFILE) { $env:CYBERFUSION_AGENT_PROFILE } else { "full" }),
     [string]$BinaryPath = "",
     [switch]$SkipServiceInstall
 )
@@ -35,7 +37,7 @@ if ([string]::IsNullOrWhiteSpace($AgentToken) -and -not [string]::IsNullOrWhiteS
         osType = "windows"
         osVersion = [System.Environment]::OSVersion.VersionString
         architecture = $env:PROCESSOR_ARCHITECTURE
-        agentVersion = "0.1.0-dev"
+        agentVersion = $AgentVersion
         labels = @{
             install = "windows-service"
             agent = "go"
@@ -84,6 +86,8 @@ $ConfigFile = Join-Path $ConfigDir "agent.env"
     "CYBERFUSION_AGENT_RUNTIME_DIR=$RuntimeDir"
     "CYBERFUSION_AGENT_FIM_PATH=$FimPath"
     "CYBERFUSION_AGENT_INTERVAL=60s"
+    "CYBERFUSION_AGENT_VERSION=$AgentVersion"
+    "CYBERFUSION_AGENT_PROFILE=$AgentProfile"
 ) | Set-Content -Path $ConfigFile -Encoding UTF8
 
 try {

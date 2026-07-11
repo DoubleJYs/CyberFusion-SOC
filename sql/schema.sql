@@ -315,6 +315,47 @@ CREATE TABLE IF NOT EXISTS sys_biz_flow_log (
   KEY idx_sys_biz_flow_log_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS soc_demo_workflow_run (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  run_id VARCHAR(80) NOT NULL,
+  batch_id VARCHAR(80) NOT NULL,
+  selected_case_id VARCHAR(80) NOT NULL,
+  step_key VARCHAR(32) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'active',
+  counts_json JSON NOT NULL,
+  logs_json JSON NOT NULL,
+  created_by BIGINT NULL,
+  created_by_name VARCHAR(64) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  last_visited_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_soc_demo_workflow_run_id (run_id),
+  KEY idx_soc_demo_workflow_run_status_updated (status, updated_at),
+  KEY idx_soc_demo_workflow_run_batch (batch_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS soc_demo_workflow_archive (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  run_id VARCHAR(80) NOT NULL,
+  batch_id VARCHAR(80) NOT NULL,
+  selected_case_id VARCHAR(80) NOT NULL,
+  final_step_key VARCHAR(32) NOT NULL,
+  final_status VARCHAR(32) NOT NULL,
+  counts_json JSON NOT NULL,
+  logs_json JSON NOT NULL,
+  created_by BIGINT NULL,
+  created_by_name VARCHAR(64) NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+  archived_by BIGINT NULL,
+  archived_by_name VARCHAR(64) NULL,
+  archived_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  archive_reason VARCHAR(255) NULL,
+  UNIQUE KEY uk_soc_demo_workflow_archive_run_id (run_id),
+  KEY idx_soc_demo_workflow_archive_time (archived_at),
+  KEY idx_soc_demo_workflow_archive_operator (archived_by, archived_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS soc_alert (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   alert_uid VARCHAR(128) NOT NULL,
@@ -404,6 +445,29 @@ CREATE TABLE IF NOT EXISTS soc_local_check_command (
   KEY idx_soc_local_check_command_updated_at (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS soc_detection_rule_policy (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  source_type VARCHAR(32) NOT NULL COMMENT 'sigma, waf, zap, suricata, wazuh, zeek, host',
+  rule_id VARCHAR(160) NOT NULL,
+  rule_name VARCHAR(255) NOT NULL,
+  detection_category VARCHAR(32) NOT NULL COMMENT 'identity, host, network, web, vulnerability, custom',
+  severity VARCHAR(16) NOT NULL COMMENT 'low, medium, high, critical',
+  detection_summary VARCHAR(1000) NULL COMMENT 'human-readable detection purpose and promotion scope',
+  status VARCHAR(32) NOT NULL DEFAULT 'draft' COMMENT 'draft, active, disabled',
+  enabled TINYINT NOT NULL DEFAULT 1,
+  version INT NOT NULL DEFAULT 1,
+  created_by BIGINT NULL,
+  updated_by BIGINT NULL,
+  approved_by BIGINT NULL,
+  approved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_soc_detection_rule_policy_source_rule (source_type, rule_id, deleted),
+  KEY idx_soc_detection_rule_policy_status (status, enabled),
+  KEY idx_soc_detection_rule_policy_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS soc_event_adapter_profile (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   source_type VARCHAR(32) NOT NULL,
@@ -476,6 +540,7 @@ CREATE TABLE IF NOT EXISTS soc_ticket (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   ticket_no VARCHAR(64) NOT NULL,
   alert_id BIGINT NULL,
+  owner_id BIGINT NULL,
   title VARCHAR(255) NOT NULL,
   severity VARCHAR(32) NOT NULL,
   status VARCHAR(32) NOT NULL,
@@ -493,6 +558,7 @@ CREATE TABLE IF NOT EXISTS soc_ticket (
   deleted TINYINT NOT NULL DEFAULT 0,
   UNIQUE KEY uk_soc_ticket_no (ticket_no),
   KEY idx_soc_ticket_alert_id (alert_id),
+  KEY idx_soc_ticket_owner (owner_id, dept_id),
   KEY idx_soc_ticket_status (status),
   KEY idx_soc_ticket_assignee (assignee_id),
   KEY idx_soc_ticket_created_at (created_at)
@@ -740,6 +806,8 @@ CREATE TABLE IF NOT EXISTS soc_report (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
   report_no VARCHAR(64) NOT NULL,
   report_type VARCHAR(32) NOT NULL,
+  owner_id BIGINT NULL,
+  dept_id BIGINT NULL,
   period_start DATE NOT NULL,
   period_end DATE NOT NULL,
   title VARCHAR(255) NOT NULL,
@@ -752,6 +820,7 @@ CREATE TABLE IF NOT EXISTS soc_report (
   deleted TINYINT NOT NULL DEFAULT 0,
   UNIQUE KEY uk_soc_report_no (report_no),
   KEY idx_soc_report_period (report_type, period_start, period_end),
+  KEY idx_soc_report_owner (owner_id, dept_id),
   KEY idx_soc_report_generated_at (generated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -1122,6 +1191,7 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   mac_addresses_json JSON NULL,
   labels_json JSON NULL,
   status VARCHAR(32) NOT NULL DEFAULT 'offline',
+  enabled TINYINT NOT NULL DEFAULT 1,
   token_hash VARCHAR(255) NOT NULL,
   last_ip VARCHAR(64) NULL,
   queue_depth INT NOT NULL DEFAULT 0,
@@ -1141,6 +1211,47 @@ CREATE TABLE IF NOT EXISTS soc_host_agent (
   KEY idx_soc_host_agent_last_seen (last_seen_at),
   KEY idx_soc_host_agent_scope (owner_id, dept_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+SET @host_agent_enabled_column_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'soc_host_agent'
+    AND COLUMN_NAME = 'enabled'
+);
+
+-- Explicit host-directory authorization for FIM. The Agent uploads only metadata
+-- changes and hashes from these paths, never file contents.
+CREATE TABLE IF NOT EXISTS soc_fim_watch_path (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  display_name VARCHAR(128) NOT NULL,
+  host_name VARCHAR(128) NOT NULL,
+  os_type VARCHAR(16) NOT NULL,
+  watch_path VARCHAR(500) NOT NULL,
+  purpose VARCHAR(32) NOT NULL,
+  is_recursive TINYINT NOT NULL DEFAULT 1,
+  max_entries INT NOT NULL DEFAULT 500,
+  status VARCHAR(16) NOT NULL DEFAULT 'draft',
+  enabled TINYINT NOT NULL DEFAULT 1,
+  version INT NOT NULL DEFAULT 1,
+  created_by BIGINT NULL,
+  updated_by BIGINT NULL,
+  approved_by BIGINT NULL,
+  approved_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_soc_fim_watch_host_path (host_name, watch_path, deleted),
+  KEY idx_soc_fim_watch_target (os_type, host_name, status, enabled),
+  KEY idx_soc_fim_watch_updated_at (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Host Agent FIM authorized watch paths';
+SET @host_agent_enabled_ddl := IF(@host_agent_enabled_column_exists = 0,
+  'ALTER TABLE soc_host_agent ADD COLUMN enabled TINYINT NOT NULL DEFAULT 1 AFTER status',
+  'SELECT 1'
+);
+PREPARE host_agent_enabled_stmt FROM @host_agent_enabled_ddl;
+EXECUTE host_agent_enabled_stmt;
+DEALLOCATE PREPARE host_agent_enabled_stmt;
 
 CREATE TABLE IF NOT EXISTS soc_ingest_batch (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,

@@ -25,6 +25,57 @@ import static org.mockito.Mockito.when;
 class HostAgentServiceTest {
 
     @Test
+    void registerCreatesOfflineAgentUntilRealHeartbeatArrives() {
+        SocHostAgentMapper agentMapper = mock(SocHostAgentMapper.class);
+        PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+
+        when(agentMapper.selectOne(any())).thenReturn(null);
+        when(agentMapper.insert(any(SocHostAgent.class))).thenReturn(1);
+        when(passwordEncoder.encode(any())).thenReturn("hashed-new-token");
+
+        HostAgentService service = new HostAgentService(
+                agentMapper,
+                mock(SocIngestBatchMapper.class),
+                mock(SocIngestRejectLogMapper.class),
+                null,
+                null,
+                null,
+                null,
+                null,
+                passwordEncoder,
+                new ObjectMapper()
+        );
+
+        HostAgentResponses.AgentRegistrationResult result = service.register(
+                new HostAgentRegisterRequest(
+                        "macos-install-agent",
+                        "macOS 安装校验",
+                        "mac-host.local",
+                        "macos",
+                        "14.5",
+                        "arm64",
+                        "0.1.0-dev",
+                        List.of("192.168.2.9"),
+                        List.of(),
+                        Map.of("install", "frontend")
+                ),
+                "127.0.0.1"
+        );
+
+        ArgumentCaptor<SocHostAgent> captor = ArgumentCaptor.forClass(SocHostAgent.class);
+        verify(agentMapper).insert(captor.capture());
+        SocHostAgent inserted = captor.getValue();
+
+        assertThat(result.agentId()).isEqualTo("macos-install-agent");
+        assertThat(result.agentToken()).isNotBlank();
+        assertThat(result.status()).isEqualTo("offline");
+        assertThat(inserted.getStatus()).isEqualTo("offline");
+        assertThat(inserted.getLastSeenAt()).isNull();
+        assertThat(inserted.getTokenHash()).isEqualTo("hashed-new-token");
+        assertThat(inserted.getEnabled()).isEqualTo(1);
+    }
+
+    @Test
     void heartbeatUsesServerReceiptTimeForOnlineStatus() {
         SocHostAgentMapper agentMapper = mock(SocHostAgentMapper.class);
         PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
@@ -86,6 +137,88 @@ class HostAgentServiceTest {
         assertThat(updated.getLastSeenAt()).isAfter(staleObservedAt.plusHours(23));
         assertThat(updated.getQueueDepth()).isZero();
         assertThat(updated.getSentCount()).isEqualTo(4L);
+    }
+
+    @Test
+    void setEnabledDisablesAgentAndSanitizesToken() {
+        SocHostAgentMapper agentMapper = mock(SocHostAgentMapper.class);
+        SocHostAgent agent = macosAgent();
+        agent.setEnabled(1);
+
+        when(agentMapper.selectById(42L)).thenReturn(agent);
+        when(agentMapper.updateById(any(SocHostAgent.class))).thenReturn(1);
+
+        HostAgentService service = new HostAgentService(
+                agentMapper,
+                mock(SocIngestBatchMapper.class),
+                mock(SocIngestRejectLogMapper.class),
+                null,
+                null,
+                null,
+                null,
+                null,
+                mock(PasswordEncoder.class),
+                new ObjectMapper()
+        );
+
+        SocHostAgent result = service.setEnabled(42L, false);
+
+        ArgumentCaptor<SocHostAgent> captor = ArgumentCaptor.forClass(SocHostAgent.class);
+        verify(agentMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getEnabled()).isZero();
+        assertThat(captor.getValue().getStatus()).isEqualTo("disabled");
+        assertThat(result.getEnabled()).isZero();
+        assertThat(result.getStatus()).isEqualTo("disabled");
+        assertThat(result.getTokenHash()).isNull();
+    }
+
+    @Test
+    void disabledAgentHeartbeatIsRejected() {
+        SocHostAgentMapper agentMapper = mock(SocHostAgentMapper.class);
+        SocIngestRejectLogMapper rejectLogMapper = mock(SocIngestRejectLogMapper.class);
+        PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+        SocHostAgent agent = macosAgent();
+        agent.setEnabled(0);
+
+        when(agentMapper.selectOne(any())).thenReturn(agent);
+        when(passwordEncoder.matches(eq("agent-token"), eq("hashed-token"))).thenReturn(true);
+
+        HostAgentService service = new HostAgentService(
+                agentMapper,
+                mock(SocIngestBatchMapper.class),
+                rejectLogMapper,
+                null,
+                null,
+                null,
+                null,
+                null,
+                passwordEncoder,
+                new ObjectMapper()
+        );
+
+        assertThatThrownBy(() -> service.heartbeat(
+                new HostAgentHeartbeatRequest(
+                        "macos-real-agent",
+                        "mac-host",
+                        "macos",
+                        "0.1.0-dev",
+                        java.util.List.of("10.0.0.12"),
+                        0,
+                        0L,
+                        4L,
+                        4L,
+                        0L,
+                        120L,
+                        LocalDateTime.now()
+                ),
+                "agent-token",
+                "127.0.0.1"
+        )).hasMessageContaining("Agent is disabled");
+
+        ArgumentCaptor<SocIngestRejectLog> rejectCaptor = ArgumentCaptor.forClass(SocIngestRejectLog.class);
+        verify(rejectLogMapper).insert(rejectCaptor.capture());
+        assertThat(rejectCaptor.getValue().getReasonCode()).isEqualTo("agent_disabled");
+        verify(agentMapper, never()).updateById(any(SocHostAgent.class));
     }
 
     @Test
@@ -283,6 +416,7 @@ class HostAgentServiceTest {
         agent.setHostname("mac-host");
         agent.setOsType("macos");
         agent.setStatus("online");
+        agent.setEnabled(1);
         agent.setTokenHash("hashed-token");
         agent.setSentCount(0L);
         agent.setDeleted(0);

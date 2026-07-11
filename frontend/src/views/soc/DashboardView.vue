@@ -31,10 +31,10 @@
       <div class="panel-title agent-status-head">
         <div>
           <strong>Agent 状态</strong>
-          <span>基础在线状态、队列、采集上报和最后心跳</span>
+          <span>当前主机可管理或正在心跳的采集器，数据每 30 秒同步一次。</span>
         </div>
         <div class="agent-status-actions">
-          <span>{{ hostAgentsSummary.total }} 个 Agent · 在线 {{ hostAgentsSummary.online }} · 离线 {{ hostAgentsSummary.offline }}</span>
+          <span>{{ hostAgentsSummary.total }} 个当前 Agent · 在线 {{ hostAgentsSummary.online }} · 未在线 {{ hostAgentsSummary.offline }}</span>
           <el-button type="primary" plain @click="router.push('/soc/agents')">完整管理</el-button>
         </div>
       </div>
@@ -42,6 +42,13 @@
         v-if="agentError"
         :title="agentError"
         type="warning"
+        show-icon
+        :closable="false"
+      />
+      <el-alert
+        v-else-if="historicalAgentCount"
+        :title="`已隐藏 ${historicalAgentCount} 个未安装且无当前心跳的历史 Agent 记录，可在完整管理页查看。`"
+        type="info"
         show-icon
         :closable="false"
       />
@@ -76,7 +83,9 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="lastSeenAt" label="最后心跳" min-width="170" />
+          <el-table-column label="最后心跳" min-width="170">
+            <template #default="{ row }">{{ row.lastSeenAt || '尚未收到心跳' }}</template>
+          </el-table-column>
         </el-table>
       </div>
     </section>
@@ -313,7 +322,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import RiskCard from '@/components/security/RiskCard.vue'
 import RiskTrendChart from '@/components/security/RiskTrendChart.vue'
@@ -372,19 +381,35 @@ const operationHeroMetrics = computed(() => {
 })
 
 const hostAgentsSummary = computed(() => {
-  const data = hostAgents.value
+  const rows = currentHostAgents.value
   return {
-    total: data?.totalAgents || 0,
-    online: data?.onlineAgents || 0,
-    offline: data?.offlineAgents || 0,
+    total: rows.length,
+    online: rows.filter((agent) => agent.status === 'online').length,
+    offline: rows.filter((agent) => agent.status !== 'online').length,
   }
 })
 
-const hostAgentRows = computed<HostAgentItem[]>(() => {
-  return (hostAgents.value?.agents || []).slice(0, 8)
+const currentHostAgents = computed<HostAgentItem[]>(() => {
+  return (hostAgents.value?.agents || [])
+    .filter((agent) => agent.status === 'online' || Boolean(agent.runtimeControllable))
 })
 
-onMounted(load)
+const hostAgentRows = computed<HostAgentItem[]>(() => {
+  return currentHostAgents.value
+    .slice(0, 8)
+})
+
+const historicalAgentCount = computed(() => Math.max(0, (hostAgents.value?.agents.length || 0) - currentHostAgents.value.length))
+let agentRefreshTimer: ReturnType<typeof window.setInterval> | undefined
+
+onMounted(() => {
+  void load()
+  agentRefreshTimer = window.setInterval(() => void loadAgentOverview(), 30_000)
+})
+
+onBeforeUnmount(() => {
+  if (agentRefreshTimer) window.clearInterval(agentRefreshTimer)
+})
 
 async function load() {
   loading.value = true

@@ -13,6 +13,16 @@
       </div>
     </section>
 
+    <section class="soc-panel closure-view-tabs">
+      <el-tabs v-model="activeClosureView">
+        <el-tab-pane label="全局工单总览" name="overview" />
+        <el-tab-pane label="按用户查看" name="users" />
+      </el-tabs>
+    </section>
+
+    <UserWorkspaceCards v-if="activeClosureView === 'users'" target="/soc/tickets" compact />
+
+    <div v-show="activeClosureView === 'overview'" class="closure-overview-content">
     <section class="soc-panel panel-pad">
       <div class="soc-filter-bar">
         <el-input v-model="query.keyword" clearable placeholder="搜索工单号或标题" @keyup.enter="load" />
@@ -63,6 +73,13 @@
           <span>处置说明</span><strong>{{ detail.ticket.resolution || '-' }}</strong>
           <span>复核结论</span><strong>{{ detail.ticket.reviewConclusion || '-' }}</strong>
         </div>
+        <SecurityDispositionGuide
+          category="ticket"
+          :subject="detail.ticket.title || detail.ticket.ticketNo"
+          :status="detail.ticket.status"
+          :reason="detail.ticket.resolution || detail.ticket.reviewConclusion || '工单尚未形成处置结论，需要按任务清单补齐证据。'"
+          :recommendation="detail.ticket.status === 'closed' ? '复核工单结论与证据是否完整。' : '按处置剧本任务推进，并记录每个任务的执行证据。'"
+        />
         <el-input v-model="remark" type="textarea" :rows="3" placeholder="填写流转说明" />
         <div class="drawer-actions">
           <el-button v-for="status in nextStatuses(detail.ticket.status)" :key="status" @click="transition(status)">{{ status }}</el-button>
@@ -95,19 +112,24 @@
         <AttackTimeline :items="detail.timeline" />
       </div>
     </el-drawer>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AttackTimeline from '@/components/security/AttackTimeline.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
+import UserWorkspaceCards from '@/components/security/UserWorkspaceCards.vue'
 import { listTickets, ticketDetail, transitionTicket, updateTicketTask, type TicketItem, type TicketTaskItem, type TimelineItem } from '@/api/soc'
 
 const route = useRoute()
+const router = useRouter()
+const activeClosureView = ref(route.query.view === 'users' ? 'users' : 'overview')
 const statuses = ['待分派', '处理中', '待复核', '已关闭', '已归档']
 const query = reactive({ pageNum: 1, pageSize: 10, keyword: '', severity: '', status: '' })
 const rows = ref<TicketItem[]>([])
@@ -119,6 +141,18 @@ const selectedTickets = ref<TicketItem[]>([])
 const batchTargetStatus = ref('')
 const loading = ref(false)
 const error = ref('')
+
+watch(activeClosureView, (view) => {
+  const nextQuery = { ...route.query }
+  delete nextQuery.ownerId
+  if (view === 'users') nextQuery.view = 'users'
+  else delete nextQuery.view
+  void router.replace({ path: route.path, query: nextQuery })
+})
+
+watch(() => route.query.ownerId, (ownerId) => {
+  if (typeof ownerId === 'string' && /^\d+$/.test(ownerId)) activeClosureView.value = 'overview'
+})
 
 watch(
   () => [route.query.keyword, route.query.openTicketId],
@@ -232,6 +266,9 @@ const taskProgress = computed(() => {
 </script>
 
 <style scoped>
+.closure-view-tabs { padding: 0 14px; }
+.closure-view-tabs :deep(.el-tabs__header) { margin: 0; }
+.closure-overview-content { display: contents; }
 .panel-pad { padding: 14px; }
 .drawer-stack { display: grid; gap: 16px; }
 .drawer-actions { display: flex; gap: 8px; flex-wrap: wrap; }

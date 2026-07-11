@@ -78,6 +78,15 @@
           <span>负责人</span><strong>{{ currentAsset.ownerName || '-' }}</strong>
           <span>最后发现</span><strong>{{ currentAsset.lastSeenAt || '-' }}</strong>
         </div>
+        <SecurityDispositionGuide
+          category="asset"
+          :subject="currentAsset.hostname || currentAsset.ip"
+          :source="currentAsset.sourceType"
+          :severity="currentAsset.riskLevel"
+          :asset="`${currentAsset.hostname || '-'}（${currentAsset.ip || '-'}）`"
+          :reason="riskProfile?.statusReason || `${currentAsset.openAlertCount || 0} 条未关闭告警影响当前资产风险。`"
+          recommendation="优先处理风险画像中的高分因子，再重新计算资产风险分。"
+        />
         <section v-loading="riskProfileLoading" class="asset-risk-profile-card">
           <div class="profile-head">
             <div>
@@ -162,6 +171,7 @@ import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import AssetRiskTag from '@/components/security/AssetRiskTag.vue'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import {
   assetRecommendations,
@@ -218,7 +228,7 @@ async function load() {
     const res = await listAssets(query)
     rows.value = res.data.data.records
     total.value = res.data.data.total
-    openRouteAssetIfNeeded()
+    void openRouteAssetIfNeeded()
   } catch {
     error.value = '资产数据加载失败，请检查网络、权限或后端服务状态。'
   } finally {
@@ -230,11 +240,35 @@ function openAsset(row: AssetItem) {
   drawer.value = true
   void loadRiskProfile(row)
 }
-function openRouteAssetIfNeeded() {
+async function openRouteAssetIfNeeded() {
   const openAssetId = typeof route.query.openAssetId === 'string' ? Number(route.query.openAssetId) : 0
   if (!openAssetId || currentAsset.value?.id === openAssetId) return
   const matched = rows.value.find((item) => item.id === openAssetId)
-  if (matched) openAsset(matched)
+  if (matched) {
+    openAsset(matched)
+    return
+  }
+  drawer.value = true
+  riskProfileLoading.value = true
+  riskProfile.value = undefined
+  assetRecommendationRows.value = []
+  assetTrendRows.value = []
+  try {
+    const res = await assetRiskProfile(openAssetId)
+    const profile = res.data.data
+    riskProfile.value = profile
+    currentAsset.value = profile.asset
+    const [recommendationRes, trendRes] = await Promise.all([
+      assetRecommendations(openAssetId, 8).catch(() => undefined),
+      trendAnomalies({ assetIp: profile.asset.ip, limit: 5 }).catch(() => undefined),
+    ])
+    assetRecommendationRows.value = recommendationRes?.data.data || []
+    assetTrendRows.value = trendRes?.data.data || []
+  } catch {
+    error.value = '资产详情加载失败，请检查该推荐动作是否仍指向有效资产。'
+  } finally {
+    riskProfileLoading.value = false
+  }
 }
 function openClientWorkbench(row: AssetItem) {
   void router.push({ path: '/client/workbench', query: { ip: row.ip } })

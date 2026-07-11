@@ -50,7 +50,7 @@ The Windows initializer uses local `mysql.exe`, not Docker, and also applies `sc
 | Audit and workflow | `sys_login_log`, `sys_operation_log`, `sys_import_export_log`, `sys_biz_sequence`, `sys_biz_flow_log` | Login audit, operation audit, import/export audit, and business process tracing. |
 | File metadata | `sys_file`, `sys_attachment` | File metadata only. Binary uploads belong under Environment. |
 | SOC core | `soc_asset`, `soc_external_event`, `soc_alert`, `soc_ticket`, `soc_ticket_timeline`, `soc_report` | Main event, alert, ticket, timeline, and report chain. |
-| SOC security checks | `soc_vulnerability`, `soc_baseline_check`, `soc_file_integrity_event` | Vulnerability, baseline, and FIM evidence. |
+| SOC security checks | `soc_vulnerability`, `soc_baseline_check`, `soc_file_integrity_event`, `soc_fim_watch_path` | Vulnerability, baseline, FIM evidence, and host-bound FIM directory authorizations. |
 | SOC integration settings | `soc_wazuh_config`, `soc_sync_task`, `soc_notification_channel`, `soc_notification_log`, `soc_alert_whitelist` | Connector state, dry-run notifications, and alert noise controls. |
 
 No separate rule table is required for the current Detection Rule Center. `/soc/rules` is a read-only projection from a built-in safe rule catalog plus `soc_external_event` and `soc_alert` hits.

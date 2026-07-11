@@ -271,7 +271,7 @@ function Check-MysqlSeed {
   $query = @"
 SELECT 'tables', COUNT(*) FROM information_schema.tables
  WHERE table_schema = DATABASE()
-   AND table_name IN ('sys_user','sys_menu','sys_role_menu','soc_asset','soc_external_event','soc_alert','soc_ticket','soc_report','soc_local_check_command','soc_event_adapter_profile','soc_correlation_rule','soc_incident_cluster','soc_incident_evidence');
+   AND table_name IN ('sys_user','sys_menu','sys_role_menu','soc_asset','soc_external_event','soc_alert','soc_ticket','soc_report','soc_local_check_command','soc_detection_rule_policy','soc_event_adapter_profile','soc_correlation_rule','soc_incident_cluster','soc_incident_evidence');
 SELECT 'menus', COUNT(*) FROM sys_menu WHERE path IN ('/soc/policies','/soc/incidents','/soc/reports') AND status = 1;
 SELECT 'permissions', COUNT(*) FROM sys_menu WHERE permission IN ('soc:policy:list','soc:incident:list','soc:correlation-rule:list') AND status = 1;
 SELECT 'admin', COUNT(*) FROM sys_user WHERE username = 'admin' AND status = 1;

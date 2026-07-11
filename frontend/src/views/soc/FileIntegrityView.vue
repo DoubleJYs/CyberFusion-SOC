@@ -4,12 +4,13 @@
       <div>
         <span class="soc-page-kicker">FILE INTEGRITY MONITORING</span>
         <h1>文件变更</h1>
-        <p>这个页面帮你复核关键文件变化，确认是否为授权变更。</p>
+        <p>复核已授权主机目录中的日志、审计和业务文件元数据变化；不采集或上传文件内容。</p>
       </div>
       <div class="soc-page-tags">
-        <el-tag>Wazuh FIM</el-tag>
-        <el-tag>Change Review</el-tag>
-        <el-tag>Audit Trail</el-tag>
+        <el-button plain @click="openWatchPolicies">管理监控目录</el-button>
+        <el-tag>授权目录</el-tag>
+        <el-tag>元数据变更</el-tag>
+        <el-tag>审计复核</el-tag>
       </div>
     </section>
 
@@ -17,7 +18,7 @@
       <div class="module-filter-bar">
         <el-input v-model="query.keyword" clearable placeholder="搜索事件、主机、IP 或路径" @keyup.enter="load" />
         <el-select v-model="query.action" clearable placeholder="动作">
-          <el-option label="新增" value="created" /><el-option label="修改" value="modified" /><el-option label="删除" value="deleted" /><el-option label="权限变化" value="permission" />
+          <el-option label="新增" value="created" /><el-option label="修改" value="modified" /><el-option label="删除" value="deleted" /><el-option label="权限变化" value="permission" /><el-option label="基线快照" value="hash" />
         </el-select>
         <el-select v-model="query.status" clearable placeholder="状态">
           <el-option label="新事件" value="new" /><el-option label="复核中" value="reviewing" /><el-option label="已确认" value="confirmed" /><el-option label="已忽略" value="ignored" /><el-option label="已关闭" value="closed" />
@@ -60,6 +61,16 @@
           <span>数据来源</span><strong><DataSourceBadge :source="current.sourceType" /></strong>
           <span>状态</span><strong><StatusBadge :status="current.status" /></strong>
         </div>
+        <SecurityDispositionGuide
+          category="fim"
+          :subject="current.filePath || current.ruleName"
+          :source="current.sourceType"
+          :severity="current.severity"
+          :status="current.status"
+          :asset="`${current.hostname || '-'}（${current.assetIp || '-'}）`"
+          :reason="current.ruleName"
+          :recommendation="`核对 ${actionLabel(current.action)} 是否来自授权发布或预期采集。`"
+        />
         <el-input v-model="remark" type="textarea" :rows="3" placeholder="填写复核说明" />
         <div class="drawer-actions">
           <el-button v-for="status in nextStatuses(current.status)" :key="status" @click="transition(status)">{{ statusLabel(status) }}</el-button>
@@ -71,8 +82,10 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import DataSourceBadge from '@/components/security/DataSourceBadge.vue'
+import SecurityDispositionGuide from '@/components/security/SecurityDispositionGuide.vue'
 import SeverityBadge from '@/components/security/SeverityBadge.vue'
 import StatusBadge from '@/components/security/StatusBadge.vue'
 import { fileIntegrityDetail, fileIntegritySummary, listFileIntegrityEvents, updateFileIntegrityStatus, type FileIntegrityItem } from '@/api/soc'
@@ -86,6 +99,7 @@ const current = ref<FileIntegrityItem>()
 const loading = ref(false)
 const error = ref('')
 const remark = ref('按文件完整性复核流程推进')
+const router = useRouter()
 
 onMounted(load)
 async function load() {
@@ -114,8 +128,9 @@ function statusLabel(status: string) {
   return ({ reviewing: '复核中', confirmed: '确认变更', ignored: '忽略', closed: '关闭' } as Record<string, string>)[status] || status
 }
 function actionLabel(action: string) {
-  return ({ created: '新增', modified: '修改', deleted: '删除', permission: '权限变化' } as Record<string, string>)[action] || action
+  return ({ created: '新增', modified: '修改', deleted: '删除', permission: '权限变化', hash: '基线快照' } as Record<string, string>)[action] || action
 }
+function openWatchPolicies() { void router.push({ path: '/soc/policies', query: { tab: 'fim-watch' } }) }
 async function transition(status: string) {
   if (!current.value) return
   await updateFileIntegrityStatus(current.value.id, status, remark.value)
@@ -135,7 +150,7 @@ async function transition(status: string) {
 }
 .summary-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 12px;
 }
 .summary-card {

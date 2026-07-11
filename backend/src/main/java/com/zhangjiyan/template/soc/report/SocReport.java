@@ -15,6 +15,8 @@ public class SocReport {
     private Long id;
     private String reportNo;
     private String reportType;
+    private Long ownerId;
+    private Long deptId;
     private LocalDate periodStart;
     private LocalDate periodEnd;
     private String title;

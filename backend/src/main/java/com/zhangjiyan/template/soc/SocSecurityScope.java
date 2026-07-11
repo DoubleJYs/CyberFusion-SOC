@@ -11,6 +11,8 @@ import com.zhangjiyan.template.system.user.SysUser;
 import com.zhangjiyan.template.system.user.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +35,10 @@ public class SocSecurityScope {
     public <T> void applyDataScope(LambdaQueryWrapper<T> wrapper, SFunction<T, Long> ownerColumn, SFunction<T, Long> deptColumn) {
         DataScope scope = currentScope();
         if (scope.allowAll()) {
+            Long ownerId = requestedOwnerId();
+            if (ownerId != null) {
+                wrapper.eq(ownerColumn, ownerId);
+            }
             return;
         }
         if (scope.userId() == null) {
@@ -60,13 +66,22 @@ public class SocSecurityScope {
 
     public boolean canAccess(Long ownerId, Long deptId) {
         DataScope scope = currentScope();
+        boolean allowed;
         if (scope.allowAll()) {
-            return true;
+            allowed = true;
+        } else if (scope.includeSelf() && ownerId != null && ownerId.equals(scope.userId())) {
+            allowed = true;
+        } else {
+            allowed = deptId != null && scope.deptIds().contains(deptId);
         }
-        if (scope.includeSelf() && ownerId != null && ownerId.equals(scope.userId())) {
-            return true;
-        }
-        return deptId != null && scope.deptIds().contains(deptId);
+        Long selectedOwner = requestedOwnerId();
+        return allowed && (selectedOwner == null || selectedOwner.equals(ownerId));
+    }
+
+    /** Applies both the role scope and the optional operator-selected user workspace. */
+    public boolean canAccessSelectedWorkspace(Long ownerId, Long deptId) {
+        Long selectedOwner = requestedOwnerId();
+        return canAccess(ownerId, deptId) && (selectedOwner == null || selectedOwner.equals(ownerId));
     }
 
     public Long currentUserId() {
@@ -82,8 +97,44 @@ public class SocSecurityScope {
         return user == null ? null : user.getDeptId();
     }
 
+    /** The selected user workspace takes precedence over the signed-in operator for newly created scoped records. */
+    public Long activeOwnerId() {
+        Long selectedOwner = requestedOwnerId();
+        return selectedOwner == null ? currentUserId() : selectedOwner;
+    }
+
+    public Long activeDeptId() {
+        Long ownerId = activeOwnerId();
+        if (ownerId == null) {
+            return null;
+        }
+        SysUser user = userMapper.selectById(ownerId);
+        return user == null ? null : user.getDeptId();
+    }
+
     public String currentUsername() {
         return SecurityUtils.currentUsername();
+    }
+
+    /**
+     * A platform operator may enter a user's workspace from the aggregate card.
+     * The requested owner is intentionally ignored for every non-global scope.
+     */
+    private Long requestedOwnerId() {
+        ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return null;
+        }
+        String value = attributes.getRequest().getParameter("ownerId");
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            long ownerId = Long.parseLong(value.trim());
+            return ownerId > 0 ? ownerId : null;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private DataScope currentScope() {

@@ -25,6 +25,17 @@ public final class HostAgentResponses {
     ) {
     }
 
+    public record AgentRuntimeResult(
+            String agentId,
+            String action,
+            String runtimeStatus,
+            boolean enabled,
+            boolean commandExecuted,
+            String message,
+            LocalDateTime operatedAt
+    ) {
+    }
+
     public record IngestResult(
             String batchId,
             String agentId,
@@ -37,6 +48,7 @@ public final class HostAgentResponses {
     }
 
     public record AgentOverview(
+            AgentRuntimeEnvironment runtime,
             long totalAgents,
             long onlineAgents,
             long offlineAgents,
@@ -52,6 +64,52 @@ public final class HostAgentResponses {
             List<AgentSourceHealth> sources,
             List<SocHostAgent> agents,
             List<RecentHostEvent> recentEvents
+    ) {
+    }
+
+    /**
+     * Runtime facts for the backend process that is serving the Agent console.
+     * Agent overview data is scoped to this operating-system family.
+     */
+    public record AgentRuntimeEnvironment(
+            String osType,
+            String label,
+            String osName,
+            String osVersion,
+            String architecture
+    ) {
+    }
+
+    public record LocalAgentInstallContext(
+            AgentRuntimeEnvironment runtime,
+            String hostname,
+            List<String> ipAddresses,
+            String defaultAgentId,
+            String defaultAgentName,
+            String agentVersion,
+            String apiBaseUrl,
+            String projectRoot,
+            String envRoot,
+            String fimPath,
+            boolean supported,
+            String message
+    ) {
+    }
+
+    public record LocalAgentInstallStage(
+            String label,
+            String status,
+            String detail
+    ) {
+    }
+
+    public record LocalAgentInstallResult(
+            String agentId,
+            boolean installed,
+            boolean verified,
+            String runtimeStatus,
+            List<LocalAgentInstallStage> stages,
+            String message
     ) {
     }
 
@@ -80,6 +138,8 @@ public final class HostAgentResponses {
     public record RecentHostEvent(
             Long id,
             String eventUid,
+            String sourceAgentId,
+            String sourceAgentName,
             String sourceType,
             String eventType,
             String severity,
@@ -95,6 +155,8 @@ public final class HostAgentResponses {
     public record AgentBatchItem(
             Long id,
             String batchId,
+            String agentId,
+            String sourceAgentName,
             String ingestType,
             Integer itemCount,
             Integer acceptedCount,
@@ -109,6 +171,8 @@ public final class HostAgentResponses {
     public record AgentRejectItem(
             Long id,
             String batchId,
+            String agentId,
+            String sourceAgentName,
             String ingestType,
             String eventUid,
             String reasonCode,

@@ -18,9 +18,13 @@ import (
 )
 
 type Options struct {
-	AgentID string
-	OSType  string
-	FIMPath string
+	AgentID       string
+	AgentVersion  string
+	OSType        string
+	Profile       string
+	FIMPath       string
+	FIMWatchPaths []FIMWatchPath
+	FIMStateFile  string
 }
 
 func CollectOnce(opts Options) (schema.Snapshot, error) {
@@ -31,12 +35,13 @@ func CollectOnce(opts Options) (schema.Snapshot, error) {
 	}
 	ips, macs := interfaceFacts()
 	primaryIP := firstOr(ips, "127.0.0.1")
-	snapshot := baseSnapshot(opts.AgentID, opts.OSType, hostname, primaryIP, ips, macs, now)
+	snapshot := baseSnapshot(opts, hostname, primaryIP, ips, macs, now)
 	snapshot.Registration.OSVersion = runtime.GOOS
 	snapshot.Registration.Architecture = runtime.GOARCH
-	snapshot.Registration.Labels = map[string]string{"collector": "go-agent", "mode": "collect"}
+	snapshot.Registration.Labels = map[string]string{"collector": "go-agent", "mode": "collect", "profile": collectionProfile(opts.Profile)}
 	snapshot.Assets.Assets[0].Facts["runtimeGoos"] = runtime.GOOS
 	snapshot.Assets.Assets[0].Facts["runtimeArch"] = runtime.GOARCH
+	snapshot.Assets.Assets[0].Facts["collectionProfile"] = collectionProfile(opts.Profile)
 	if userName := currentUsername(); userName != "" {
 		snapshot.Assets.Assets[0].Facts["currentUser"] = userName
 	}
@@ -68,14 +73,26 @@ func CollectOnce(opts Options) (schema.Snapshot, error) {
 	if processEvent, ok := processSummaryEvent(opts, hostname, primaryIP, now); ok {
 		snapshot.Events.Events = append(snapshot.Events.Events, processEvent)
 	}
-	snapshot.Events.Events = uniqueHostEvents(snapshot.Events.Events)
-	if opts.FIMPath != "" {
+	if len(opts.FIMWatchPaths) > 0 {
+		fimEvents, err := collectAuthorizedFIMChanges(opts, hostname, primaryIP, now)
+		if err != nil {
+			snapshot.Events.Events = append(snapshot.Events.Events,
+				collectorErrorEvent(opts, hostname, primaryIP, now, "fim_collect_failed", "authorized_watch_paths", err))
+		} else {
+			snapshot.FIM.Events = append(snapshot.FIM.Events, fimEvents...)
+		}
+	} else if opts.FIMPath != "" {
 		fim, err := fimEvent(opts, hostname, primaryIP, now)
 		if err != nil {
-			return snapshot, err
+			// FIM permission and file-system errors are evidence, not a reason to suppress
+			// the Agent heartbeat, asset inventory, and other independent collectors.
+			snapshot.Events.Events = append(snapshot.Events.Events,
+				collectorErrorEvent(opts, hostname, primaryIP, now, "fim_collect_failed", opts.FIMPath, err))
+		} else {
+			snapshot.FIM.Events = append(snapshot.FIM.Events, fim)
 		}
-		snapshot.FIM.Events = append(snapshot.FIM.Events, fim)
 	}
+	snapshot.Events.Events = uniqueHostEvents(snapshot.Events.Events)
 	snapshot.Baseline.Checks = append(snapshot.Baseline.Checks, schema.BaselineCheck{
 		CheckCode:   checkCode(opts.AgentID, "agent-runtime"),
 		Category:    "agent-health",
@@ -94,6 +111,7 @@ func CollectOnce(opts Options) (schema.Snapshot, error) {
 		},
 	})
 	snapshot.Baseline.Checks = append(snapshot.Baseline.Checks, baselineChecks(opts, hostname, primaryIP, now)...)
+	applyCollectionProfile(&snapshot, collectionProfile(opts.Profile))
 	snapshot.Heartbeat.CollectedCount = int64(len(snapshot.Assets.Assets) + len(snapshot.Events.Events) + len(snapshot.FIM.Events) + len(snapshot.Baseline.Checks))
 	return snapshot, nil
 }
@@ -115,23 +133,27 @@ func uniqueHostEvents(events []schema.HostEvent) []schema.HostEvent {
 	return out
 }
 
-func baseSnapshot(agentID string, osType string, hostname string, primaryIP string, ips []string, macs []string, now time.Time) schema.Snapshot {
+func baseSnapshot(opts Options, hostname string, primaryIP string, ips []string, macs []string, now time.Time) schema.Snapshot {
 	collectedAt := schema.LocalTime(now)
+	agentVersion := opts.AgentVersion
+	if agentVersion == "" {
+		agentVersion = schema.Version
+	}
 	return schema.Snapshot{
 		Registration: schema.AgentRegistration{
-			AgentID:      agentID,
+			AgentID:      opts.AgentID,
 			AgentName:    hostname,
 			Hostname:     hostname,
-			OSType:       osType,
-			AgentVersion: schema.Version,
+			OSType:       opts.OSType,
+			AgentVersion: agentVersion,
 			IPAddresses:  ips,
 			MACAddresses: macs,
 		},
 		Heartbeat: schema.Heartbeat{
-			AgentID:        agentID,
+			AgentID:        opts.AgentID,
 			Hostname:       hostname,
-			OSType:         osType,
-			AgentVersion:   schema.Version,
+			OSType:         opts.OSType,
+			AgentVersion:   agentVersion,
 			IPAddresses:    ips,
 			QueueDepth:     0,
 			QueueBytes:     0,
@@ -142,14 +164,14 @@ func baseSnapshot(agentID string, osType string, hostname string, primaryIP stri
 			ObservedAt:     collectedAt,
 		},
 		Assets: schema.AssetIngest{
-			AgentID:     agentID,
-			BatchID:     "HOST-" + agentID + "-ASSET",
-			OSType:      osType,
+			AgentID:     opts.AgentID,
+			BatchID:     "HOST-" + opts.AgentID + "-ASSET",
+			OSType:      opts.OSType,
 			CollectedAt: collectedAt,
 			Assets: []schema.Asset{{
 				Hostname:     hostname,
 				PrimaryIP:    primaryIP,
-				OSType:       osType,
+				OSType:       opts.OSType,
 				IPAddresses:  ips,
 				MACAddresses: macs,
 				Facts:        map[string]string{"source": "cyberfusion-agent"},
@@ -157,23 +179,47 @@ func baseSnapshot(agentID string, osType string, hostname string, primaryIP stri
 			}},
 		},
 		Events: schema.EventIngest{
-			AgentID:     agentID,
-			BatchID:     "HOST-" + agentID + "-EVENT",
-			OSType:      osType,
+			AgentID:     opts.AgentID,
+			BatchID:     "HOST-" + opts.AgentID + "-EVENT",
+			OSType:      opts.OSType,
 			CollectedAt: collectedAt,
 		},
 		FIM: schema.FIMIngest{
-			AgentID:     agentID,
-			BatchID:     "HOST-" + agentID + "-FIM",
-			OSType:      osType,
+			AgentID:     opts.AgentID,
+			BatchID:     "HOST-" + opts.AgentID + "-FIM",
+			OSType:      opts.OSType,
 			CollectedAt: collectedAt,
 		},
 		Baseline: schema.BaselineIngest{
-			AgentID:     agentID,
-			BatchID:     "HOST-" + agentID + "-BASELINE",
-			OSType:      osType,
+			AgentID:     opts.AgentID,
+			BatchID:     "HOST-" + opts.AgentID + "-BASELINE",
+			OSType:      opts.OSType,
 			CollectedAt: collectedAt,
 		},
+	}
+}
+
+func collectionProfile(profile string) string {
+	switch profile {
+	case "host-log", "patrol-audit", "file-integrity", "baseline-audit":
+		return profile
+	default:
+		return "full"
+	}
+}
+
+func applyCollectionProfile(snapshot *schema.Snapshot, profile string) {
+	switch profile {
+	case "host-log":
+		snapshot.FIM.Events = nil
+		snapshot.Baseline.Checks = nil
+	case "patrol-audit":
+		snapshot.FIM.Events = nil
+	case "file-integrity":
+		snapshot.Events.Events = nil
+	case "baseline-audit":
+		snapshot.Events.Events = nil
+		snapshot.FIM.Events = nil
 	}
 }
 
@@ -215,6 +261,13 @@ func interfaceFacts() ([]string, []string) {
 }
 
 func fimEvent(opts Options, hostname string, primaryIP string, now time.Time) (schema.FIMEvent, error) {
+	info, err := os.Stat(opts.FIMPath)
+	if err != nil {
+		return schema.FIMEvent{}, err
+	}
+	if info.IsDir() {
+		return fimDirectoryEvent(opts, hostname, primaryIP, now)
+	}
 	file, err := os.Open(opts.FIMPath)
 	if err != nil {
 		return schema.FIMEvent{}, err
@@ -238,6 +291,55 @@ func fimEvent(opts Options, hostname string, primaryIP string, now time.Time) (s
 		Attributes: map[string]any{
 			"hashAlgorithm": "sha256",
 			"collector":     "cyberfusion-agent",
+		},
+	}, nil
+}
+
+// fimDirectoryEvent hashes bounded immediate-entry metadata without uploading file names or contents.
+// The installation UI accepts directories as FIM targets, so a directory must never prevent a cycle heartbeat.
+func fimDirectoryEvent(opts Options, hostname string, primaryIP string, now time.Time) (schema.FIMEvent, error) {
+	entries, err := os.ReadDir(opts.FIMPath)
+	if err != nil {
+		return schema.FIMEvent{}, err
+	}
+	const maxEntries = 256
+	hash := sha256.New()
+	_, _ = io.WriteString(hash, "cyberfusion-directory-snapshot\n")
+	_, _ = io.WriteString(hash, opts.FIMPath+"\n")
+	count := len(entries)
+	if count > maxEntries {
+		entries = entries[:maxEntries]
+	}
+	for _, entry := range entries {
+		entryInfo, infoErr := entry.Info()
+		if infoErr != nil {
+			_, _ = io.WriteString(hash, entry.Name()+"|unreadable\n")
+			continue
+		}
+		// Entry names are intentionally included only in the local hash, never in the payload.
+		_, _ = fmt.Fprintf(hash, "%s|%t|%d|%d\n", entry.Name(), entry.IsDir(), entryInfo.Size(), entryInfo.ModTime().UnixNano())
+	}
+	sum := hex.EncodeToString(hash.Sum(nil))
+	return schema.FIMEvent{
+		EventUID: stableUID(opts.AgentID, "fim-directory", opts.FIMPath, sum),
+		// The backend FIM contract accepts hash as the normalized action. The rule and
+		// attributes retain that this is a directory metadata snapshot.
+		Action:    "hash",
+		Severity:  "info",
+		Hostname:  hostname,
+		AssetIP:   primaryIP,
+		FilePath:  opts.FIMPath,
+		RuleName:  "CyberFusion Agent watched directory snapshot",
+		AfterHash: sum,
+		EventTime: schema.LocalTime(now),
+		Attributes: map[string]any{
+			"snapshotType":       "directory_metadata",
+			"hashAlgorithm":      "sha256",
+			"collector":          "cyberfusion-agent",
+			"entryCount":         count,
+			"sampledEntryCount":  len(entries),
+			"entriesTruncated":   count > maxEntries,
+			"contentTransferred": false,
 		},
 	}, nil
 }

@@ -40,6 +40,8 @@ import com.zhangjiyan.template.soc.notification.SocNotificationLog;
 import com.zhangjiyan.template.soc.notification.SocNotificationService;
 import com.zhangjiyan.template.soc.policy.LocalCheckPolicyService;
 import com.zhangjiyan.template.soc.policy.adapter.EventAdapterPolicyService;
+import com.zhangjiyan.template.soc.rule.DetectionRulePolicyService;
+import com.zhangjiyan.template.soc.rule.SocDetectionRulePolicy;
 import com.zhangjiyan.template.soc.playbook.SocTicketTask;
 import com.zhangjiyan.template.soc.playbook.SocTicketTaskMapper;
 import com.zhangjiyan.template.soc.operations.SocOperationsService;
@@ -119,6 +121,9 @@ public class SocOperationService {
 
     @Autowired(required = false)
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private DetectionRulePolicyService detectionRulePolicyService;
 
     private static final List<DemoRangeSourceSample> DEMO_RANGE_SOURCE_SAMPLES = List.of(
             new DemoRangeSourceSample("waf", """
@@ -272,6 +277,7 @@ public class SocOperationService {
         ticket.setTitle(alert.getSeverity().toUpperCase(Locale.ROOT) + " 告警处置：" + alert.getRuleDescription() + demoTitleSuffix);
         ticket.setSeverity(alert.getSeverity());
         ticket.setStatus("待分派");
+        ticket.setOwnerId(alert.getOwnerId());
         ticket.setAssigneeId(request.assigneeId());
         ticket.setDeptId(alert.getDeptId());
         ticket.setDueAt(LocalDateTime.now().plusHours("critical".equals(alert.getSeverity()) ? 4 : 24));
@@ -748,8 +754,7 @@ public class SocOperationService {
     }
 
     public PageResult<SocReport> reports(SocPageRequest request) {
-        LambdaQueryWrapper<SocReport> wrapper = new LambdaQueryWrapper<SocReport>()
-                .eq(SocReport::getDeleted, 0)
+        LambdaQueryWrapper<SocReport> wrapper = scopedReportWrapper()
                 .and(notBlank(request.keyword()), w -> w.like(SocReport::getReportNo, request.keyword())
                         .or().like(SocReport::getTitle, request.keyword())
                         .or().like(SocReport::getSummary, request.keyword())
@@ -770,6 +775,7 @@ public class SocOperationService {
         SocReport report = new SocReport();
         report.setReportNo("RPT-" + request.reportType().toUpperCase(Locale.ROOT) + "-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
         report.setReportType(request.reportType());
+        applyActiveWorkspace(report);
         report.setPeriodStart(start);
         report.setPeriodEnd(end);
         report.setTitle("企业安全监测" + labelOf(request.reportType()) + "（" + start + " 至 " + end + "）");
@@ -828,6 +834,7 @@ public class SocOperationService {
         SocReport report = new SocReport();
         report.setReportNo("RPT-VALIDATION-" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")));
         report.setReportType("security_validation");
+        applyActiveWorkspace(report);
         report.setPeriodStart(start);
         report.setPeriodEnd(end);
         report.setTitle("安全验证报告（" + batchId + "）");
@@ -993,13 +1000,14 @@ public class SocOperationService {
     }
 
     public List<NameValue> fileIntegritySummary() {
-        return List.of("created", "modified", "deleted", "permission").stream()
+        return List.of("created", "modified", "deleted", "permission", "hash").stream()
                 .map(action -> new NameValue(action, fileIntegrityMapper.selectCount(scopedFileIntegrityWrapper().eq(SocFileIntegrityEvent::getAction, action))))
                 .toList();
     }
 
     public PageResult<SocExternalEvent> externalEvents(SocPageRequest request) {
         LambdaQueryWrapper<SocExternalEvent> wrapper = scopedExternalEventWrapper()
+                .in(SocExternalEvent::getSourceType, externalRiskSourceTypes())
                 .and(notBlank(request.keyword()), w -> w.like(SocExternalEvent::getEventUid, request.keyword())
                         .or().like(SocExternalEvent::getEventType, request.keyword())
                         .or().like(SocExternalEvent::getRuleId, request.keyword())
@@ -1043,8 +1051,7 @@ public class SocOperationService {
     }
 
     public List<ExternalSourceSummary> externalEventSummary() {
-        return List.of("waf", "zap", "trivy", "wazuh", "suricata", "zeek", "misp", "opencti", "sigma", "shuffle",
-                        "falco", "osquery", "velociraptor", "cowrie").stream()
+        return externalRiskSourceTypes().stream()
                 .map(source -> {
                     LambdaQueryWrapper<SocExternalEvent> sourceWrapper = scopedExternalEventWrapper()
                             .eq(SocExternalEvent::getSourceType, source);
@@ -1059,6 +1066,47 @@ public class SocOperationService {
                 })
                 .filter(item -> item.total() > 0)
                 .toList();
+    }
+
+    /**
+     * Operational counters for evidence that crosses a host boundary: inbound
+     * access, host egress, third-party scan results, and external IOC matches.
+     * Local Agent observations deliberately do not participate in this view.
+     */
+    public ExternalRiskOverview externalRiskOverview() {
+        List<SocExternalEvent> events = externalEventMapper.selectList(scopedExternalEventWrapper()
+                .in(SocExternalEvent::getSourceType, externalRiskSourceTypes())
+                .orderByDesc(SocExternalEvent::getEventTime)
+                .last("LIMIT 5000"));
+        long inbound = events.stream().filter(this::isInboundExternalEvent).count();
+        long outbound = events.stream().filter(this::isOutboundExternalEvent).count();
+        long scans = events.stream().filter(this::isExternalScanEvent).count();
+        long iocHits = events.stream().filter(this::isExternalIocEvent).count();
+        long linkedAlerts = events.stream().filter(item -> item.getAlertId() != null).count();
+        return new ExternalRiskOverview(inbound, outbound, scans, iocHits, linkedAlerts);
+    }
+
+    private List<String> externalRiskSourceTypes() {
+        return List.of("waf", "zeek", "suricata", "zap", "trivy", "misp", "opencti", "validation-fixture");
+    }
+
+    private boolean isInboundExternalEvent(SocExternalEvent event) {
+        return "waf".equals(event.getSourceType())
+                || (notBlank(event.getAssetIp()) && event.getAssetIp().equals(event.getDestIp()) && notBlank(event.getSrcIp()));
+    }
+
+    private boolean isOutboundExternalEvent(SocExternalEvent event) {
+        return notBlank(event.getAssetIp()) && event.getAssetIp().equals(event.getSrcIp()) && notBlank(event.getDestIp());
+    }
+
+    private boolean isExternalScanEvent(SocExternalEvent event) {
+        String type = firstNotBlank(event.getEventType(), "").toLowerCase(Locale.ROOT);
+        return List.of("zap", "trivy").contains(event.getSourceType())
+                || type.contains("scan") || type.contains("probe") || type.contains("recon");
+    }
+
+    private boolean isExternalIocEvent(SocExternalEvent event) {
+        return List.of("misp", "opencti").contains(event.getSourceType()) || notBlank(event.getIoc());
     }
 
     public PageResult<DetectionRuleSummary> detectionRules(SocPageRequest request) {
@@ -1104,6 +1152,14 @@ public class SocOperationService {
             }
         }
 
+        detectionRulePolicies().forEach(policy -> {
+            String key = ruleKey(policy.getSourceType(), policy.getRuleId());
+            MutableDetectionRule rule = rules.computeIfAbsent(key, ignored -> new MutableDetectionRule(
+                    policy.getRuleId(), policy.getRuleName(), policy.getSourceType(), policy.getSeverity(),
+                    false, "v" + policy.getVersion(), null, 0, 0));
+            rule.applyPolicy(policy);
+        });
+
         List<DetectionRuleSummary> filtered = rules.values().stream()
                 .map(MutableDetectionRule::toSummary)
                 .filter(item -> matchesRuleFilter(item, request))
@@ -1139,6 +1195,16 @@ public class SocOperationService {
                 .last("LIMIT 20"));
         alerts.forEach(this::enrichAlertEvidence);
         return new DetectionRuleHits(canonicalSource, normalizedRuleId, events, alerts);
+    }
+
+    private List<SocDetectionRulePolicy> detectionRulePolicies() {
+        return detectionRulePolicyService == null ? List.of() : detectionRulePolicyService.directoryPolicies();
+    }
+
+    private DetectionRulePolicyService.AlertPromotion alertPromotion(String sourceType, String ruleId, String severity) {
+        return detectionRulePolicyService == null
+                ? new DetectionRulePolicyService.AlertPromotion(true, severity)
+                : detectionRulePolicyService.alertPromotion(sourceType, ruleId, severity);
     }
 
     public List<AdapterFieldMapping> adapterFieldMappings() {
@@ -2106,7 +2172,7 @@ public class SocOperationService {
                         .or().like(SocVulnerability::getCveId, "DEMO-RANGE"))
                 .orderByDesc(SocVulnerability::getDetectedAt)
                 .last("LIMIT 100"));
-        List<SocReport> reports = reportMapper.selectList(new LambdaQueryWrapper<SocReport>()
+        List<SocReport> reports = reportMapper.selectList(scopedReportWrapper()
                 .and(w -> w.like(SocReport::getTitle, batchId)
                         .or().like(SocReport::getSummary, batchId)
                         .or().like(SocReport::getReportNo, batchId))
@@ -2327,6 +2393,11 @@ public class SocOperationService {
     }
 
     private SocAlert upsertSuricataAlert(NormalizedSuricataEvent normalized) {
+        String ruleId = firstNotBlank(normalized.ruleId(), "SURICATA");
+        DetectionRulePolicyService.AlertPromotion promotion = alertPromotion("suricata", ruleId, normalized.severity());
+        if (!promotion.enabled()) {
+            return null;
+        }
         String alertUid = "SURICATA-IMPORT-" + normalized.eventUid().replace("SURICATA-", "");
         SocAlert alert = alertMapper.selectOne(new LambdaQueryWrapper<SocAlert>()
                 .eq(SocAlert::getAlertUid, alertUid)
@@ -2338,9 +2409,9 @@ public class SocOperationService {
             alert.setStatus("new");
         }
         alert.setSourceType("suricata");
-        alert.setLevel(levelOf(normalized.severity()));
-        alert.setSeverity(normalized.severity());
-        alert.setRuleId(firstNotBlank(normalized.ruleId(), "SURICATA"));
+        alert.setLevel(levelOf(promotion.severity()));
+        alert.setSeverity(promotion.severity());
+        alert.setRuleId(ruleId);
         alert.setRuleDescription(normalized.ruleName());
         alert.setAssetName(firstNotBlank(normalized.assetName(), normalized.assetIp(), "unknown-asset"));
         alert.setAssetIp(firstNotBlank(normalized.assetIp(), normalized.destIp(), "0.0.0.0"));
@@ -2668,6 +2739,11 @@ public class SocOperationService {
     }
 
     private SocAlert upsertCyberFusionAlert(NormalizedCyberFusionEvent normalized) {
+        String ruleId = firstNotBlank(normalized.ruleId(), normalized.sourceType().toUpperCase(Locale.ROOT));
+        DetectionRulePolicyService.AlertPromotion promotion = alertPromotion(normalized.sourceType(), ruleId, normalized.severity());
+        if (!promotion.enabled()) {
+            return null;
+        }
         String alertUid = normalized.sourceType().toUpperCase(Locale.ROOT) + "-IMPORT-" + normalized.eventUid().replace(normalized.sourceType().toUpperCase(Locale.ROOT) + "-", "");
         SocAlert alert = alertMapper.selectOne(new LambdaQueryWrapper<SocAlert>()
                 .eq(SocAlert::getAlertUid, alertUid)
@@ -2679,9 +2755,9 @@ public class SocOperationService {
             alert.setStatus("new");
         }
         alert.setSourceType(normalized.sourceType());
-        alert.setLevel(levelOf(normalized.severity()));
-        alert.setSeverity(normalized.severity());
-        alert.setRuleId(firstNotBlank(normalized.ruleId(), normalized.sourceType().toUpperCase(Locale.ROOT)));
+        alert.setLevel(levelOf(promotion.severity()));
+        alert.setSeverity(promotion.severity());
+        alert.setRuleId(ruleId);
         alert.setRuleDescription(normalized.ruleName());
         alert.setAssetName(firstNotBlank(normalized.assetName(), normalized.assetIp(), "external-asset"));
         alert.setAssetIp(firstNotBlank(normalized.assetIp(), normalized.destIp(), "0.0.0.0"));
@@ -3492,7 +3568,7 @@ public class SocOperationService {
                 .eq(SocAlert::getDeleted, 0)
                 .and(w -> w.isNotNull(SocAlert::getAssetIp).ne(SocAlert::getAssetIp, "")
                         .or().isNotNull(SocAlert::getAssetName).ne(SocAlert::getAssetName, ""))
-                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND s.owner_id = soc_alert.owner_id AND (s.ip = asset_ip OR s.hostname = asset_name))");
         applyRealSource(wrapper, SocAlert::getSourceType);
         securityScope.applyDataScope(wrapper, SocAlert::getOwnerId, SocAlert::getDeptId);
         return wrapper;
@@ -3512,8 +3588,14 @@ public class SocOperationService {
         LambdaQueryWrapper<SocTicket> wrapper = new LambdaQueryWrapper<SocTicket>()
                 .eq(SocTicket::getDeleted, 0)
                 .isNotNull(SocTicket::getAlertId)
-                .apply("EXISTS (SELECT 1 FROM soc_alert a WHERE a.deleted = 0 AND a.id = alert_id AND a.source_type IS NOT NULL AND a.source_type NOT IN (" + NON_REAL_SOURCE_SQL + "))");
-        securityScope.applyDataScope(wrapper, SocTicket::getAssigneeId, SocTicket::getDeptId);
+                .apply("EXISTS (SELECT 1 FROM soc_alert a WHERE a.deleted = 0 AND a.id = alert_id AND a.owner_id = soc_ticket.owner_id AND a.source_type IS NOT NULL AND a.source_type NOT IN (" + NON_REAL_SOURCE_SQL + "))");
+        securityScope.applyDataScope(wrapper, SocTicket::getOwnerId, SocTicket::getDeptId);
+        return wrapper;
+    }
+
+    private LambdaQueryWrapper<SocReport> scopedReportWrapper() {
+        LambdaQueryWrapper<SocReport> wrapper = new LambdaQueryWrapper<SocReport>().eq(SocReport::getDeleted, 0);
+        securityScope.applyDataScope(wrapper, SocReport::getOwnerId, SocReport::getDeptId);
         return wrapper;
     }
 
@@ -3522,7 +3604,7 @@ public class SocOperationService {
                 .eq(SocVulnerability::getDeleted, 0)
                 .and(w -> w.isNotNull(SocVulnerability::getAssetIp).ne(SocVulnerability::getAssetIp, "")
                         .or().isNotNull(SocVulnerability::getAssetName).ne(SocVulnerability::getAssetName, ""))
-                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND s.owner_id = soc_vulnerability.owner_id AND (s.ip = asset_ip OR s.hostname = asset_name))");
         applyRealSource(wrapper, SocVulnerability::getSourceType);
         securityScope.applyDataScope(wrapper, SocVulnerability::getOwnerId, SocVulnerability::getDeptId);
         return wrapper;
@@ -3533,7 +3615,7 @@ public class SocOperationService {
                 .eq(SocBaselineCheck::getDeleted, 0)
                 .and(w -> w.isNotNull(SocBaselineCheck::getAssetIp).ne(SocBaselineCheck::getAssetIp, "")
                         .or().isNotNull(SocBaselineCheck::getAssetName).ne(SocBaselineCheck::getAssetName, ""))
-                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name))");
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND s.owner_id = soc_baseline_check.owner_id AND (s.ip = asset_ip OR s.hostname = asset_name))");
         applyRealSource(wrapper, SocBaselineCheck::getSourceType);
         securityScope.applyDataScope(wrapper, SocBaselineCheck::getOwnerId, SocBaselineCheck::getDeptId);
         return wrapper;
@@ -3544,7 +3626,7 @@ public class SocOperationService {
                 .eq(SocFileIntegrityEvent::getDeleted, 0)
                 .and(w -> w.isNotNull(SocFileIntegrityEvent::getAssetIp).ne(SocFileIntegrityEvent::getAssetIp, "")
                         .or().isNotNull(SocFileIntegrityEvent::getHostname).ne(SocFileIntegrityEvent::getHostname, ""))
-                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = hostname))");
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND s.owner_id = soc_file_integrity_event.owner_id AND (s.ip = asset_ip OR s.hostname = hostname))");
         applyRealSource(wrapper, SocFileIntegrityEvent::getSourceType);
         securityScope.applyDataScope(wrapper, SocFileIntegrityEvent::getOwnerId, SocFileIntegrityEvent::getDeptId);
         return wrapper;
@@ -3556,7 +3638,7 @@ public class SocOperationService {
                 .and(w -> w.isNotNull(SocExternalEvent::getAssetIp).ne(SocExternalEvent::getAssetIp, "")
                         .or().isNotNull(SocExternalEvent::getAssetName).ne(SocExternalEvent::getAssetName, "")
                         .or().isNotNull(SocExternalEvent::getDestIp).ne(SocExternalEvent::getDestIp, ""))
-                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND (s.ip = asset_ip OR s.hostname = asset_name OR s.ip = dest_ip))");
+                .apply("EXISTS (SELECT 1 FROM soc_asset s WHERE s.deleted = 0 AND s.owner_id = soc_external_event.owner_id AND (s.ip = asset_ip OR s.hostname = asset_name OR s.ip = dest_ip))");
         applyRealSource(wrapper, SocExternalEvent::getSourceType);
         securityScope.applyDataScope(wrapper, SocExternalEvent::getOwnerId, SocExternalEvent::getDeptId);
         return wrapper;
@@ -3580,9 +3662,14 @@ public class SocOperationService {
     }
 
     private void ensureTicketAccess(SocTicket ticket) {
-        if (!securityScope.canAccess(ticket.getAssigneeId(), ticket.getDeptId())) {
+        if (!securityScope.canAccess(ticket.getOwnerId(), ticket.getDeptId())) {
             throw new BusinessException("无权访问该工单");
         }
+    }
+
+    private void applyActiveWorkspace(SocReport report) {
+        report.setOwnerId(securityScope.activeOwnerId());
+        report.setDeptId(securityScope.activeDeptId());
     }
 
     private void ensureAccess(Long ownerId, Long deptId, String message) {
@@ -3835,6 +3922,9 @@ public class SocOperationService {
         SocReport report = reportMapper.selectById(id);
         if (report == null || Integer.valueOf(1).equals(report.getDeleted())) {
             throw new BusinessException("报表不存在");
+        }
+        if (!securityScope.canAccess(report.getOwnerId(), report.getDeptId())) {
+            throw new BusinessException("无权访问该报表");
         }
         return report;
     }
@@ -4151,9 +4241,14 @@ public class SocOperationService {
     public record ExternalSourceSummary(String sourceType, long total, long highRisk, long linkedAlerts) {
     }
 
+    public record ExternalRiskOverview(long inboundAccess, long outboundAccess, long scanFindings,
+                                      long iocHits, long linkedAlerts) {
+    }
+
     public record DetectionRuleSummary(String ruleId, String ruleName, String sourceType, String severity,
                                        boolean enabled, String version, LocalDateTime lastHitAt,
-                                       long hitCount, long falsePositiveCount) {
+                                       long hitCount, long falsePositiveCount, Long policyId, String status,
+                                       String detectionCategory, String detectionSummary) {
     }
 
     public record DetectionRuleHits(String sourceType, String ruleId,
@@ -4231,11 +4326,15 @@ public class SocOperationService {
         private String ruleName;
         private final String sourceType;
         private String severity;
-        private final boolean enabled;
-        private final String version;
+        private boolean enabled;
+        private String version;
         private LocalDateTime lastHitAt;
         private long hitCount;
         private long falsePositiveCount;
+        private Long policyId;
+        private String status = "external";
+        private String detectionCategory;
+        private String detectionSummary;
 
         private MutableDetectionRule(String ruleId, String ruleName, String sourceType, String severity,
                                      boolean enabled, String version, LocalDateTime lastHitAt,
@@ -4253,7 +4352,22 @@ public class SocOperationService {
 
         private DetectionRuleSummary toSummary() {
             return new DetectionRuleSummary(ruleId, ruleName, sourceType, severity, enabled, version,
-                    lastHitAt, hitCount, falsePositiveCount);
+                    lastHitAt, hitCount, falsePositiveCount, policyId, status, detectionCategory, detectionSummary);
+        }
+
+        private void applyPolicy(SocDetectionRulePolicy policy) {
+            policyId = policy.getId();
+            if (policy.getRuleName() != null && !policy.getRuleName().isBlank()) {
+                ruleName = policy.getRuleName();
+            }
+            if (policy.getSeverity() != null && !policy.getSeverity().isBlank()) {
+                severity = policy.getSeverity();
+            }
+            enabled = "active".equals(policy.getStatus()) && Objects.equals(policy.getEnabled(), 1);
+            version = "v" + (policy.getVersion() == null ? 1 : policy.getVersion());
+            status = policy.getStatus() == null || policy.getStatus().isBlank() ? "draft" : policy.getStatus();
+            detectionCategory = policy.getDetectionCategory();
+            detectionSummary = policy.getDetectionSummary();
         }
     }
 

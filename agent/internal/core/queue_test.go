@@ -2,6 +2,8 @@ package core
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -25,6 +27,47 @@ func TestQueueSkipsOperationWhenAllDedupeKeysAreAlreadyPending(t *testing.T) {
 	}
 	if stats.Depth != 1 {
 		t.Fatalf("Stats().Depth = %d, want 1", stats.Depth)
+	}
+}
+
+func TestQueueMovesPermanentRejectionOutOfPendingQueue(t *testing.T) {
+	runtimeDir := t.TempDir()
+	queue, err := NewQueue(runtimeDir, 200<<20)
+	if err != nil {
+		t.Fatalf("NewQueue() error = %v", err)
+	}
+	state, err := LoadState(runtimeDir)
+	if err != nil {
+		t.Fatalf("LoadState() error = %v", err)
+	}
+	logger, err := NewLogger(runtimeDir)
+	if err != nil {
+		t.Fatalf("NewLogger() error = %v", err)
+	}
+	if err := queue.Enqueue("fim", "/soc/ingest/host/fim", map[string]any{"events": []string{"bad-fim"}}, []string{"bad-fim"}); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+
+	result, _, err := queue.Flush(permanentPoster{}, nil, state, logger)
+	if err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if result.Rejected != 1 || result.Failed != 0 || result.Sent != 0 {
+		t.Fatalf("Flush() result = %#v, want one rejected operation", result)
+	}
+	stats, err := queue.Stats()
+	if err != nil {
+		t.Fatalf("Stats() error = %v", err)
+	}
+	if stats.Depth != 0 {
+		t.Fatalf("pending queue depth = %d, want 0", stats.Depth)
+	}
+	rejected, err := filepath.Glob(filepath.Join(runtimeDir, "queue", "rejected", "*.json"))
+	if err != nil || len(rejected) != 1 {
+		t.Fatalf("rejected queue files = %v, error = %v", rejected, err)
+	}
+	if _, err := os.Stat(rejected[0]); err != nil {
+		t.Fatalf("rejected operation missing: %v", err)
 	}
 }
 
@@ -125,3 +168,14 @@ func (p *recordingPoster) PostRaw(path string, _ []byte) error {
 	p.paths = append(p.paths, path)
 	return nil
 }
+
+type permanentPoster struct{}
+
+func (permanentPoster) PostRaw(string, []byte) error {
+	return permanentTestError{}
+}
+
+type permanentTestError struct{}
+
+func (permanentTestError) Error() string   { return "validation rejected" }
+func (permanentTestError) Permanent() bool { return true }
